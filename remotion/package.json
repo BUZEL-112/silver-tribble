@@ -1,0 +1,22 @@
+{
+  "name": "ai-news-remotion-renderer",
+  "version": "1.0.0",
+  "description": "Remotion video engine for automated AI news videos",
+  "scripts": {
+    "start": "remotion preview src/index.ts",
+    "build": "remotion bundle src/index.ts",
+    "render": "remotion render src/index.ts"
+  },
+  "dependencies": {
+    "@remotion/captions": "^4.0.218",
+    "@remotion/cli": "^4.0.218",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "remotion": "^4.0.218"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,109 @@
+"""SQLAlchemy ORM models for the video pipeline."""
+
+from datetime import datetime
+from typing import Any
+from sqlalchemy import (
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    Text,
+)
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from src.core.database import Base
+
+
+class Article(Base):
+    """Raw or embedded news article fetched from RSS sources."""
+
+    __tablename__ = "articles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    link: Mapped[str] = mapped_column(String(1000), unique=True, nullable=False, index=True)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    source: Mapped[str] = mapped_column(String(100), nullable=False)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class StoryCluster(Base):
+    """Cluster of closely related articles representing a single unified news story."""
+
+    __tablename__ = "story_clusters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cluster_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    article_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
+    article_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    scripts: Mapped[list["ScriptRecord"]] = relationship(
+        "ScriptRecord", back_populates="cluster", cascade="all, delete-orphan"
+    )
+
+
+class ScriptRecord(Base):
+    """Beat sheet and expanded comedic dialogue generated for a story cluster."""
+
+    __tablename__ = "scripts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    cluster_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("story_clusters.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(500), nullable=False)
+    aspect_ratio: Mapped[str] = mapped_column(String(20), nullable=False, default="9:16")
+    beats: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
+    full_narration: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    cluster: Mapped["StoryCluster"] = relationship("StoryCluster", back_populates="scripts")
+    render_jobs: Mapped[list["RenderJob"]] = relationship(
+        "RenderJob", back_populates="script", cascade="all, delete-orphan"
+    )
+
+
+class RenderJob(Base):
+    """Render execution record tracking audio, captions, and the generated video."""
+
+    __tablename__ = "render_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    script_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("scripts.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    aspect_ratio: Mapped[str] = mapped_column(String(20), nullable=False, default="9:16")
+    audio_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    captions_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    render_props_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    output_video_path: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    script: Mapped["ScriptRecord"] = relationship("ScriptRecord", back_populates="render_jobs")
+
+
+class CostLogEntry(Base):
+    """Granular cost tracking entry for LLM, TTS, alignment, and render execution."""
+
+    __tablename__ = "cost_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    stage: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    model: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    units: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    unit_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)

@@ -1,0 +1,133 @@
+# ==============================================================================
+# AI News to YouTube Video Generation Pipeline - Configuration Template
+# ==============================================================================
+# To configure your project:
+#   1. Copy this template to config.yaml:
+#        cp config_example.yaml config.yaml
+#   2. Edit config.yaml and fill in your preferred models, keys, and paths.
+#
+# Loading Precedence:
+#   CLI flags (highest) > Environment Variables > config.yaml > .env > Default Settings
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Database Configuration
+# ------------------------------------------------------------------------------
+database:
+  # SQLite (default for local development):
+  url: "sqlite:///./data/ai_news.db"
+
+  # PostgreSQL (for production with pgvector / docker-compose):
+  # url: "postgresql://postgres:postgres@localhost:5432/ai_news_video"
+
+# ------------------------------------------------------------------------------
+# 2. LiteLLM Proxy / Gateway Settings
+# ------------------------------------------------------------------------------
+# If running the docker-compose LiteLLM proxy or an external gateway (e.g. OpenRouter):
+litellm:
+  base_url: "http://localhost:4000"
+  api_key: "sk-litellm-master-key"
+
+# ------------------------------------------------------------------------------
+# 3. LLM Model Routing
+# ------------------------------------------------------------------------------
+models:
+  # Stage 1: Narrative beat sheet structuring (fast, structured output model)
+  # Examples: gpt-4o-mini, gemini-2.0-flash, claude-3-5-haiku
+  planning: "gpt-4o-mini"
+
+  # Stage 2: Comedic host persona dialogue expansion (creative, expressive writer)
+  # Examples: deepseek-chat, gpt-4o, qwen-2.5-72b
+  writing: "deepseek-chat"
+
+  # Semantic story clustering vector embedding model:
+  # Options:
+  #   - "local" or "BAAI/bge-small-en-v1.5"  -> 100% Free, offline FastEmbed ONNX ($0.00)
+  #   - "sentence-transformers/all-MiniLM-L6-v2" -> Alternative local ONNX model
+  #   - "text-embedding-004"                -> Google AI Studio / Gemini
+  #   - "text-embedding-3-small"            -> OpenAI (1536 dimensions)
+  embedding: "text-embedding-3-small"
+
+  # Custom embedding endpoint (e.g. Ollama http://localhost:11434/v1 or Voyage AI):
+  embedding_base_url: null
+  embedding_api_key: null
+
+# ------------------------------------------------------------------------------
+# 4. Direct Provider API Keys (Bring Your Own Key - BYOK)
+# ------------------------------------------------------------------------------
+# Configure direct provider keys if you are not routing via LiteLLM:
+providers:
+  # OpenAI API key (for gpt-4o-mini / text-embedding-3-small)
+  openai_api_key: null      # "sk-proj-..."
+
+  # DeepSeek API key (for deepseek-chat persona dialogue)
+  deepseek_api_key: null    # "sk-..."
+
+  # Google AI Studio / Gemini API key (for gemini models & text-embedding-004)
+  gemini_api_key: null      # "AIzaSy..."
+
+  # Pexels API key (for stock B-roll background footage)
+  pexels_api_key: null      # "..."
+
+# ------------------------------------------------------------------------------
+# 5. Asset & Media Storage
+# ------------------------------------------------------------------------------
+storage:
+  # Storage backend: "local" or "s3" (Cloudflare R2 / AWS S3)
+  backend: "local"
+
+  # Local directory for media assets when backend is "local"
+  local_dir: "./data/assets"
+
+  # Cloudflare R2 / S3 Configuration (only required if backend: "s3")
+  r2:
+    account_id: null
+    access_key_id: null
+    secret_access_key: null
+    bucket_name: null
+    public_url: null
+
+# ------------------------------------------------------------------------------
+# 6. Audio Transcription & Word Caption Alignment (faster-whisper)
+# ------------------------------------------------------------------------------
+whisper:
+  # Whisper model size: "tiny", "base", "small", "medium"
+  model_size: "base"
+
+  # Inference device: "cpu" or "cuda"
+  device: "cpu"
+
+# ------------------------------------------------------------------------------
+# 7. Remotion Motion Graphics & Video Rendering Engine
+# ------------------------------------------------------------------------------
+remotion:
+  # Root directory of the Remotion project
+  project_dir: "./remotion"
+
+  # Target export folder for rendered MP4 video files
+  output_dir: "./output/videos"
+
+# ------------------------------------------------------------------------------
+# 8. Story Clustering & Semantic Similarity Hyperparameters
+# ------------------------------------------------------------------------------
+clustering:
+  # Cosine similarity cutoff (0.0 to 1.0) for grouping news articles
+  # Lower (e.g. 0.75) creates broader, larger clusters
+  # Higher (e.g. 0.88) creates tighter, more specific topic clusters
+  similarity_threshold: 0.82
+
+# ------------------------------------------------------------------------------
+# 9. Curated AI News RSS Feeds
+# ------------------------------------------------------------------------------
+# List of RSS feeds to scrape during the `ingest` pipeline stage:
+rss_feeds:
+  - name: "TechCrunch AI"
+    url: "https://techcrunch.com/category/artificial-intelligence/feed/"
+  - name: "VentureBeat AI"
+    url: "https://venturebeat.com/category/ai/feed/"
+  - name: "The Verge AI"
+    url: "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml"
+  - name: "MIT Technology Review AI"
+    url: "https://www.technologyreview.com/topic/artificial-intelligence/feed"
+  - name: "ArXiv AI Recent"
+    url: "https://rss.arxiv.org/rss/cs.AI"

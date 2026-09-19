@@ -1,7 +1,7 @@
 """Prefect orchestration workflow coordinating end-to-end video production."""
 
-from pathlib import Path
 from prefect import flow, task
+
 from src.core.config import settings
 from src.core.database import get_session, init_db
 from src.repositories.article_repository import ArticleRepository
@@ -29,30 +29,66 @@ def ingest_feeds_task() -> int:
 
 
 @task(name="cluster_articles_task", retries=2, retry_delay_seconds=5)
-def cluster_articles_task() -> list[int]:
+def cluster_articles_task(
+    embedding_model: str | None = None,
+    litellm_url: str | None = None,
+    litellm_key: str | None = None,
+    openai_key: str | None = None,
+    gemini_key: str | None = None,
+    embedding_base_url: str | None = None,
+    embedding_key: str | None = None,
+) -> list[int]:
     """Compute embeddings and group articles into story clusters."""
     with get_session() as session:
         article_repo = ArticleRepository(session)
         cost_repo = CostRepository(session)
-        clustering_service = ClusteringService(article_repo, cost_repo)
+        clustering_service = ClusteringService(
+            article_repo=article_repo,
+            cost_repo=cost_repo,
+            base_url=litellm_url,
+            api_key=litellm_key,
+            openai_key=openai_key,
+            gemini_key=gemini_key,
+            embedding_base_url=embedding_base_url,
+            embedding_api_key=embedding_key,
+        )
 
-        clustering_service.generate_embeddings_for_new_articles()
+        clustering_service.generate_embeddings_for_new_articles(model=embedding_model)
         clusters = clustering_service.cluster_recent_articles()
         return [c.id for c in clusters]
 
 
 @task(name="generate_script_task", retries=2, retry_delay_seconds=5)
-def generate_script_task(cluster_id: int, aspect_ratio: str = "9:16") -> int:
+def generate_script_task(
+    cluster_id: int,
+    aspect_ratio: str = "9:16",
+    planner_model: str | None = None,
+    writer_model: str | None = None,
+    litellm_url: str | None = None,
+    litellm_key: str | None = None,
+    openai_key: str | None = None,
+    deepseek_key: str | None = None,
+) -> int:
     """Generate structured beat sheet and comedic narration for a story cluster."""
     with get_session() as session:
         article_repo = ArticleRepository(session)
         script_repo = ScriptRepository(session)
         cost_repo = CostRepository(session)
-        script_service = ScriptService(article_repo, script_repo, cost_repo)
+        script_service = ScriptService(
+            article_repo=article_repo,
+            script_repo=script_repo,
+            cost_repo=cost_repo,
+            base_url=litellm_url,
+            api_key=litellm_key,
+            openai_key=openai_key,
+            deepseek_key=deepseek_key,
+        )
 
         script_record = script_service.generate_full_script(
             cluster_id=cluster_id,
             aspect_ratio=aspect_ratio,
+            planner_model=planner_model,
+            writer_model=writer_model,
         )
         return script_record.id
 
@@ -142,6 +178,16 @@ def run_video_pipeline(
     cluster_id: int | None = None,
     aspect_ratio: str = "9:16",
     dry_run: bool = False,
+    planner_model: str | None = None,
+    writer_model: str | None = None,
+    embedding_model: str | None = None,
+    litellm_url: str | None = None,
+    litellm_key: str | None = None,
+    openai_key: str | None = None,
+    deepseek_key: str | None = None,
+    gemini_key: str | None = None,
+    embedding_base_url: str | None = None,
+    embedding_key: str | None = None,
 ) -> dict[str, str]:
     """End-to-end execution flow from news clustering to finished video."""
     init_db()
@@ -149,17 +195,36 @@ def run_video_pipeline(
     target_cluster_id = cluster_id
     if target_cluster_id is None:
         ingest_feeds_task()
-        cluster_ids = cluster_articles_task()
+        cluster_ids = cluster_articles_task(
+            embedding_model=embedding_model,
+            litellm_url=litellm_url,
+            litellm_key=litellm_key,
+            openai_key=openai_key,
+            gemini_key=gemini_key,
+            embedding_base_url=embedding_base_url,
+            embedding_key=embedding_key,
+        )
         if not cluster_ids:
             raise RuntimeError("No story clusters found after ingestion and clustering")
         target_cluster_id = cluster_ids[0]
 
-    script_id = generate_script_task(cluster_id=target_cluster_id, aspect_ratio=aspect_ratio)
+    script_id = generate_script_task(
+        cluster_id=target_cluster_id,
+        aspect_ratio=aspect_ratio,
+        planner_model=planner_model,
+        writer_model=writer_model,
+        litellm_url=litellm_url,
+        litellm_key=litellm_key,
+        openai_key=openai_key,
+        deepseek_key=deepseek_key,
+    )
     job_id, _audio, _captions, _duration = voice_and_captions_task(
         script_id=script_id,
         aspect_ratio=aspect_ratio,
     )
     video_path = render_video_task(job_id=job_id, dry_run=dry_run)
+    with get_session() as session:
+        ArticleRepository(session).update_cluster_status(target_cluster_id, "completed")
 
     return {
         "cluster_id": str(target_cluster_id),

@@ -2,9 +2,11 @@
 
 from collections.abc import Generator
 from pathlib import Path
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+
 from src.core.database import Base
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository

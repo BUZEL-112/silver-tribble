@@ -1,6 +1,7 @@
 """Unit tests for storage service adapter."""
 
 from pathlib import Path
+
 from src.services.storage_service import LocalStorageService
 
 

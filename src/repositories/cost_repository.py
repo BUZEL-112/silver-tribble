@@ -1,7 +1,9 @@
 """Repository for pipeline cost logging and budget analytics."""
 
 from typing import Any
+
 from sqlalchemy import func, select
+
 from src.models.entities import CostLogEntry
 from src.models.schemas import CostLogCreate
 from src.repositories.base import BaseRepository

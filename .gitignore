@@ -26,6 +26,8 @@ venv/
 .venv/
 env/
 .env
+config.yaml
+config/config.yaml
 
 # Database and Storage
 *.db

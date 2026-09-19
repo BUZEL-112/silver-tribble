@@ -1,7 +1,7 @@
 """Audio transcription and word-level caption alignment using faster-whisper."""
 
 import json
-from pathlib import Path
+
 from src.core.config import settings
 from src.models.schemas import CostLogCreate, WordCaption
 from src.repositories.cost_repository import CostRepository
@@ -90,6 +90,10 @@ class CaptionService:
                                 )
                             )
         except Exception:
+            captions = self._align_words_fallback(reference_text, total_duration)
+
+        ref_words = reference_text.split() if reference_text else []
+        if ref_words and len(captions) < max(len(ref_words) * 0.4, 3):
             captions = self._align_words_fallback(reference_text, total_duration)
 
         destination_key = f"captions/captions_job_{job_id}.json"

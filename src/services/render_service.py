@@ -1,10 +1,11 @@
 """Remotion video rendering bridge utilizing subprocess execution."""
 
-import json
-from pathlib import Path
+import base64
 import shutil
 import subprocess
 import time
+from pathlib import Path
+
 from src.core.config import settings
 from src.models.entities import RenderJob, ScriptRecord
 from src.models.schemas import (
@@ -46,7 +47,6 @@ class RenderService:
     ) -> Path:
         """Calculate beat timeline intervals and write render_props.json."""
         raw_beats = script.beats or []
-        total_beats = len(raw_beats)
 
         # Distribute timeline evenly across beats based on relative target durations
         total_target = sum(b.get("estimated_duration_seconds", 10.0) for b in raw_beats)
@@ -75,17 +75,27 @@ class RenderService:
                 )
             )
 
+        audio_path_str = str(audio_local_path.resolve())
+        is_remote_or_data = audio_path_str.startswith(("http://", "https://", "data:"))
+        if audio_local_path.exists() and not is_remote_or_data:
+            mime = "audio/wav" if audio_local_path.suffix.lower() == ".wav" else "audio/mpeg"
+            encoded_data = base64.b64encode(audio_local_path.read_bytes()).decode("utf-8")
+            audio_path_str = f"data:{mime};base64,{encoded_data}"
+
         props = RenderProps(
             videoTitle=script.title,
             aspectRatio="9:16" if job.aspect_ratio == "9:16" else "16:9",
-            audioPath=str(audio_local_path.resolve()),
+            audioPath=audio_path_str,
             durationInSeconds=duration_seconds,
             fps=30,
             beats=render_beats,
             captions=captions,
         )
 
-        props_dir = settings.storage_local_dir / "render_props"
+        if hasattr(self.storage_service, "base_dir") and self.storage_service.base_dir:
+            props_dir = Path(self.storage_service.base_dir) / "render_props"
+        else:
+            props_dir = settings.storage_local_dir / "render_props"
         props_dir.mkdir(parents=True, exist_ok=True)
         props_file = props_dir / f"props_job_{job.id}.json"
         props_file.write_text(props.model_dump_json(by_alias=True, indent=2), encoding="utf-8")
@@ -145,7 +155,7 @@ class RenderService:
         ]
 
         try:
-            result = subprocess.run(
+            subprocess.run(
                 cmd,
                 cwd=str(self.remotion_dir.resolve()),
                 capture_output=True,
@@ -155,7 +165,7 @@ class RenderService:
             elapsed = time.time() - start_time
             self.render_repo.complete_job(job_id, str(output_path.resolve()))
 
-            # Remotion local compute cost: logged as execution time in seconds with 0 direct API cost
+            # Remotion local compute cost: logged as runtime with 0 direct API cost
             self.cost_repo.log_cost(
                 CostLogCreate(
                     job_id=job_id,

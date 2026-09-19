@@ -2,6 +2,7 @@
 
 import wave
 from pathlib import Path
+
 from src.core.config import settings
 from src.models.schemas import CostLogCreate
 from src.repositories.cost_repository import CostRepository
@@ -22,7 +23,7 @@ class TtsService:
         self.api_key = api_key or settings.gemini_api_key
 
     def _generate_synthetic_wav(self, text: str, output_path: Path) -> float:
-        """Create a silent placeholder WAV file with calibrated duration for tests or offline mode."""
+        """Create a silent placeholder WAV file with calibrated duration for tests/offline."""
         word_count = max(len(text.split()), 1)
         # Average reading rate: roughly 2.6 words per second
         duration_seconds = max(word_count / 2.6, 2.0)

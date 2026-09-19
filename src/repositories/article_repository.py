@@ -1,7 +1,7 @@
 """Repository for article ingestion, embeddings, and story clustering."""
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+
 from src.models.entities import Article, StoryCluster
 from src.models.schemas import FeedItem
 from src.repositories.base import BaseRepository
@@ -13,13 +13,18 @@ class ArticleRepository(BaseRepository):
     def save_feed_items(self, items: list[FeedItem]) -> list[Article]:
         """Insert new articles ignoring duplicate URLs."""
         saved_articles: list[Article] = []
+        seen_links: set[str] = set()
         for item in items:
+            if not item.link or item.link in seen_links:
+                continue
             existing = self.session.scalar(
                 select(Article).where(Article.link == item.link)
             )
             if existing:
+                seen_links.add(item.link)
                 continue
 
+            seen_links.add(item.link)
             article = Article(
                 title=item.title,
                 link=item.link,
@@ -48,6 +53,7 @@ class ArticleRepository(BaseRepository):
         article = self.session.get(Article, article_id)
         if article:
             article.embedding = embedding
+            self.session.flush()
 
     def get_all_embedded_articles(self, limit: int = 200) -> list[Article]:
         """Retrieve recent articles that possess embeddings for clustering."""
@@ -75,6 +81,7 @@ class ArticleRepository(BaseRepository):
             existing.summary = summary
             existing.article_ids = article_ids
             existing.article_count = len(article_ids)
+            self.session.flush()
             return existing
 
         cluster = StoryCluster(
@@ -120,3 +127,4 @@ class ArticleRepository(BaseRepository):
         cluster = self.session.get(StoryCluster, cluster_id)
         if cluster:
             cluster.status = status
+            self.session.flush()

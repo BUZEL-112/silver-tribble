@@ -3,7 +3,10 @@
 import re
 from datetime import datetime
 from time import mktime
+
 import feedparser
+
+from src.core.config import settings
 from src.models.schemas import FeedItem
 
 DEFAULT_AI_FEEDS: list[dict[str, str]] = [
@@ -34,7 +37,8 @@ class RssService:
     """Fetches and normalizes news entries from configured RSS feeds."""
 
     def __init__(self, feeds: list[dict[str, str]] | None = None) -> None:
-        self.feeds = feeds or DEFAULT_AI_FEEDS
+        self.feeds = feeds or getattr(settings, "rss_feeds", DEFAULT_AI_FEEDS)
+
 
     def clean_html(self, raw_html: str) -> str:
         """Strip HTML tags and condense whitespace."""

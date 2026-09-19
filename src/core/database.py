@@ -2,8 +2,10 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
 from src.core.config import settings
 
 

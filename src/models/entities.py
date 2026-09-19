@@ -1,18 +1,25 @@
 """SQLAlchemy ORM models for the video pipeline."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
+
 from sqlalchemy import (
+    JSON,
     DateTime,
     Float,
     ForeignKey,
     Integer,
-    JSON,
     String,
     Text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from src.core.database import Base
+
+
+def utc_now() -> datetime:
+    """Return timezone-aware current UTC datetime."""
+    return datetime.now(UTC)
 
 
 class Article(Base):
@@ -27,7 +34,7 @@ class Article(Base):
     source: Mapped[str] = mapped_column(String(100), nullable=False)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     embedding: Mapped[list[float] | None] = mapped_column(JSON, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
 
 class StoryCluster(Base):
@@ -42,7 +49,7 @@ class StoryCluster(Base):
     article_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)
     article_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
     scripts: Mapped[list["ScriptRecord"]] = relationship(
         "ScriptRecord", back_populates="cluster", cascade="all, delete-orphan"
@@ -62,7 +69,7 @@ class ScriptRecord(Base):
     aspect_ratio: Mapped[str] = mapped_column(String(20), nullable=False, default="9:16")
     beats: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
     full_narration: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
     cluster: Mapped["StoryCluster"] = relationship("StoryCluster", back_populates="scripts")
     render_jobs: Mapped[list["RenderJob"]] = relationship(
@@ -87,7 +94,7 @@ class RenderJob(Base):
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="pending")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     script: Mapped["ScriptRecord"] = relationship("ScriptRecord", back_populates="render_jobs")
@@ -106,4 +113,4 @@ class CostLogEntry(Base):
     units: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     unit_type: Mapped[str] = mapped_column(String(30), nullable=False)
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)

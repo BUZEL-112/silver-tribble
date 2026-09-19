@@ -1,5 +1,4 @@
-"""Text to speech synthesis service using Google GenAI SDK."""
-
+import re
 import wave
 from pathlib import Path
 
@@ -7,6 +6,11 @@ from src.core.config import settings
 from src.models.schemas import CostLogCreate
 from src.repositories.cost_repository import CostRepository
 from src.services.storage_service import StorageService
+
+PHONETIC_TTS_PRONUNCIATIONS = [
+    (re.compile(r"\bDario Amodei\b", re.IGNORECASE), "Dario Amo-day-ee"),
+    (re.compile(r"\bAmodei\b", re.IGNORECASE), "Amo-day-ee"),
+]
 
 
 class TtsService:
@@ -21,6 +25,60 @@ class TtsService:
         self.storage_service = storage_service
         self.cost_repo = cost_repo
         self.api_key = api_key or settings.gemini_api_key
+
+    def _synthesize_edge_tts(
+        self,
+        text: str,
+        output_path: Path,
+        voice_name: str = "en-US-ChristopherNeural",
+    ) -> float:
+        """Synthesize natural speech using edge-tts and convert to 24kHz mono WAV."""
+        import asyncio
+        import concurrent.futures
+        import subprocess
+        import edge_tts
+
+        temp_mp3 = output_path.with_suffix(".tmp.mp3")
+        try:
+            communicate = edge_tts.Communicate(text, voice_name)
+            coro = communicate.save(str(temp_mp3))
+
+            try:
+                loop = asyncio.get_running_loop()
+            except RuntimeError:
+                loop = None
+
+            if loop and loop.is_running():
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    executor.submit(asyncio.run, coro).result()
+            else:
+                asyncio.run(coro)
+
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            subprocess.run(
+                [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(temp_mp3),
+                    "-ar",
+                    "24000",
+                    "-ac",
+                    "1",
+                    str(output_path),
+                ],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            with wave.open(str(output_path), "rb") as w:
+                frames = w.getnframes()
+                rate = w.getframerate()
+                return frames / float(rate)
+        finally:
+            if temp_mp3.exists():
+                temp_mp3.unlink()
 
     def _generate_synthetic_wav(self, text: str, output_path: Path) -> float:
         """Create a silent placeholder WAV file with calibrated duration for tests/offline."""
@@ -43,7 +101,7 @@ class TtsService:
         self,
         text: str,
         job_id: int,
-        voice_name: str = "Puck",
+        voice_name: str = "en-US-ChristopherNeural",
     ) -> tuple[str, float]:
         """Synthesize script text into audio and store the file.
 
@@ -55,58 +113,75 @@ class TtsService:
 
         character_count = len(text)
         duration_seconds: float
+        provider = "edge_tts"
+        model_name = voice_name
+        cost_usd = 0.0
 
-        if self.api_key and self.api_key != "your_gemini_api_key_here":
-            try:
-                from google import genai
-                from google.genai import types
+        spoken_text = text
+        for pattern, replacement in PHONETIC_TTS_PRONUNCIATIONS:
+            spoken_text = pattern.sub(replacement, spoken_text)
 
-                client = genai.Client(api_key=self.api_key)
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=text,
-                    config=types.GenerateContentConfig(
-                        response_modalities=["AUDIO"],
-                        speech_config=types.SpeechConfig(
-                            voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=voice_name
+        # Try edge-tts first for high quality, natural neural narration
+        try:
+            edge_voice = voice_name if "Neural" in voice_name else "en-US-ChristopherNeural"
+            duration_seconds = self._synthesize_edge_tts(spoken_text, local_temp_file, edge_voice)
+            provider = "edge_tts"
+            model_name = edge_voice
+        except Exception:
+            # Fallback to Gemini if configured
+            gemini_success = False
+            if self.api_key and self.api_key != "your_gemini_api_key_here":
+                try:
+                    from google import genai
+                    from google.genai import types
+
+                    client = genai.Client(api_key=self.api_key)
+                    g_voice = "Puck" if "Neural" in voice_name else voice_name
+                    response = client.models.generate_content(
+                        model="gemini-2.0-flash",
+                        contents=spoken_text,
+                        config=types.GenerateContentConfig(
+                            response_modalities=["AUDIO"],
+                            speech_config=types.SpeechConfig(
+                                voice_config=types.VoiceConfig(
+                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                        voice_name=g_voice
+                                    )
                                 )
-                            )
+                            ),
                         ),
-                    ),
-                )
+                    )
 
-                audio_bytes = None
-                for part in response.candidates[0].content.parts:
-                    if hasattr(part, "inline_data") and part.inline_data:
-                        audio_bytes = part.inline_data.data
-                        break
+                    audio_bytes = None
+                    for part in response.candidates[0].content.parts:
+                        if hasattr(part, "inline_data") and part.inline_data:
+                            audio_bytes = part.inline_data.data
+                            break
 
-                if audio_bytes:
-                    local_temp_file.write_bytes(audio_bytes)
-                    # Inspect wave header for duration
-                    with wave.open(str(local_temp_file), "rb") as w:
-                        frames = w.getnframes()
-                        rate = w.getframerate()
-                        duration_seconds = frames / float(rate)
-                else:
-                    duration_seconds = self._generate_synthetic_wav(text, local_temp_file)
+                    if audio_bytes:
+                        local_temp_file.write_bytes(audio_bytes)
+                        with wave.open(str(local_temp_file), "rb") as w:
+                            frames = w.getnframes()
+                            rate = w.getframerate()
+                            duration_seconds = frames / float(rate)
+                        provider = "gemini"
+                        model_name = "gemini-2.0-flash-audio"
+                        cost_usd = (character_count / 1000.0) * 0.04
+                        gemini_success = True
+                except Exception:
+                    gemini_success = False
 
-            except Exception:
+            if not gemini_success:
                 duration_seconds = self._generate_synthetic_wav(text, local_temp_file)
-        else:
-            duration_seconds = self._generate_synthetic_wav(text, local_temp_file)
-
-        # Gemini audio generation estimated cost: ~$0.00004 per 1k characters
-        cost_usd = (character_count / 1000.0) * 0.04
+                provider = "synthetic_fallback"
+                model_name = "silent_wav"
 
         self.cost_repo.log_cost(
             CostLogCreate(
                 job_id=job_id,
                 stage="tts_voice",
-                provider="gemini",
-                model="gemini-2.0-flash-audio",
+                provider=provider,
+                model=model_name,
                 units=float(character_count),
                 unit_type="characters",
                 cost_usd=cost_usd,

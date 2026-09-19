@@ -1,5 +1,6 @@
 """RSS feed ingestion service for AI news aggregation."""
 
+import html
 import re
 from datetime import datetime
 from time import mktime
@@ -44,10 +45,23 @@ class RssService:
         self.feeds = feeds or getattr(settings, "rss_feeds", DEFAULT_AI_FEEDS)
 
     def clean_html(self, raw_html: str) -> str:
-        """Strip HTML tags and condense whitespace."""
+        """Strip HTML tags, unescape entities, remove marketing boilerplate, and condense whitespace."""
         if not raw_html:
             return ""
-        text = re.sub(r"<[^>]+>", " ", raw_html)
+        text = html.unescape(raw_html)
+        text = re.sub(r"<[^>]+>", " ", text)
+        boilerplate_patterns = [
+            r"This story appeared in [^.]*(?:newsletter|AI)[^.]*\.(?:\s*To get stories like this in your inbox first,?\s*sign up here\.?)?",
+            r"Sign up (?:for|to) [^.]*\.",
+            r"To get stories like this in your inbox[^.]*\.",
+            r"Subscribe to [^.]*\.",
+            r"Read more at [^.]*\.",
+            r"Follow us on [^.]*\.",
+            r"\[…\]",
+            r"\[\.\.\.\]",
+        ]
+        for pat in boilerplate_patterns:
+            text = re.sub(pat, " ", text, flags=re.IGNORECASE)
         text = re.sub(r"\s+", " ", text)
         return text.strip()
 

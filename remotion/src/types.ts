@@ -45,4 +45,5 @@ export interface RenderProps {
   mediaPlacements?: SentenceMediaItem[];
   introDelaySeconds?: number;
   outroDurationSeconds?: number;
+  channelBadgeText?: string;
 }

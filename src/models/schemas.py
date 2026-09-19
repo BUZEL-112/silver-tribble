@@ -123,6 +123,7 @@ class RenderProps(BaseModel):
     )
     intro_delay_seconds: float = Field(default=0.0, alias="introDelaySeconds")
     outro_duration_seconds: float = Field(default=0.0, alias="outroDurationSeconds")
+    channel_badge_text: str = Field(default="AI NEWS BY ESWAR", alias="channelBadgeText")
 
 
 class CostLogCreate(BaseModel):

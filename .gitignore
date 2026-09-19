@@ -31,11 +31,19 @@ config/config.yaml
 
 # Database and Storage
 *.db
+*.db-journal
+*.db-wal
+*.db-shm
 *.sqlite3
+test.db*
 data/
 output/
 temp/
 artifacts/
+scratch/
+*.tmp.*
+*.tmp
+*.preview.jpg
 
 # Logs
 *.log
@@ -46,7 +54,18 @@ remotion/node_modules/
 remotion/.remotion/
 remotion/out/
 remotion/dist/
+remotion/public/media
+remotion/public/media/
 
-# OS
+# Testing and Coverage
+.coverage
+htmlcov/
+coverage.xml
+
+# IDE and OS
 .DS_Store
 Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~

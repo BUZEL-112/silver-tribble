@@ -1,6 +1,7 @@
 """Audio transcription and word-level caption alignment using faster-whisper."""
 
 import json
+import re
 
 from src.core.config import settings
 from src.models.schemas import CostLogCreate, WordCaption
@@ -69,26 +70,82 @@ class CaptionService:
         local_audio_path = self.storage_service.get_local_path(audio_path_or_url)
         captions: list[WordCaption] = []
 
+        PROPER_NOUN_CORRECTIONS = {
+            "amade": "Amodei",
+            "amadei": "Amodei",
+            "amadi": "Amodei",
+            "dario": "Dario",
+            "jensen": "Jensen",
+            "huang": "Huang",
+            "anthropic": "Anthropic",
+            "openai": "OpenAI",
+            "nvidia": "Nvidia",
+            "wifi": "Wi-Fi",
+            "passports": "passwords",
+            "passport": "password",
+        }
+
+        allowed_compounds = {
+            "three-step",
+            "third-party",
+            "self-regulation",
+            "wi-fi",
+            "open-source",
+            "multi-billion-dollar",
+        }
+        ref_text_lower = (reference_text or "").lower()
+
         try:
             model = self._get_model()
+            initial_prompt = (
+                "AI news report: Anthropic, Dario Amodei, Jensen Huang, OpenAI, Nvidia, LLMs, "
+                "superintelligence, third-party, three-step, Wi-Fi passwords, self-regulation."
+            )
             segments, _info = model.transcribe(
                 str(local_audio_path),
                 word_timestamps=True,
                 language="en",
+                initial_prompt=initial_prompt,
             )
             for segment in segments:
                 if segment.words:
                     for w in segment.words:
                         clean_word = w.word.strip()
-                        if clean_word:
-                            captions.append(
-                                WordCaption(
-                                    word=clean_word,
-                                    start=round(w.start, 2),
-                                    end=round(w.end, 2),
-                                    confidence=round(getattr(w, "probability", 1.0), 2),
-                                )
+                        if not clean_word or clean_word == "-":
+                            continue
+
+                        # Check leading hyphen tokens against legitimate compound words
+                        if clean_word.startswith("-") and len(clean_word) > 1 and captions:
+                            prev_base = re.sub(r"[^\w]", "", captions[-1].word).lower()
+                            next_base = re.sub(r"[^\w]", "", clean_word).lower()
+                            candidate_compound = f"{prev_base}-{next_base}"
+                            if (
+                                candidate_compound in allowed_compounds
+                                or candidate_compound in ref_text_lower
+                            ):
+                                punct = re.search(r"[.,!?:;]+$", clean_word)
+                                trailing = punct.group(0) if punct else ""
+                                captions[-1].word = f"{captions[-1].word.rstrip('.,!?:;')}-{next_base}{trailing}"
+                                captions[-1].end = round(w.end, 2)
+                                continue
+                            else:
+                                clean_word = clean_word.lstrip("-")
+
+                        # Correct acoustic misrecognitions and proper nouns
+                        base_w = re.sub(r"[^\w]", "", clean_word.lower())
+                        if base_w in PROPER_NOUN_CORRECTIONS:
+                            correct = PROPER_NOUN_CORRECTIONS[base_w]
+                            punct = re.search(r"[.,!?:;]+$", clean_word)
+                            clean_word = f"{correct}{punct.group(0)}" if punct else correct
+
+                        captions.append(
+                            WordCaption(
+                                word=clean_word,
+                                start=round(w.start, 2),
+                                end=round(w.end, 2),
+                                confidence=round(getattr(w, "probability", 1.0), 2),
                             )
+                        )
         except Exception:
             captions = self._align_words_fallback(reference_text, total_duration)
 

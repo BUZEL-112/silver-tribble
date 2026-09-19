@@ -141,6 +141,7 @@ class RenderService:
             mediaPlacements=shifted_media,
             introDelaySeconds=intro_delay,
             outroDurationSeconds=outro_duration,
+            channel_badge_text=settings.channel_badge_text,
         )
 
         if hasattr(self.storage_service, "base_dir") and self.storage_service.base_dir:
@@ -173,6 +174,17 @@ class RenderService:
         )
         output_filename = f"video_job_{job_id}_{composition}.mp4"
         output_path = self.output_dir / output_filename
+
+        # Ensure remotion/public/media points to artifacts/media so Remotion serves assets
+        public_media = self.remotion_dir / "public" / "media"
+        if not public_media.exists() and not public_media.is_symlink():
+            try:
+                public_media.parent.mkdir(parents=True, exist_ok=True)
+                public_media.symlink_to(
+                    settings.media_cache_dir.resolve(), target_is_directory=True
+                )
+            except Exception:
+                pass
 
         start_time = time.time()
 

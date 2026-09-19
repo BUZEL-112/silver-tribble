@@ -145,13 +145,20 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "similarity_threshold" in c:
             flat["similarity_threshold"] = c["similarity_threshold"]
 
-    # 10. Media and Branding sections
+    # 10. Media, Inspector, and Branding sections
     if "media" in data and isinstance(data["media"], dict):
         med = data["media"]
         if "cache_dir" in med:
             flat["media_cache_dir"] = med["cache_dir"]
         if "ratio" in med:
             flat["default_media_type_ratio"] = med["ratio"]
+        if "inspector_mode" in med:
+            flat["media_inspector_mode"] = med["inspector_mode"]
+        if "multimodal_model" in med:
+            flat["media_inspector_model"] = med["multimodal_model"]
+        if "min_relevance_score" in med:
+            flat["media_inspector_min_score"] = float(med["min_relevance_score"])
+
     if "watermark" in data and isinstance(data["watermark"], dict):
         wm = data["watermark"]
         if "text" in wm:
@@ -162,6 +169,19 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             flat["watermark_position"] = wm["position"]
         if "opacity" in wm:
             flat["watermark_opacity"] = wm["opacity"]
+        if "header_badge" in wm:
+            flat["channel_badge_text"] = wm["header_badge"]
+        if "channel_badge" in wm:
+            flat["channel_badge_text"] = wm["channel_badge"]
+
+    if "branding" in data and isinstance(data["branding"], dict):
+        b = data["branding"]
+        if "header_badge" in b:
+            flat["channel_badge_text"] = b["header_badge"]
+        if "channel_badge" in b:
+            flat["channel_badge_text"] = b["channel_badge"]
+        if "watermark_text" in b:
+            flat["watermark_text"] = b["watermark_text"]
     if "timing" in data and isinstance(data["timing"], dict):
         t = data["timing"]
         if "intro_delay_seconds" in t:
@@ -169,7 +189,26 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "outro_duration_seconds" in t:
             flat["outro_duration_seconds"] = t["outro_duration_seconds"]
 
-    # 11. RSS Feeds section
+    # 11. Prompts & System Prompts section
+    if "prompts" in data and isinstance(data["prompts"], dict):
+        p = data["prompts"]
+        if "planning" in p and isinstance(p["planning"], dict):
+            if "system_prompt" in p["planning"]:
+                flat["prompts_planning_system_prompt"] = p["planning"]["system_prompt"]
+            if "file" in p["planning"]:
+                flat["prompts_planning_file"] = p["planning"]["file"]
+        if "writing" in p and isinstance(p["writing"], dict):
+            if "system_prompt" in p["writing"]:
+                flat["prompts_writing_system_prompt"] = p["writing"]["system_prompt"]
+            if "file" in p["writing"]:
+                flat["prompts_writing_file"] = p["writing"]["file"]
+        if "media_inspector" in p and isinstance(p["media_inspector"], dict):
+            if "system_prompt" in p["media_inspector"]:
+                flat["prompts_media_inspector_system_prompt"] = p["media_inspector"]["system_prompt"]
+            if "file" in p["media_inspector"]:
+                flat["prompts_media_inspector_file"] = p["media_inspector"]["file"]
+
+    # 12. RSS Feeds section
     raw_feeds = None
     if "rss_feeds" in data and isinstance(data["rss_feeds"], list):
         raw_feeds = data["rss_feeds"]
@@ -286,9 +325,27 @@ class Settings(BaseSettings):
         description="Ratio of stock clips to comedic GIFs",
     )
 
+    # Media Inspector
+    media_inspector_mode: Literal["off", "multimodal", "hil"] = Field(
+        default="off",
+        description="Media inspector mode: 'off', 'multimodal', or 'hil'",
+    )
+    media_inspector_model: str = Field(
+        default="gemini-2.0-flash",
+        description="VLM model for multimodal media inspection",
+    )
+    media_inspector_min_score: float = Field(
+        default=7.0,
+        description="Minimum relevance score (1-10) for candidate approval in multimodal mode",
+    )
+
     # Watermark and Branding
+    channel_badge_text: str = Field(
+        default="AI NEWS BY ESWAR",
+        description="Top header channel badge text in title card",
+    )
     watermark_text: str = Field(
-        default="",
+        default="@AINewsDesk",
         description="Watermark text overlay e.g. @AINewsDesk",
     )
     watermark_image_path: str = Field(
@@ -312,6 +369,32 @@ class Settings(BaseSettings):
     outro_duration_seconds: float = Field(
         default=3.0,
         description="Ending card display after speech ends",
+    )
+
+    # Prompt and System Prompt Configuration
+    prompts_planning_file: str = Field(
+        default="prompts/beat_sheet.yaml",
+        description="Prompt YAML template file for story narrative planning",
+    )
+    prompts_planning_system_prompt: str | None = Field(
+        default=None,
+        description="Optional inline system prompt override for narrative planning",
+    )
+    prompts_writing_file: str = Field(
+        default="prompts/eswar_host_persona.yaml",
+        description="Prompt YAML template file for script narration and host persona",
+    )
+    prompts_writing_system_prompt: str | None = Field(
+        default=None,
+        description="Optional inline system prompt override for script narration",
+    )
+    prompts_media_inspector_file: str = Field(
+        default="prompts/media_inspector.yaml",
+        description="Prompt YAML template file for multimodal visual media inspection",
+    )
+    prompts_media_inspector_system_prompt: str | None = Field(
+        default=None,
+        description="Optional inline system prompt override for media inspection",
     )
 
     # Storage Settings

@@ -130,14 +130,27 @@ media:
   # Local cache directory for downloaded videos, images, and GIFs
   cache_dir: "./artifacts/media"
 
-  # Default ratio of stock videos to animated GIFs (0.0 = all GIFs, 1.0 = all stock videos)
-  ratio: 0.5
+  # Visual asset inspector mode:
+  # - "off": automated fast retrieval with deduplication and domain queries
+  # - "multimodal": VLM (Gemini) evaluates image relevance to narration
+  # - "hil": human-in-the-loop interactive review and selection
+  inspector_mode: "off"
+
+  # Model used when inspector_mode is "multimodal"
+  multimodal_model: "gemini-2.0-flash"
+
+  # Minimum relevance score threshold (1 to 10) for candidate approval
+  min_relevance_score: 7.0
 
 # ------------------------------------------------------------------------------
 # 10. Watermark & Branding Overlays
 # ------------------------------------------------------------------------------
 watermark:
-  # On-screen text identifier (e.g. handle or channel name)
+  # Top header channel badge text (displayed on the main title card)
+  # You can customize this string freely (e.g. "AI NEWS BY ESWAR", "TECH PULSE DAILY")
+  header_badge: "AI NEWS BY ESWAR"
+
+  # On-screen text identifier / watermark (displayed top-right, e.g. "@AINewsDesk")
   text: "@AINewsDesk"
 
   # Path to transparent PNG/SVG logo overlay file (optional)
@@ -160,7 +173,34 @@ timing:
   outro_duration_seconds: 3.0
 
 # ------------------------------------------------------------------------------
-# 12. Curated AI News RSS Feeds
+# 12. System Prompts Configuration
+# ------------------------------------------------------------------------------
+# Customize system prompts for every model interaction point.
+# You can reference a YAML/TXT template file, or provide an inline `system_prompt` override.
+prompts:
+  # Stage 1: News beat sheet structuring
+  planning:
+    file: "prompts/beat_sheet.yaml"
+    # Optional inline system prompt override:
+    # system_prompt: |
+    #   You are an executive news producer structuring fast-paced tech news...
+
+  # Stage 2: Scriptwriting and host persona
+  writing:
+    file: "prompts/eswar_host_persona.yaml"
+    # Optional inline system prompt override:
+    # system_prompt: |
+    #   You are 'Eswar', a sharp, technically literate AI news commentator...
+
+  # Media Inspection: Multimodal VLM quality evaluation
+  media_inspector:
+    file: "prompts/media_inspector.yaml"
+    # Optional inline system prompt override:
+    # system_prompt: |
+    #   You are a strict visual quality inspector evaluating AI news b-roll...
+
+# ------------------------------------------------------------------------------
+# 13. Curated AI News RSS Feeds
 # ------------------------------------------------------------------------------
 # List of RSS feeds to scrape during the `ingest` pipeline stage.
 # You can add any custom RSS/Atom feeds here as objects with name and url,

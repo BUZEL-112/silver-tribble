@@ -34,7 +34,7 @@ export const OutroCard: React.FC<OutroCardProps> = ({ aspectRatio }) => {
         alignItems: "center",
         backgroundColor: "rgba(10, 15, 29, 0.85)",
         backdropFilter: "blur(16px)",
-        zIndex: 30,
+        zIndex: 70,
         transform: `scale(${scale})`,
       }}
     >

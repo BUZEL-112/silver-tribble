@@ -81,13 +81,26 @@ def main() -> None:
                 except Exception:
                     placements = []
 
-            if not placements:
+            has_valid_media = any(
+                p.local_path and Path(p.local_path).exists() for p in placements
+            )
+            has_media_keys = bool(settings.pexels_api_key or settings.giphy_api_key)
+
+            if not placements or (has_media_keys and not has_valid_media):
                 media_svc = MediaService(storage_service=storage, cost_repo=cost_repo)
                 placements = media_svc.process_media_for_job(
                     job_id=job.id,
                     captions=captions,
                     beats=script.beats,
                 )
+                try:
+                    placements_path.parent.mkdir(parents=True, exist_ok=True)
+                    placements_path.write_text(
+                        json.dumps([p.model_dump() for p in placements], indent=2),
+                        encoding="utf-8",
+                    )
+                except Exception:
+                    pass
 
             audio_local_path = storage.get_local_path(job.audio_path or "")
             render_svc = RenderService(render_repo, cost_repo, storage)

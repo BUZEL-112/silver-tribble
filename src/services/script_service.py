@@ -110,7 +110,11 @@ class ScriptService:
         return OpenAI(base_url=effective_base_url, api_key=effective_key, timeout=10.0)
 
     def _load_prompt(self, filename: str) -> dict[str, Any]:
-        prompt_path = self.prompts_dir / filename
+        p = Path(filename)
+        if p.is_file():
+            prompt_path = p
+        else:
+            prompt_path = self.prompts_dir / p.name
         with open(prompt_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
@@ -127,7 +131,9 @@ class ScriptService:
             raise ValueError(f"StoryCluster with id {cluster_id} not found")
 
         articles = self.article_repo.get_articles_by_ids(cluster.article_ids)
-        prompt_data = self._load_prompt("beat_sheet.yaml")
+        prompt_file = settings.prompts_planning_file or "beat_sheet.yaml"
+        prompt_data = self._load_prompt(prompt_file)
+        system_prompt = settings.prompts_planning_system_prompt or prompt_data["system_prompt"]
 
         template = jinja2.Template(prompt_data["user_prompt_template"])
         format_label = "Vertical Short" if aspect_ratio == "9:16" else "Horizontal Widescreen"
@@ -141,17 +147,47 @@ class ScriptService:
         target_model = model or settings.llm_planning_model
         try:
             client = self._resolve_client(target_model)
-            response = client.chat.completions.create(
-                model=target_model,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": prompt_data["system_prompt"]},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.7,
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=target_model,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    temperature=0.7,
+                )
+            except Exception:
+                if self.gemini_key and target_model != "gemini-3.5-flash-lite":
+                    target_model = "gemini-3.5-flash-lite"
+                    client = self._resolve_client(target_model)
+                    response = client.chat.completions.create(
+                        model=target_model,
+                        response_format={"type": "json_object"},
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        temperature=0.7,
+                    )
+                else:
+                    raise
+
             raw_json = response.choices[0].message.content or "{}"
             parsed = json.loads(raw_json)
+            if isinstance(parsed, list):
+                parsed = {
+                    "title": cluster.title if cluster else "AI News Update",
+                    "beats": parsed,
+                }
+            elif isinstance(parsed, dict) and "beats" not in parsed:
+                for k in ["items", "beat_sheet", "outline", "data"]:
+                    if k in parsed and isinstance(parsed[k], list):
+                        parsed["beats"] = parsed[k]
+                        break
+            if isinstance(parsed, dict) and not parsed.get("title"):
+                parsed["title"] = cluster.title if cluster else "AI News Update"
+
             beat_sheet = BeatSheetResponse.model_validate(parsed)
 
             # Pricing estimate based on standard tokens
@@ -226,7 +262,10 @@ class ScriptService:
         cluster = self.article_repo.get_cluster_by_id(cluster_id)
         cluster_title = cluster.title if cluster else beat_sheet.title
 
-        prompt_data = self._load_prompt("eswar_host_persona.yaml")
+        prompt_file = settings.prompts_writing_file or "eswar_host_persona.yaml"
+        prompt_data = self._load_prompt(prompt_file)
+        system_prompt = settings.prompts_writing_system_prompt or prompt_data["system_prompt"]
+
         template = jinja2.Template(prompt_data["user_prompt_template"])
         user_message = template.render(
             cluster_title=cluster_title,
@@ -236,17 +275,56 @@ class ScriptService:
         target_model = model or settings.llm_writing_model
         try:
             client = self._resolve_client(target_model)
-            response = client.chat.completions.create(
-                model=target_model,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": prompt_data["system_prompt"]},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.8,
-            )
+            try:
+                response = client.chat.completions.create(
+                    model=target_model,
+                    response_format={"type": "json_object"},
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    temperature=0.8,
+                )
+            except Exception:
+                if self.gemini_key and target_model != "gemini-3.5-flash-lite":
+                    target_model = "gemini-3.5-flash-lite"
+                    client = self._resolve_client(target_model)
+                    response = client.chat.completions.create(
+                        model=target_model,
+                        response_format={"type": "json_object"},
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message},
+                        ],
+                        temperature=0.8,
+                    )
+                else:
+                    raise
+
             raw_json = response.choices[0].message.content or "{}"
             parsed = json.loads(raw_json)
+            if isinstance(parsed, list):
+                parsed = {
+                    "title": cluster_title,
+                    "expanded_beats": parsed,
+                    "full_narration_script": " ".join(
+                        b.get("narration_text", "") for b in parsed if isinstance(b, dict)
+                    ),
+                }
+            elif isinstance(parsed, dict):
+                if "expanded_beats" not in parsed:
+                    for k in ["beats", "expandedBeats", "items"]:
+                        if k in parsed and isinstance(parsed[k], list):
+                            parsed["expanded_beats"] = parsed[k]
+                            break
+                if not parsed.get("title"):
+                    parsed["title"] = cluster_title
+                if not parsed.get("full_narration_script"):
+                    beats_list = parsed.get("expanded_beats", [])
+                    parsed["full_narration_script"] = " ".join(
+                        b.get("narration_text", "") for b in beats_list if isinstance(b, dict)
+                    )
+
             expansion = ScriptExpansionResponse.model_validate(parsed)
 
             # Pricing estimate based on standard tokens

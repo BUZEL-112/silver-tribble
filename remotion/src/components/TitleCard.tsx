@@ -6,6 +6,7 @@ interface TitleCardProps {
   onScreenText: string;
   aspectRatio: "9:16" | "16:9";
   beatType?: string;
+  channelBadgeText?: string;
 }
 
 export const TitleCard: React.FC<TitleCardProps> = ({
@@ -13,6 +14,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({
   onScreenText,
   aspectRatio,
   beatType = "context",
+  channelBadgeText = "AI NEWS BY ESWAR",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -35,7 +37,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({
         top: isVertical ? "12%" : "8%",
         left: isVertical ? "6%" : "5%",
         right: isVertical ? "6%" : "5%",
-        zIndex: 15,
+        zIndex: 50,
         transform: `translateY(${(1 - slideIn) * -40}px)`,
         opacity: slideIn,
       }}
@@ -67,7 +69,7 @@ export const TitleCard: React.FC<TitleCardProps> = ({
             display: "inline-block",
           }}
         />
-        AI NEWS BY ESWAR
+        {channelBadgeText}
       </div>
 
       {/* Main Kinetic Headline Box */}

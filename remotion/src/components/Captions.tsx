@@ -47,7 +47,7 @@ export const Captions: React.FC<CaptionsProps> = ({
         flexWrap: "wrap",
         justifyContent: "center",
         alignItems: "center",
-        gap: isVertical ? "12px" : "16px",
+        gap: isVertical ? "16px" : "20px",
         zIndex: 20,
         pointerEvents: "none",
       }}
@@ -55,27 +55,52 @@ export const Captions: React.FC<CaptionsProps> = ({
       {visibleWords.map((c, idx) => {
         const isActive = currentTime >= c.start && currentTime <= c.end;
         const isPast = currentTime > c.end;
+        const cleanWord = c.word.replace(/^[^\w]+|[^\w]+$/g, "");
+        const trailingPunct = c.word.match(/[.,!?;:]+$/)?.[0] || "";
+        if (!cleanWord) return null;
 
         return (
           <span
             key={`${c.word}-${c.start}-${idx}`}
             style={{
-              fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-              fontSize: isVertical ? "48px" : "42px",
-              fontWeight: 900,
-              textTransform: "uppercase",
-              letterSpacing: "1px",
-              color: isActive ? "#fde047" : isPast ? "#94a3b8" : "#ffffff",
-              backgroundColor: isActive ? "rgba(0, 0, 0, 0.75)" : "rgba(0, 0, 0, 0.4)",
-              padding: isVertical ? "6px 16px" : "4px 14px",
-              borderRadius: "8px",
-              transform: isActive ? "scale(1.12)" : "scale(1.0)",
-              transition: "transform 0.08s ease-out",
-              border: isActive ? "2px solid #facc15" : "1px solid rgba(255,255,255,0.1)",
-              textShadow: "0 4px 12px rgba(0,0,0,0.8)",
+              display: "inline-flex",
+              alignItems: "baseline",
             }}
           >
-            {c.word}
+            <span
+              style={{
+                fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+                fontSize: isVertical ? "48px" : "42px",
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: "1px",
+                color: isActive ? "#fde047" : isPast ? "#94a3b8" : "#ffffff",
+                backgroundColor: isActive ? "rgba(0, 0, 0, 0.85)" : "transparent",
+                padding: isActive ? (isVertical ? "4px 14px" : "4px 12px") : "0px",
+                borderRadius: "8px",
+                transform: isActive ? "scale(1.12)" : "scale(1.0)",
+                transition: "transform 0.08s ease-out",
+                border: isActive ? "2px solid #facc15" : "none",
+                textShadow: "0 4px 12px rgba(0,0,0,0.9), 0 0 20px rgba(0,0,0,0.8)",
+              }}
+            >
+              {cleanWord}
+              {!isActive && trailingPunct}
+            </span>
+            {trailingPunct && isActive && (
+              <span
+                style={{
+                  fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
+                  fontSize: isVertical ? "48px" : "42px",
+                  fontWeight: 900,
+                  color: "#fde047",
+                  marginLeft: "2px",
+                  textShadow: "0 4px 12px rgba(0,0,0,0.9)",
+                }}
+              >
+                {trailingPunct}
+              </span>
+            )}
           </span>
         );
       })}

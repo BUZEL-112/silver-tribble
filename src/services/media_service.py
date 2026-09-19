@@ -1,6 +1,5 @@
-"""Sentence-level media search and asset retrieval service using Pexels and Giphy."""
-
 import re
+import subprocess
 from pathlib import Path
 from typing import Any, Literal
 
@@ -13,6 +12,7 @@ from src.models.schemas import (
     WordCaption,
 )
 from src.repositories.cost_repository import CostRepository
+from src.services.media_inspector import MediaInspector
 from src.services.storage_service import StorageService, get_storage_service
 
 STOP_WORDS = {
@@ -223,7 +223,15 @@ class MediaService:
         self.default_ratio = (
             default_ratio if default_ratio is not None else settings.default_media_type_ratio
         )
+        self.inspector = MediaInspector()
         self.media_cache_dir.mkdir(parents=True, exist_ok=True)
+        public_media = settings.remotion_project_dir / "public" / "media"
+        if not public_media.exists() and not public_media.is_symlink():
+            try:
+                public_media.parent.mkdir(parents=True, exist_ok=True)
+                public_media.symlink_to(self.media_cache_dir.resolve(), target_is_directory=True)
+            except Exception:
+                pass
 
     def extract_keywords(self, text: str, max_keywords: int = 3) -> list[str]:
         """Extract 1 to 3 distinct search keywords from text removing punctuation and stop words."""
@@ -268,12 +276,14 @@ class MediaService:
             has_long_pause = False
             if idx < len(captions) - 1:
                 gap = captions[idx + 1].start - word_cap.end
-                if gap >= 0.7:
+                if gap >= 0.75:
                     has_long_pause = True
 
-            exceeds_word_count = len(current_words) >= 10
+            dur = current_words[-1].end - current_words[0].start
+            exceeds_word_count = len(current_words) >= 12
 
-            if has_terminal_punct or has_long_pause or exceeds_word_count:
+            # Enforce minimum 1.8s duration to avoid flash frames
+            if (has_terminal_punct and dur >= 1.8) or (has_long_pause and dur >= 1.5) or exceeds_word_count:
                 sent_text = " ".join(w.word for w in current_words)
                 sentences.append(
                     {
@@ -300,8 +310,9 @@ class MediaService:
         self,
         query: str,
         media_type: Literal["video", "image"] = "video",
+        excluded_urls: set[str] | None = None,
     ) -> tuple[str, str] | None:
-        """Search Pexels API for video or photo URL and return (source_url, file_extension)."""
+        """Search Pexels API for video or photo URL, filtering out excluded_urls."""
         if not self.pexels_api_key:
             return None
 
@@ -310,32 +321,41 @@ class MediaService:
         try:
             with httpx.Client(timeout=10.0) as client:
                 if media_type == "video":
-                    url = f"https://api.pexels.com/videos/search?query={query}&per_page=1&orientation=portrait"
+                    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
                     resp = client.get(url, headers=headers)
                     if resp.status_code == 200:
                         data = resp.json()
                         videos = data.get("videos", [])
-                        if videos and videos[0].get("video_files"):
-                            # Pick medium or sd video file
-                            files = videos[0]["video_files"]
+                        for v in videos:
+                            files = v.get("video_files", [])
+                            if not files:
+                                continue
                             best_file = files[0]
                             for f in files:
                                 if f.get("quality") in ["sd", "hd"]:
                                     best_file = f
                                     break
-                            return best_file["link"], "mp4"
+                            link = best_file.get("link")
+                            if not link:
+                                continue
+                            if excluded_urls and link in excluded_urls:
+                                continue
+                            return link, "mp4"
 
                 # Fallback or photo search
-                photo_url = f"https://api.pexels.com/v1/search?query={query}&per_page=1&orientation=portrait"
+                photo_url = f"https://api.pexels.com/v1/search?query={query}&per_page=15&orientation=portrait"
                 resp = client.get(photo_url, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
                     photos = data.get("photos", [])
-                    if photos and photos[0].get("src"):
-                        src_dict = photos[0]["src"]
+                    for p in photos:
+                        src_dict = p.get("src", {})
                         src_url = src_dict.get("large") or src_dict.get("original")
-                        if src_url:
-                            return src_url, "jpg"
+                        if not src_url:
+                            continue
+                        if excluded_urls and src_url in excluded_urls:
+                            continue
+                        return src_url, "jpg"
 
         except Exception:
             return None
@@ -373,17 +393,46 @@ class MediaService:
 
         return None
 
-    def download_asset(self, url: str, destination_path: Path) -> bool:
-        """Download remote asset to local destination path."""
+    def download_asset(self, url: str, destination_path: Path) -> tuple[bool, Path]:
+        """Download remote asset to local destination path, transcoding GIFs to MP4 to prevent looping."""
         try:
             with httpx.Client(timeout=15.0) as client:
                 resp = client.get(url)
                 if resp.status_code == 200:
                     destination_path.write_bytes(resp.content)
-                    return True
+
+                    # Transcode GIF to non-looping MP4 video for clean Remotion playback
+                    if destination_path.suffix.lower() == ".gif":
+                        mp4_file = destination_path.with_suffix(".mp4")
+                        try:
+                            cmd = [
+                                "ffmpeg",
+                                "-y",
+                                "-i",
+                                str(destination_path),
+                                "-movflags",
+                                "faststart",
+                                "-pix_fmt",
+                                "yuv420p",
+                                "-vf",
+                                "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                                str(mp4_file),
+                            ]
+                            subprocess.run(
+                                cmd,
+                                check=True,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                            if mp4_file.exists() and mp4_file.stat().st_size > 0:
+                                return True, mp4_file
+                        except Exception:
+                            pass
+
+                    return True, destination_path
         except Exception:
-            return False
-        return False
+            return False, destination_path
+        return False, destination_path
 
     def process_media_for_job(
         self,
@@ -391,74 +440,121 @@ class MediaService:
         captions: list[WordCaption],
         beats: list[dict[str, Any]] | None = None,
     ) -> list[SentenceMediaPlacement]:
-        """Generate keywords, fetch assets from Pexels/Giphy with graceful fallback."""
+        """Generate keywords, fetch assets with deduplication, GIF-freeze, and inspector gate."""
         sentences = self.group_captions_into_sentences(captions)
         if not sentences:
             return []
 
         beats_list = beats or []
         placements: list[SentenceMediaPlacement] = []
+        used_urls: set[str] = set()
 
         for idx, sentence_info in enumerate(sentences):
             start_t = sentence_info["start_time"]
             end_t = sentence_info["end_time"]
             text = sentence_info["text"]
+            lower_text = text.lower()
 
             keywords = self.extract_keywords(text, max_keywords=3)
-            query_str = " ".join(keywords[:2]) if keywords else "ai technology"
+            base_kw = keywords[0] if keywords else "technology"
 
-            # Determine tone from matching beat
-            active_beat = None
-            for b in beats_list:
-                b_start = b.get("start_time", 0.0)
-                b_end = b.get("end_time", 9999.0)
-                if start_t >= b_start and start_t < b_end:
-                    active_beat = b
-                    break
-
-            beat_type = active_beat.get("beat_type", "context") if active_beat else "context"
-
-            # Comedic / skepticism / exaggeration beats prefer Giphy GIFs
-            prefer_giphy = beat_type in ["skepticism", "outro"] or (
-                idx % 2 == 1 and bool(self.giphy_api_key)
-            )
+            # Domain-anchored query mapping to prevent generic/meme mismatches
+            if any(k in lower_text for k in ["jensen", "huang", "nvidia"]):
+                query_str = "nvidia gpu semiconductor microchip artificial intelligence"
+            elif any(k in lower_text for k in ["dario", "amodei", "anthropic", "openai", "sam altman"]):
+                query_str = "artificial intelligence neural network futuristic data center"
+            elif any(k in lower_text for k in ["brakes", "slow", "pace", "frontier", "police"]):
+                query_str = "server room futuristic cyber security technology"
+            elif any(k in lower_text for k in ["regulat", "treaties", "agreements", "democratic", "global"]):
+                query_str = "global digital network connection artificial intelligence"
+            elif any(k in lower_text for k in ["diary", "privacy", "secret", "evaluators", "trust"]):
+                query_str = "cybersecurity digital data privacy matrix code"
+            elif any(k in lower_text for k in ["server", "hardware", "chip", "semiconductor", "models"]):
+                query_str = "data center glowing server rack technology"
+            elif any(k in lower_text for k in ["robot", "agent", "agents", "autonomous", "superintelligence", "gods"]):
+                query_str = "futuristic humanoid robot artificial intelligence"
+            elif any(k in lower_text for k in ["code", "coding", "software", "developer"]):
+                query_str = "programming code screen computer developer technology"
+            elif any(k in lower_text for k in ["wifi", "wi-fi", "password", "passwords"]):
+                query_str = "digital networking router cyber tech futuristic"
+            else:
+                query_str = f"artificial intelligence futuristic technology {base_kw}"
 
             chosen_placement: SentenceMediaPlacement | None = None
 
-            if prefer_giphy and self.giphy_api_key:
-                result = self.search_giphy(query_str)
+            if self.pexels_api_key:
+                # Default to vertical video with deduplication across the video
+                result = self.search_pexels(query_str, media_type="video", excluded_urls=used_urls)
+                if not result:
+                    result = self.search_pexels(
+                        f"artificial intelligence technology {base_kw}",
+                        media_type="video",
+                        excluded_urls=used_urls,
+                    )
+                if not result:
+                    result = self.search_pexels(
+                        "artificial intelligence technology",
+                        media_type="video",
+                        excluded_urls=used_urls,
+                    )
                 if result:
                     source_url, ext = result
                     dest_file = self.media_cache_dir / f"job_{job_id}_sent_{idx}.{ext}"
-                    if self.download_asset(source_url, dest_file):
-                        chosen_placement = SentenceMediaPlacement(
-                            sentence_index=idx,
-                            start_time=start_t,
-                            end_time=end_t,
+                    ok, final_path = self.download_asset(source_url, dest_file)
+                    if ok:
+                        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
+                        approved, _ = self.inspector.inspect_candidate(
+                            sentence_text=text,
                             keywords=keywords,
-                            media_type="gif",
-                            local_path=str(dest_file.resolve()),
-                            source_url=source_url,
-                            provider="giphy",
+                            media_path=final_path,
+                            media_type=actual_type,
                         )
+                        if approved:
+                            used_urls.add(source_url)
+                            chosen_placement = SentenceMediaPlacement(
+                                sentence_index=idx,
+                                start_time=start_t,
+                                end_time=end_t,
+                                keywords=keywords,
+                                media_type=actual_type,
+                                local_path=str(final_path.resolve()),
+                                source_url=source_url,
+                                provider="pexels",
+                            )
+                        else:
+                            used_urls.add(source_url)
 
-            if not chosen_placement and self.pexels_api_key:
-                m_type: Literal["video", "image"] = "video" if idx % 2 == 0 else "image"
-                result = self.search_pexels(query_str, media_type=m_type)
+            if not chosen_placement and self.giphy_api_key:
+                reaction_query = f"{base_kw} technology reaction"
+                result = self.search_giphy(reaction_query)
+                if not result:
+                    result = self.search_giphy("technology reaction")
                 if result:
                     source_url, ext = result
                     dest_file = self.media_cache_dir / f"job_{job_id}_sent_{idx}.{ext}"
-                    if self.download_asset(source_url, dest_file):
-                        chosen_placement = SentenceMediaPlacement(
-                            sentence_index=idx,
-                            start_time=start_t,
-                            end_time=end_t,
+                    ok, final_path = self.download_asset(source_url, dest_file)
+                    if ok:
+                        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
+                        approved, _ = self.inspector.inspect_candidate(
+                            sentence_text=text,
                             keywords=keywords,
-                            media_type="video" if ext == "mp4" else "image",
-                            local_path=str(dest_file.resolve()),
-                            source_url=source_url,
-                            provider="pexels",
+                            media_path=final_path,
+                            media_type=actual_type,
                         )
+                        if approved:
+                            used_urls.add(source_url)
+                            chosen_placement = SentenceMediaPlacement(
+                                sentence_index=idx,
+                                start_time=start_t,
+                                end_time=end_t,
+                                keywords=keywords,
+                                media_type=actual_type,
+                                local_path=str(final_path.resolve()),
+                                source_url=source_url,
+                                provider="giphy",
+                            )
+                        else:
+                            used_urls.add(source_url)
 
             # Graceful fallback when keys missing or search returned no results
             if not chosen_placement:
@@ -474,6 +570,12 @@ class MediaService:
                 )
 
             placements.append(chosen_placement)
+
+        # Continuous interval clamping: eliminate black gaps between consecutive clips
+        for i in range(len(placements) - 1):
+            placements[i].end_time = placements[i + 1].start_time
+        if placements and captions:
+            placements[-1].end_time = round(captions[-1].end, 2)
 
         if self.cost_repo:
             self.cost_repo.log_cost(

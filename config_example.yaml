@@ -69,6 +69,9 @@ providers:
   # Pexels API key (for stock B-roll background footage)
   pexels_api_key: null      # "..."
 
+  # Giphy API key (for reaction meme GIFs)
+  giphy_api_key: null       # "..."
+
 # ------------------------------------------------------------------------------
 # 5. Asset & Media Storage
 # ------------------------------------------------------------------------------
@@ -117,7 +120,43 @@ clustering:
   similarity_threshold: 0.82
 
 # ------------------------------------------------------------------------------
-# 9. Curated AI News RSS Feeds
+# 9. Media & Stock Visual Retrieval (Pexels & Giphy)
+# ------------------------------------------------------------------------------
+media:
+  # Local cache directory for downloaded videos, images, and GIFs
+  cache_dir: "./artifacts/media"
+
+  # Default ratio of stock videos to animated GIFs (0.0 = all GIFs, 1.0 = all stock videos)
+  ratio: 0.5
+
+# ------------------------------------------------------------------------------
+# 10. Watermark & Branding Overlays
+# ------------------------------------------------------------------------------
+watermark:
+  # On-screen text identifier (e.g. handle or channel name)
+  text: "@AINewsDesk"
+
+  # Path to transparent PNG/SVG logo overlay file (optional)
+  image_path: null
+
+  # Screen position: "top-right", "top-left", "bottom-right", "bottom-left"
+  position: "top-right"
+
+  # Watermark opacity (0.0 = invisible, 1.0 = fully opaque)
+  opacity: 0.8
+
+# ------------------------------------------------------------------------------
+# 11. Timeline Delays & Card Timing Offsets
+# ------------------------------------------------------------------------------
+timing:
+  # Intro delay in seconds (duration watermark/title displays before speech begins)
+  intro_delay_seconds: 1.5
+
+  # Outro card duration in seconds (duration card displays after narration ends)
+  outro_duration_seconds: 3.0
+
+# ------------------------------------------------------------------------------
+# 12. Curated AI News RSS Feeds
 # ------------------------------------------------------------------------------
 # List of RSS feeds to scrape during the `ingest` pipeline stage:
 rss_feeds:

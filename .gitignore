@@ -35,6 +35,11 @@ config/config.yaml
 data/
 output/
 temp/
+artifacts/
+
+# Logs
+*.log
+session.log
 
 # Node and Remotion
 remotion/node_modules/

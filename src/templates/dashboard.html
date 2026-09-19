@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Modular AI Video Production Platform</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .tab-btn.active { border-color: #3b82f6; color: #3b82f6; background-color: #1e293b; }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+  <div class="border-b border-slate-800 bg-slate-900/60 sticky top-0 z-50 backdrop-blur">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+        <span class="font-bold text-lg tracking-tight">AI Video Studio</span>
+        <span class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">v1.0</span>
+      </div>
+      <div class="flex space-x-1" id="nav-tabs">
+        <button onclick="switchTab('pipeline')" id="tab-btn-pipeline" class="tab-btn active px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Operations</button>
+        <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Action Logs</button>
+        <button onclick="switchTab('script')" id="tab-btn-script" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Script Editor</button>
+        <button onclick="switchTab('media')" id="tab-btn-media" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Media Gallery</button>
+        <button onclick="switchTab('branding')" id="tab-btn-branding" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Branding</button>
+        <button onclick="switchTab('config')" id="tab-btn-config" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Settings (YAML)</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- TAB 1: PIPELINE OPERATIONS -->
+    <section id="tab-pipeline" class="space-y-6">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">Pipeline Operations Center</h2>
+            <p class="text-sm text-slate-400">Trigger individual micro-monolith stages or run the full pipeline.</p>
+          </div>
+          <button onclick="runEndToEnd()" id="btn-run-all" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 font-semibold rounded-lg text-sm shadow transition">Run All Stages</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+              <div class="text-xs font-semibold text-blue-400 uppercase tracking-wider">Stage 1</div>
+              <div class="font-medium text-white mt-1">Ingest RSS</div>
+              <div class="text-xs text-slate-400 mt-1">Fetch feeds & store</div>
+            </div>
+            <button onclick="triggerStage('ingest')" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Ingest</button>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+              <div class="text-xs font-semibold text-purple-400 uppercase tracking-wider">Stage 2</div>
+              <div class="font-medium text-white mt-1">Cluster Stories</div>
+              <div class="text-xs text-slate-400 mt-1">Embeddings & groups</div>
+            </div>
+            <button onclick="triggerStage('cluster')" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Cluster</button>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+              <div class="text-xs font-semibold text-yellow-400 uppercase tracking-wider">Stage 3</div>
+              <div class="font-medium text-white mt-1">Generate Script</div>
+              <div class="text-xs text-slate-400 mt-1">Beats & narration</div>
+            </div>
+            <button onclick="promptScriptStage()" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Script</button>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+              <div class="text-xs font-semibold text-green-400 uppercase tracking-wider">Stage 4</div>
+              <div class="font-medium text-white mt-1">Voice & Captions</div>
+              <div class="text-xs text-slate-400 mt-1">TTS & Whisper</div>
+            </div>
+            <button onclick="promptVoiceStage()" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Voice</button>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+              <div class="text-xs font-semibold text-pink-400 uppercase tracking-wider">Stage 5</div>
+              <div class="font-medium text-white mt-1">Media Retrieval</div>
+              <div class="text-xs text-slate-400 mt-1">Pexels & Giphy</div>
+            </div>
+            <button onclick="promptMediaStage()" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Media</button>
+          </div>
+
+          <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
+            <div>
+              <div class="text-xs font-semibold text-red-400 uppercase tracking-wider">Stage 6</div>
+              <div class="font-medium text-white mt-1">Remotion Render</div>
+              <div class="text-xs text-slate-400 mt-1">Watermark & video</div>
+            </div>
+            <button onclick="promptRenderStage()" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Render</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Execution Console Output -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-mono uppercase text-slate-400">Execution Output</span>
+          <button onclick="clearConsole()" class="text-xs text-slate-500 hover:text-slate-300">Clear</button>
+        </div>
+        <pre id="console-output" class="bg-slate-950 p-4 rounded-lg font-mono text-xs text-slate-300 h-44 overflow-y-auto">Ready for execution.</pre>
+      </div>
+    </section>
+
+    <!-- TAB 2: AUDIT ACTION LOG -->
+    <section id="tab-logs" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 class="text-lg font-bold text-white">Central Audit Action Logs</h2>
+          <div class="flex items-center space-x-3">
+            <select id="log-stage-filter" onchange="loadLogs()" class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300">
+              <option value="">All Stages</option>
+              <option value="ingest">Ingest</option>
+              <option value="cluster">Cluster</option>
+              <option value="script">Script</option>
+              <option value="voice">Voice</option>
+              <option value="media">Media</option>
+              <option value="render">Render</option>
+              <option value="pipeline">Pipeline</option>
+            </select>
+            <select id="log-status-filter" onchange="loadLogs()" class="bg-slate-950 border border-slate-800 rounded px-2.5 py-1 text-xs text-slate-300">
+              <option value="">All Statuses</option>
+              <option value="started">Started</option>
+              <option value="success">Success</option>
+              <option value="failed">Failed</option>
+            </select>
+            <button onclick="loadLogs()" class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Refresh</button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr class="border-b border-slate-800 text-slate-400 font-mono uppercase">
+                <th class="py-2 px-3">ID</th>
+                <th class="py-2 px-3">Stage</th>
+                <th class="py-2 px-3">Action</th>
+                <th class="py-2 px-3">Actor</th>
+                <th class="py-2 px-3">Status</th>
+                <th class="py-2 px-3">Job ID</th>
+                <th class="py-2 px-3">Duration</th>
+                <th class="py-2 px-3">Message</th>
+                <th class="py-2 px-3">Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body" class="divide-y divide-slate-800 text-slate-300 font-mono">
+              <tr><td colspan="9" class="text-center py-4 text-slate-500">Loading logs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: SCRIPT EDITOR -->
+    <section id="tab-script" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">Script Editor & Approver</h2>
+            <p class="text-sm text-slate-400">Review, fine-tune dialogue, and approve scripts prior to voice synthesis.</p>
+          </div>
+          <div class="flex items-center space-x-3">
+            <input type="number" id="script-id-input" placeholder="Script ID" class="bg-slate-950 border border-slate-800 rounded px-3 py-1 text-sm w-28 text-white">
+            <button onclick="loadScript()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Load</button>
+            <button onclick="saveScript()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded transition">Save & Approve</button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Title</label>
+            <input id="script-title-input" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white mb-4">
+
+            <div class="flex items-center justify-between mb-1">
+              <label class="text-xs font-mono text-slate-400 uppercase">Spoken Narration</label>
+              <div class="text-xs text-slate-400 font-mono">
+                <span id="script-word-count">0</span> words | Est: <span id="script-est-dur">0</span>s
+              </div>
+            </div>
+            <textarea id="script-narration-input" oninput="updateScriptStats()" rows="12" class="w-full bg-slate-950 border border-slate-800 rounded p-3 text-sm text-slate-200 font-sans leading-relaxed"></textarea>
+          </div>
+
+          <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Beat Sheet (JSON)</label>
+            <textarea id="script-beats-input" rows="15" class="w-full bg-slate-950 border border-slate-800 rounded p-3 text-xs text-slate-300 font-mono leading-relaxed"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: MEDIA & VIDEO GALLERY -->
+    <section id="tab-media" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">Media & Video Gallery</h2>
+            <p class="text-sm text-slate-400">View sentence-level visual placements and play finalized video renders.</p>
+          </div>
+          <div class="flex items-center space-x-3">
+            <input type="number" id="gallery-job-id" placeholder="Job ID" class="bg-slate-950 border border-slate-800 rounded px-3 py-1 text-sm w-28 text-white">
+            <button onclick="loadGalleryJob()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Load Job Assets</button>
+          </div>
+        </div>
+
+        <!-- Video Player Preview -->
+        <div id="video-player-container" class="bg-slate-950 border border-slate-800 rounded-lg p-4 mb-6 hidden">
+          <h3 class="text-sm font-semibold text-slate-300 mb-2">Final Video Preview</h3>
+          <video id="html5-video-player" controls class="max-h-96 rounded mx-auto bg-black"></video>
+        </div>
+
+        <!-- Placements Asset Grid -->
+        <h3 class="text-sm font-semibold text-slate-300 mb-3">Sentence Asset Placements</h3>
+        <div id="placements-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div class="text-xs text-slate-500 col-span-full">Enter a Job ID above to inspect visual assets.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: BRANDING & WATERMARK -->
+    <section id="tab-branding" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h2 class="text-lg font-bold text-white">Branding & Watermark Control</h2>
+            <p class="text-sm text-slate-400">Configure on-screen watermarks, intro splash duration, and outro cards.</p>
+          </div>
+          <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded transition">Save Settings</button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Watermark Text</label>
+              <input id="setting-wm-text" oninput="updateWatermarkPreview()" placeholder="@AINewsDesk" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white">
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Watermark Logo Image Path</label>
+              <input id="setting-wm-img" oninput="updateWatermarkPreview()" placeholder="/path/to/logo.png" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Position</label>
+                <select id="setting-wm-pos" onchange="updateWatermarkPreview()" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white">
+                  <option value="top-right">Top-Right</option>
+                  <option value="top-left">Top-Left</option>
+                  <option value="bottom-right">Bottom-Right</option>
+                  <option value="bottom-left">Bottom-Left</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Opacity (<span id="wm-opacity-val">0.8</span>)</label>
+                <input type="range" id="setting-wm-opacity" min="0" max="1" step="0.05" value="0.8" oninput="updateWatermarkPreview()" class="w-full mt-2">
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Intro Delay (seconds)</label>
+                <input type="number" id="setting-intro-delay" step="0.5" min="0" max="10" value="1.5" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white">
+              </div>
+
+              <div>
+                <label class="block text-xs font-mono text-slate-400 uppercase mb-1">Outro Duration (seconds)</label>
+                <input type="number" id="setting-outro-dur" step="0.5" min="0" max="10" value="3.0" class="w-full bg-slate-950 border border-slate-800 rounded p-2 text-sm text-white">
+              </div>
+            </div>
+          </div>
+
+          <!-- Real-Time Watermark Visual Preview Box -->
+          <div>
+            <label class="block text-xs font-mono text-slate-400 uppercase mb-2">Live Screen Preview (9:16)</label>
+            <div class="relative w-64 h-[450px] mx-auto bg-slate-950 border border-slate-700 rounded-lg overflow-hidden shadow-2xl flex flex-col justify-between p-4">
+              <!-- Watermark Overlay Preview -->
+              <div id="preview-watermark-overlay" class="absolute z-30 transition-all duration-200">
+                <div class="bg-black/60 border border-white/20 px-3 py-1 rounded-full flex items-center space-x-1.5 backdrop-blur-sm">
+                  <span id="preview-wm-text" class="text-xs font-bold text-white">@AINewsDesk</span>
+                </div>
+              </div>
+
+              <!-- Animated background mockup -->
+              <div class="absolute inset-0 bg-gradient-to-br from-indigo-950 via-slate-950 to-blue-950 opacity-90 z-0"></div>
+
+              <!-- Mock Captions -->
+              <div class="relative z-10 my-auto text-center">
+                <span class="inline-block bg-yellow-400 text-black font-black text-sm px-2 py-0.5 rounded shadow">SAMPLE CAPTION</span>
+              </div>
+
+              <!-- Mock Lower Card -->
+              <div class="relative z-10 bg-slate-900/80 border border-slate-800 p-2 rounded text-center">
+                <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">AI Breakthrough</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    <!-- TAB 6: CONFIGURATION (PLUG AND PLAY YAML) -->
+    <section id="tab-config" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white">Plug-and-Play Configuration Manager</h2>
+            <p class="text-sm text-slate-400">Switch active profiles, edit YAML live, or load from commented templates with hot-reloading.</p>
+          </div>
+          <div class="flex items-center space-x-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 text-xs">
+            <span class="text-slate-400">Active Source:</span>
+            <span id="active-config-badge" class="font-mono font-semibold text-blue-400">Loading...</span>
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4 bg-slate-950/70 p-3 rounded-lg border border-slate-800">
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="text-xs font-mono text-slate-400 uppercase">Target File:</label>
+            <input id="yaml-path-input" value="config.yaml" class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-xs w-60 text-white font-mono" placeholder="config.yaml">
+            <button onclick="loadYamlFile()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Load File</button>
+            <button onclick="loadTemplateYaml()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Load Sample Template</button>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="saveAndApplyYaml()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded transition shadow">Save & Apply (Plug & Play)</button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <label class="text-xs font-mono text-slate-400 uppercase">YAML Configuration Editor</label>
+            <span id="yaml-status-msg" class="text-xs text-slate-400 font-mono"></span>
+          </div>
+          <textarea id="yaml-editor-textarea" rows="22" class="w-full bg-slate-950 border border-slate-800 rounded p-4 text-xs text-slate-200 font-mono leading-relaxed" placeholder="YAML configuration will appear here..."></textarea>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll("section[id^='tab-']").forEach(el => el.classList.add("hidden"));
+      document.querySelectorAll(".tab-btn").forEach(el => el.classList.remove("active"));
+
+      const targetSec = document.getElementById("tab-" + tabId);
+      const targetBtn = document.getElementById("tab-btn-" + tabId);
+      if (targetSec) targetSec.classList.remove("hidden");
+      if (targetBtn) targetBtn.classList.add("active");
+
+      if (tabId === "logs") loadLogs();
+      if (tabId === "branding") loadSettings();
+      if (tabId === "config") {
+        checkActiveConfig();
+        const curVal = document.getElementById("yaml-editor-textarea").value;
+        if (!curVal || curVal.trim() === "") {
+          loadYamlFile();
+        }
+      }
+    }
+
+    function logToConsole(msg) {
+      const el = document.getElementById("console-output");
+      const ts = new Date().toLocaleTimeString();
+      el.textContent += `\n[${ts}] ${msg}`;
+      el.scrollTop = el.scrollHeight;
+    }
+
+    function clearConsole() {
+      document.getElementById("console-output").textContent = "Console cleared.";
+    }
+
+    async function triggerStage(stage) {
+      logToConsole(`Triggering stage: ${stage}...`);
+      try {
+        const res = await fetch(`/api/pipeline/${stage}`, { method: "POST" });
+        const data = await res.json();
+        logToConsole(`[${stage.toUpperCase()}] Result: ` + JSON.stringify(data));
+      } catch (err) {
+        logToConsole(`[${stage.toUpperCase()}] Error: ` + err.message);
+      }
+    }
+
+    async function promptScriptStage() {
+      const clusterId = prompt("Enter Cluster ID:", "1");
+      if (!clusterId) return;
+      logToConsole(`Generating script for cluster ${clusterId}...`);
+      try {
+        const res = await fetch("/api/pipeline/script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cluster_id: parseInt(clusterId), aspect_ratio: "9:16" })
+        });
+        const data = await res.json();
+        logToConsole("[SCRIPT] Result: " + JSON.stringify(data));
+      } catch (err) {
+        logToConsole("[SCRIPT] Error: " + err.message);
+      }
+    }
+
+    async function promptVoiceStage() {
+      const scriptId = prompt("Enter Script ID:", "1");
+      if (!scriptId) return;
+      logToConsole(`Synthesizing voice for script ${scriptId}...`);
+      try {
+        const res = await fetch("/api/pipeline/voice", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ script_id: parseInt(scriptId), aspect_ratio: "9:16" })
+        });
+        const data = await res.json();
+        logToConsole("[VOICE] Result: " + JSON.stringify(data));
+      } catch (err) {
+        logToConsole("[VOICE] Error: " + err.message);
+      }
+    }
+
+    async function promptMediaStage() {
+      const jobId = prompt("Enter Job ID:", "1");
+      if (!jobId) return;
+      logToConsole(`Retrieving visual media for job ${jobId}...`);
+      try {
+        const res = await fetch("/api/pipeline/media", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: parseInt(jobId) })
+        });
+        const data = await res.json();
+        logToConsole("[MEDIA] Result: " + JSON.stringify(data));
+      } catch (err) {
+        logToConsole("[MEDIA] Error: " + err.message);
+      }
+    }
+
+    async function promptRenderStage() {
+      const jobId = prompt("Enter Job ID to Render:", "1");
+      if (!jobId) return;
+      logToConsole(`Executing Remotion render for job ${jobId}...`);
+      try {
+        const res = await fetch("/api/pipeline/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ job_id: parseInt(jobId), dry_run: false })
+        });
+        const data = await res.json();
+        logToConsole("[RENDER] Result: " + JSON.stringify(data));
+      } catch (err) {
+        logToConsole("[RENDER] Error: " + err.message);
+      }
+    }
+
+    async function runEndToEnd() {
+      logToConsole("Starting End-to-End Pipeline Execution...");
+      try {
+        const res = await fetch("/api/pipeline/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ aspect_ratio: "9:16", dry_run: false })
+        });
+        const data = await res.json();
+        logToConsole("[PIPELINE RUN] Finished: " + JSON.stringify(data));
+      } catch (err) {
+        logToConsole("[PIPELINE RUN] Error: " + err.message);
+      }
+    }
+
+    async function loadLogs() {
+      const stage = document.getElementById("log-stage-filter").value;
+      const status = document.getElementById("log-status-filter").value;
+      let url = "/api/logs?limit=50";
+      if (stage) url += `&stage=${stage}`;
+      if (status) url += `&status=${status}`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        const tbody = document.getElementById("logs-table-body");
+        tbody.innerHTML = "";
+
+        if (!data || data.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-slate-500">No action logs found.</td></tr>';
+          return;
+        }
+
+        data.forEach(log => {
+          const tr = document.createElement("tr");
+          const statusClass = log.status === "success" ? "text-green-400" : (log.status === "failed" ? "text-red-400" : "text-yellow-400");
+          const dur = log.duration_seconds !== null ? `${log.duration_seconds.toFixed(2)}s` : "-";
+          const jobId = log.job_id !== null ? log.job_id : "-";
+          const time = log.created_at ? log.created_at.replace("T", " ").substring(0, 19) : "-";
+
+          tr.innerHTML = `
+            <td class="py-2 px-3 text-slate-400">${log.id}</td>
+            <td class="py-2 px-3 font-semibold text-blue-400">${log.stage}</td>
+            <td class="py-2 px-3 text-white">${log.action}</td>
+            <td class="py-2 px-3 text-purple-400">${log.actor}</td>
+            <td class="py-2 px-3 font-bold ${statusClass}">${log.status}</td>
+            <td class="py-2 px-3 text-slate-400">${jobId}</td>
+            <td class="py-2 px-3 text-slate-400">${dur}</td>
+            <td class="py-2 px-3 text-slate-400 max-w-xs truncate">${log.message || ""}</td>
+            <td class="py-2 px-3 text-slate-500">${time}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      } catch (err) {
+        console.error("Error loading logs:", err);
+      }
+    }
+
+    async function loadScript() {
+      const id = document.getElementById("script-id-input").value;
+      if (!id) return;
+      try {
+        const res = await fetch(`/api/scripts/${id}`);
+        if (!res.ok) throw new Error("Script not found");
+        const data = await res.json();
+        document.getElementById("script-title-input").value = data.title;
+        document.getElementById("script-narration-input").value = data.full_narration;
+        document.getElementById("script-beats-input").value = JSON.stringify(data.beats, null, 2);
+        updateScriptStats();
+      } catch (err) {
+        alert("Failed to load script: " + err.message);
+      }
+    }
+
+    function updateScriptStats() {
+      const text = document.getElementById("script-narration-input").value.trim();
+      const words = text ? text.split(/\\s+/).length : 0;
+      document.getElementById("script-word-count").textContent = words;
+      document.getElementById("script-est-dur").textContent = (words / 2.5).toFixed(1);
+    }
+
+    async function saveScript() {
+      const id = document.getElementById("script-id-input").value;
+      if (!id) { alert("Load a script first"); return; }
+      try {
+        const title = document.getElementById("script-title-input").value;
+        const narration = document.getElementById("script-narration-input").value;
+        const beats = JSON.parse(document.getElementById("script-beats-input").value);
+
+        const res = await fetch(`/api/scripts/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, full_narration: narration, beats })
+        });
+        if (!res.ok) throw new Error("Save failed");
+        alert("Script saved and approved.");
+      } catch (err) {
+        alert("Error saving script: " + err.message);
+      }
+    }
+
+    async function loadGalleryJob() {
+      const jobId = document.getElementById("gallery-job-id").value;
+      if (!jobId) return;
+
+      try {
+        const jobsRes = await fetch("/api/jobs");
+        const jobs = await jobsRes.json();
+        const job = jobs.find(j => String(j.id) === String(jobId));
+
+        const playerContainer = document.getElementById("video-player-container");
+        const videoPlayer = document.getElementById("html5-video-player");
+
+        if (job && job.output_video_path) {
+          playerContainer.classList.remove("hidden");
+          const filename = job.output_video_path.split("/").pop();
+          videoPlayer.src = `/static/videos/${filename}`;
+          videoPlayer.load();
+        } else {
+          playerContainer.classList.add("hidden");
+        }
+
+        const grid = document.getElementById("placements-grid");
+        grid.innerHTML = '<div class="text-xs text-slate-500">Checking media placements...</div>';
+
+        grid.innerHTML = `
+          <div class="bg-slate-950 border border-slate-800 p-3 rounded-lg">
+            <div class="text-xs font-bold text-slate-300">Job #${jobId} Visual Summary</div>
+            <div class="text-xs text-slate-400 mt-1">Status: ${job ? job.status : 'unknown'}</div>
+            <div class="text-xs text-slate-400 mt-1">Audio: ${job && job.audio_path ? job.audio_path : 'none'}</div>
+          </div>
+        `;
+      } catch (err) {
+        console.error("Gallery load error:", err);
+      }
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await fetch("/api/settings");
+        const data = await res.json();
+        document.getElementById("setting-wm-text").value = data.watermark_text || "";
+        document.getElementById("setting-wm-img").value = data.watermark_image_path || "";
+        document.getElementById("setting-wm-pos").value = data.watermark_position || "top-right";
+        document.getElementById("setting-wm-opacity").value = data.watermark_opacity ?? 0.8;
+        document.getElementById("setting-intro-delay").value = data.intro_delay_seconds ?? 1.5;
+        document.getElementById("setting-outro-dur").value = data.outro_duration_seconds ?? 3.0;
+        updateWatermarkPreview();
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      }
+    }
+
+    function updateWatermarkPreview() {
+      const text = document.getElementById("setting-wm-text").value || "@AINewsDesk";
+      const pos = document.getElementById("setting-wm-pos").value;
+      const opacity = document.getElementById("setting-wm-opacity").value;
+      document.getElementById("wm-opacity-val").textContent = opacity;
+
+      const overlay = document.getElementById("preview-watermark-overlay");
+      document.getElementById("preview-wm-text").textContent = text;
+      overlay.style.opacity = opacity;
+
+      overlay.style.top = "";
+      overlay.style.bottom = "";
+      overlay.style.left = "";
+      overlay.style.right = "";
+
+      if (pos === "top-right") { overlay.style.top = "12px"; overlay.style.right = "12px"; }
+      if (pos === "top-left") { overlay.style.top = "12px"; overlay.style.left = "12px"; }
+      if (pos === "bottom-right") { overlay.style.bottom = "12px"; overlay.style.right = "12px"; }
+      if (pos === "bottom-left") { overlay.style.bottom = "12px"; overlay.style.left = "12px"; }
+    }
+
+    async function saveSettings() {
+      try {
+        const payload = {
+          watermark_text: document.getElementById("setting-wm-text").value,
+          watermark_image_path: document.getElementById("setting-wm-img").value,
+          watermark_position: document.getElementById("setting-wm-pos").value,
+          watermark_opacity: parseFloat(document.getElementById("setting-wm-opacity").value),
+          intro_delay_seconds: parseFloat(document.getElementById("setting-intro-delay").value),
+          outro_duration_seconds: parseFloat(document.getElementById("setting-outro-dur").value)
+        };
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Failed to save settings");
+        alert("Settings saved successfully.");
+      } catch (err) {
+        alert("Error: " + err.message);
+      }
+    }
+
+    async function checkActiveConfig() {
+      try {
+        const res = await fetch("/api/config/active");
+        const data = await res.json();
+        const badge = document.getElementById("active-config-badge");
+        if (badge) {
+          badge.textContent = data.config_source || ".env (Environment)";
+        }
+      } catch (err) {
+        console.error("Failed to check active config:", err);
+      }
+    }
+
+    async function loadYamlFile() {
+      const path = document.getElementById("yaml-path-input").value.trim() || "config.yaml";
+      const statusEl = document.getElementById("yaml-status-msg");
+      statusEl.textContent = "Loading...";
+      try {
+        const res = await fetch(`/api/config/yaml?path=${encodeURIComponent(path)}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to load config file");
+        document.getElementById("yaml-editor-textarea").value = data.yaml_content;
+        statusEl.textContent = data.exists ? `Loaded: ${path}` : `File not found on disk. Loaded sample template.`;
+        checkActiveConfig();
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    }
+
+    async function loadTemplateYaml() {
+      const statusEl = document.getElementById("yaml-status-msg");
+      statusEl.textContent = "Loading sample template...";
+      try {
+        const res = await fetch("/api/config/yaml?path=config_example.yaml");
+        const data = await res.json();
+        document.getElementById("yaml-editor-textarea").value = data.yaml_content;
+        statusEl.textContent = "Sample template loaded. Click 'Save & Apply' to write and activate.";
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+      }
+    }
+
+    async function saveAndApplyYaml() {
+      const path = document.getElementById("yaml-path-input").value.trim() || "config.yaml";
+      const content = document.getElementById("yaml-editor-textarea").value;
+      const statusEl = document.getElementById("yaml-status-msg");
+      statusEl.textContent = "Saving and applying configuration...";
+      try {
+        const res = await fetch("/api/config/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config_path: path, yaml_content: content })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to save configuration");
+        statusEl.textContent = `Applied! Active configuration: ${data.config_source}`;
+        checkActiveConfig();
+        alert(`Configuration saved and applied to ${path}. Hot-reload successful.`);
+      } catch (err) {
+        statusEl.textContent = "Error: " + err.message;
+        alert("Error applying configuration: " + err.message);
+      }
+    }
+
+    // Auto poll logs every 4 seconds if tab is active
+    setInterval(() => {
+      if (!document.getElementById("tab-logs").classList.contains("hidden")) {
+        loadLogs();
+      }
+    }, 4000);
+  </script>
+</body>
+</html>

@@ -183,9 +183,7 @@ def test_e2e_local_fastembed_clustering_flow():
             link=f"https://example.com/local-ai-quantization-{uid}",
             source="LocalAI Journal",
             published_at=None,
-            summary=(
-                "New 4-bit and 2-bit quantization techniques retain 98 percent of accuracy."
-            ),
+            summary=("New 4-bit and 2-bit quantization techniques retain 98 percent of accuracy."),
         )
         session.add(a1)
         session.commit()

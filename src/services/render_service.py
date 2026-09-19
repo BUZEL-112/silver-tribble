@@ -12,6 +12,8 @@ from src.models.schemas import (
     CostLogCreate,
     RenderBeatProp,
     RenderProps,
+    SentenceMediaPlacement,
+    WatermarkConfig,
     WordCaption,
 )
 from src.repositories.cost_repository import CostRepository
@@ -44,9 +46,16 @@ class RenderService:
         captions: list[WordCaption],
         audio_local_path: Path,
         duration_seconds: float,
+        media_placements: list[SentenceMediaPlacement] | None = None,
+        intro_delay_seconds: float | None = None,
+        outro_duration_seconds: float | None = None,
+        watermark_config: WatermarkConfig | None = None,
     ) -> Path:
-        """Calculate beat timeline intervals and write render_props.json."""
+        """Calculate beat timeline intervals with timing offsets and write render_props.json."""
         raw_beats = script.beats or []
+        intro_delay = intro_delay_seconds if intro_delay_seconds is not None else 0.0
+        outro_duration = outro_duration_seconds if outro_duration_seconds is not None else 0.0
+        total_duration = round(intro_delay + duration_seconds + outro_duration, 2)
 
         # Distribute timeline evenly across beats based on relative target durations
         total_target = sum(b.get("estimated_duration_seconds", 10.0) for b in raw_beats)
@@ -59,8 +68,8 @@ class RenderService:
         for idx, beat in enumerate(raw_beats):
             target = beat.get("estimated_duration_seconds", 10.0)
             beat_duration = (target / total_target) * duration_seconds
-            start_t = round(elapsed, 2)
-            end_t = round(min(elapsed + beat_duration, duration_seconds), 2)
+            start_t = round(elapsed + intro_delay, 2)
+            end_t = round(min(elapsed + beat_duration, duration_seconds) + intro_delay, 2)
             elapsed += beat_duration
 
             render_beats.append(
@@ -75,6 +84,44 @@ class RenderService:
                 )
             )
 
+        # Shift word caption timestamps by intro_delay
+        shifted_captions: list[WordCaption] = [
+            WordCaption(
+                word=c.word,
+                start=round(c.start + intro_delay, 2),
+                end=round(c.end + intro_delay, 2),
+                confidence=c.confidence,
+            )
+            for c in captions
+        ]
+
+        # Shift sentence media placements timestamps by intro_delay
+        shifted_media: list[SentenceMediaPlacement] = []
+        if media_placements:
+            shifted_media = [
+                SentenceMediaPlacement(
+                    sentence_index=m.sentence_index,
+                    start_time=round(m.start_time + intro_delay, 2),
+                    end_time=round(m.end_time + intro_delay, 2),
+                    keywords=m.keywords,
+                    media_type=m.media_type,
+                    local_path=m.local_path,
+                    source_url=m.source_url,
+                    provider=m.provider,
+                )
+                for m in media_placements
+            ]
+
+        # Resolve watermark configuration
+        wm = watermark_config
+        if wm is None and (settings.watermark_text or settings.watermark_image_path):
+            wm = WatermarkConfig(
+                text=settings.watermark_text,
+                image_path=settings.watermark_image_path,
+                position=settings.watermark_position,
+                opacity=settings.watermark_opacity,
+            )
+
         audio_path_str = str(audio_local_path.resolve())
         is_remote_or_data = audio_path_str.startswith(("http://", "https://", "data:"))
         if audio_local_path.exists() and not is_remote_or_data:
@@ -86,10 +133,14 @@ class RenderService:
             videoTitle=script.title,
             aspectRatio="9:16" if job.aspect_ratio == "9:16" else "16:9",
             audioPath=audio_path_str,
-            durationInSeconds=duration_seconds,
+            durationInSeconds=total_duration,
             fps=30,
             beats=render_beats,
-            captions=captions,
+            captions=shifted_captions,
+            watermark=wm,
+            mediaPlacements=shifted_media,
+            introDelaySeconds=intro_delay,
+            outroDurationSeconds=outro_duration,
         )
 
         if hasattr(self.storage_service, "base_dir") and self.storage_service.base_dir:

@@ -15,6 +15,24 @@ export interface RenderBeatProp {
   end_time: number;
 }
 
+export interface WatermarkConfig {
+  text?: string;
+  image_path?: string;
+  position?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+  opacity?: number;
+}
+
+export interface SentenceMediaItem {
+  sentence_index: number;
+  start_time: number;
+  end_time: number;
+  keywords: string[];
+  media_type: "image" | "video" | "gif";
+  local_path: string;
+  source_url: string;
+  provider: "pexels" | "giphy" | "fallback";
+}
+
 export interface RenderProps {
   videoTitle: string;
   aspectRatio: "9:16" | "16:9";
@@ -23,4 +41,8 @@ export interface RenderProps {
   fps: number;
   beats: RenderBeatProp[];
   captions: WordCaption[];
+  watermark?: WatermarkConfig;
+  mediaPlacements?: SentenceMediaItem[];
+  introDelaySeconds?: number;
+  outroDurationSeconds?: number;
 }

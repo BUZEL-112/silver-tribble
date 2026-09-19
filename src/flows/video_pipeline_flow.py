@@ -1,15 +1,20 @@
 """Prefect orchestration workflow coordinating end-to-end video production."""
 
+import json
+
 from prefect import flow, task
 
 from src.core.config import settings
 from src.core.database import get_session, init_db
+from src.models.schemas import SentenceMediaPlacement
+from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository
 from src.repositories.render_repository import RenderRepository
 from src.repositories.script_repository import ScriptRepository
 from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
+from src.services.media_service import MediaService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
 from src.services.script_service import ScriptService
@@ -158,6 +163,23 @@ def render_video_task(job_id: int, dry_run: bool = False) -> str:
             total_duration=job.duration_seconds or 30.0,
         )
 
+        placements: list[SentenceMediaPlacement] = []
+        placements_path = settings.media_cache_dir / f"placements_job_{job.id}.json"
+        if placements_path.exists():
+            try:
+                raw_p = json.loads(placements_path.read_text(encoding="utf-8"))
+                placements = [SentenceMediaPlacement(**item) for item in raw_p]
+            except Exception:
+                placements = []
+
+        if not placements:
+            media_svc = MediaService(storage_service=storage, cost_repo=cost_repo)
+            placements = media_svc.process_media_for_job(
+                job_id=job.id,
+                captions=captions,
+                beats=script.beats,
+            )
+
         audio_local_path = storage.get_local_path(job.audio_path or "")
 
         render_service = RenderService(render_repo, cost_repo, storage)
@@ -167,6 +189,7 @@ def render_video_task(job_id: int, dry_run: bool = False) -> str:
             captions=captions,
             audio_local_path=audio_local_path,
             duration_seconds=job.duration_seconds or 30.0,
+            media_placements=placements,
         )
 
         output_path = render_service.execute_render(job_id=job.id, dry_run=dry_run)
@@ -191,6 +214,17 @@ def run_video_pipeline(
 ) -> dict[str, str]:
     """End-to-end execution flow from news clustering to finished video."""
     init_db()
+
+    with get_session() as session:
+        action_repo = ActionLogRepository(session)
+        action_repo.record_action(
+            stage="pipeline",
+            action="pipeline_started",
+            actor="pipeline",
+            status="started",
+            message="Starting end-to-end video pipeline run",
+            details={"aspect_ratio": aspect_ratio, "dry_run": dry_run},
+        )
 
     target_cluster_id = cluster_id
     if target_cluster_id is None:
@@ -225,6 +259,15 @@ def run_video_pipeline(
     video_path = render_video_task(job_id=job_id, dry_run=dry_run)
     with get_session() as session:
         ArticleRepository(session).update_cluster_status(target_cluster_id, "completed")
+        ActionLogRepository(session).record_action(
+            stage="pipeline",
+            action="pipeline_completed",
+            actor="pipeline",
+            status="success",
+            message=f"Completed video pipeline for cluster {target_cluster_id}",
+            job_id=job_id,
+            details={"video_path": video_path},
+        )
 
     return {
         "cluster_id": str(target_cluster_id),

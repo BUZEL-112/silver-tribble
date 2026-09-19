@@ -52,22 +52,13 @@ class ClusteringService:
     def is_google_embedding_model(model: str) -> bool:
         """Check if target embedding model belongs to Google AI Studio."""
         m = model.lower()
-        return (
-            "text-embedding-004" in m
-            or "embedding-001" in m
-            or "gemini" in m
-            or "google" in m
-        )
+        return "text-embedding-004" in m or "embedding-001" in m or "gemini" in m or "google" in m
 
     @staticmethod
     def is_openai_embedding_model(model: str) -> bool:
         """Check if target embedding model belongs to OpenAI."""
         m = model.lower()
-        return (
-            "text-embedding-3" in m
-            or "text-embedding-ada" in m
-            or "openai" in m
-        )
+        return "text-embedding-3" in m or "text-embedding-ada" in m or "openai" in m
 
     @staticmethod
     def parse_local_model_name(model: str) -> str:
@@ -102,9 +93,7 @@ class ClusteringService:
             return OpenAI(base_url=effective_base_url, api_key=effective_key, timeout=12.0)
 
         # Google AI Studio / Gemini embedding model
-        if self.is_google_embedding_model(model) and (
-            self.gemini_key or self.api_key
-        ):
+        if self.is_google_embedding_model(model) and (self.gemini_key or self.api_key):
             effective_gemini_key = self.gemini_key or self.api_key
             return OpenAI(
                 base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
@@ -153,9 +142,7 @@ class ClusteringService:
                 embedding_model = TextEmbedding(model_name=local_name)
                 generator = embedding_model.embed(texts)
                 for idx, embedding in enumerate(generator):
-                    self.article_repo.update_article_embedding(
-                        articles[idx].id, embedding.tolist()
-                    )
+                    self.article_repo.update_article_embedding(articles[idx].id, embedding.tolist())
 
                 self.cost_repo.log_cost(
                     CostLogCreate(
@@ -172,9 +159,7 @@ class ClusteringService:
                 pass
 
         # 2. Google AI Studio Native Mode (google-genai SDK)
-        if self.is_google_embedding_model(target_model) and (
-            self.gemini_key or self.api_key
-        ):
+        if self.is_google_embedding_model(target_model) and (self.gemini_key or self.api_key):
             try:
                 from google import genai
 
@@ -201,9 +186,7 @@ class ClusteringService:
                 saved_count = 0
                 for idx, emb_vals in enumerate(embeddings_list):
                     if idx < len(articles):
-                        self.article_repo.update_article_embedding(
-                            articles[idx].id, emb_vals
-                        )
+                        self.article_repo.update_article_embedding(articles[idx].id, emb_vals)
                         saved_count += 1
 
                 self.cost_repo.log_cost(

@@ -39,7 +39,6 @@ class RssService:
     def __init__(self, feeds: list[dict[str, str]] | None = None) -> None:
         self.feeds = feeds or getattr(settings, "rss_feeds", DEFAULT_AI_FEEDS)
 
-
     def clean_html(self, raw_html: str) -> str:
         """Strip HTML tags and condense whitespace."""
         if not raw_html:
@@ -72,10 +71,7 @@ class RssService:
                     if not title or not link:
                         continue
 
-                    raw_summary = (
-                        getattr(entry, "summary", "")
-                        or getattr(entry, "description", "")
-                    )
+                    raw_summary = getattr(entry, "summary", "") or getattr(entry, "description", "")
                     summary = self.clean_html(raw_summary)
                     pub_date = self.parse_feed_date(entry)
 

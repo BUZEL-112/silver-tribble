@@ -17,9 +17,7 @@ class ArticleRepository(BaseRepository):
         for item in items:
             if not item.link or item.link in seen_links:
                 continue
-            existing = self.session.scalar(
-                select(Article).where(Article.link == item.link)
-            )
+            existing = self.session.scalar(select(Article).where(Article.link == item.link))
             if existing:
                 seen_links.add(item.link)
                 continue

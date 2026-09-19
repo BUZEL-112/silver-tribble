@@ -114,3 +114,20 @@ class CostLogEntry(Base):
     unit_type: Mapped[str] = mapped_column(String(30), nullable=False)
     cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class ActionLog(Base):
+    """Audit log recording every operational event across all interfaces."""
+
+    __tablename__ = "action_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    stage: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    actor: Mapped[str] = mapped_column(String(50), nullable=False, default="cli")
+    status: Mapped[str] = mapped_column(String(30), nullable=False)
+    job_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)

@@ -31,6 +31,25 @@ class RenderRepository(BaseRepository):
         stmt = select(RenderJob).where(RenderJob.script_id == script_id)
         return list(self.session.scalars(stmt).all())
 
+    def get_recent_jobs(self, limit: int = 50) -> list[RenderJob]:
+        """Fetch recent render jobs ordered by creation date descending."""
+        from sqlalchemy import select
+
+        stmt = select(RenderJob).order_by(RenderJob.created_at.desc()).limit(limit)
+        return list(self.session.scalars(stmt).all())
+
+    def get_pending_jobs(self, limit: int = 50) -> list[RenderJob]:
+        """Fetch pending render jobs ordered by creation date ascending."""
+        from sqlalchemy import select
+
+        stmt = (
+            select(RenderJob)
+            .where(RenderJob.status == "pending")
+            .order_by(RenderJob.created_at.asc())
+            .limit(limit)
+        )
+        return list(self.session.scalars(stmt).all())
+
     def update_job_audio(
         self,
         job_id: int,

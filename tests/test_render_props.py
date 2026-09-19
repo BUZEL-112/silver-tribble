@@ -147,4 +147,3 @@ def test_render_repository_lifecycle(render_repo: RenderRepository):
     assert failed.status == "failed"
     assert failed.error_message == "Test error message"
     assert failed.completed_at is not None
-

@@ -1,3 +1,4 @@
+import json
 import re
 from pathlib import Path
 from typing import Annotated, Any
@@ -9,12 +10,15 @@ from rich.table import Table
 from src.core.config import settings
 from src.core.database import get_session, init_db
 from src.flows.video_pipeline_flow import run_video_pipeline
+from src.models.schemas import SentenceMediaPlacement, WordCaption
+from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository
 from src.repositories.render_repository import RenderRepository
 from src.repositories.script_repository import ScriptRepository
 from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
+from src.services.media_service import MediaService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
 from src.services.script_service import ScriptService
@@ -206,9 +210,7 @@ def config_llm(
             ("Embedding Model", settings.llm_embedding_model),
         ]:
             if role == "Embedding Model" and ClusteringService.is_local_model(model):
-                console.print(
-                    f"Pinging [bold]{role}[/bold] ('{model}') via local fastembed..."
-                )
+                console.print(f"Pinging [bold]{role}[/bold] ('{model}') via local fastembed...")
                 try:
                     from fastembed import TextEmbedding
 
@@ -224,9 +226,7 @@ def config_llm(
                 continue
 
             if role == "Embedding Model" and ClusteringService.is_google_embedding_model(model):
-                console.print(
-                    f"Pinging [bold]{role}[/bold] ('{model}') via Google AI Studio..."
-                )
+                console.print(f"Pinging [bold]{role}[/bold] ('{model}') via Google AI Studio...")
                 try:
                     from google import genai
 
@@ -285,17 +285,40 @@ def setup_db() -> None:
 
 
 @app.command()
-def ingest() -> None:
+def ingest(
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
+) -> None:
     """Fetch latest AI news articles from RSS feeds."""
     init_db()
     service = RssService()
     items = service.fetch_all_feeds()
     with get_session() as session:
         repo = ArticleRepository(session)
-        saved = repo.save_feed_items(items)
-        console.print(
-            f"[green]Ingested {len(items)} items. Saved {len(saved)} new unique articles.[/green]"
-        )
+        action_repo = ActionLogRepository(session)
+        with action_repo.track_operation(
+            stage="ingest",
+            action="fetch_rss_feeds",
+            actor=actor,
+            details={"fetched_items": len(items)},
+        ):
+            saved = repo.save_feed_items(items)
+
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "articles_fetched": len(items),
+                        "new_articles_saved": len(saved),
+                    }
+                )
+            )
+        else:
+            msg = f"Ingested {len(items)} items. Saved {len(saved)} new unique articles."
+            console.print(f"[green]{msg}[/green]")
 
 
 @app.command()
@@ -342,12 +365,17 @@ def cluster(
         str | None,
         typer.Option("--gemini-key", help="Direct Google Gemini / AI Studio API key"),
     ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
 ) -> None:
     """Embed new articles and group them into story clusters."""
     init_db()
     with get_session() as session:
         article_repo = ArticleRepository(session)
         cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
         effective_url = api_base or litellm_url
         effective_key = api_key or litellm_key
         service = ClusteringService(
@@ -362,12 +390,33 @@ def cluster(
         )
 
         effective_emb = embedding_model or settings.llm_embedding_model
-        console.print(f"[cyan]Generating embeddings using '{effective_emb}'...[/cyan]")
-        embedded_count = service.generate_embeddings_for_new_articles(model=embedding_model)
-        console.print(f"[green]Embedded {embedded_count} articles.[/green]")
+        if not as_json:
+            console.print(f"[cyan]Generating embeddings using '{effective_emb}'...[/cyan]")
 
+        with action_repo.track_operation(
+            stage="cluster",
+            action="cluster_articles",
+            actor=actor,
+            details={"threshold": threshold, "model": effective_emb},
+        ):
+            embedded_count = service.generate_embeddings_for_new_articles(model=embedding_model)
+            clusters = service.cluster_recent_articles(threshold=threshold)
+
+        top_id = clusters[0].id if clusters else None
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "clusters_created": len(clusters),
+                        "top_cluster_id": top_id,
+                    }
+                )
+            )
+            return
+
+        console.print(f"[green]Embedded {embedded_count} articles.[/green]")
         console.print(f"[cyan]Clustering stories with threshold {threshold}...[/cyan]")
-        clusters = service.cluster_recent_articles(threshold=threshold)
 
         table = Table(title="Detected AI Story Clusters")
         table.add_column("ID", style="cyan", justify="right")
@@ -431,6 +480,10 @@ def script(
         str | None,
         typer.Option("--gemini-key", help="Direct Google Gemini API key"),
     ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
 ) -> None:
     """Generate structured beat sheet and comedic narration for a story cluster."""
     init_db()
@@ -438,6 +491,7 @@ def script(
         article_repo = ArticleRepository(session)
         script_repo = ScriptRepository(session)
         cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
         effective_url = api_base or litellm_url
         effective_key = api_key or litellm_key
         service = ScriptService(
@@ -453,17 +507,39 @@ def script(
 
         effective_planner = planner_model or settings.llm_planning_model
         effective_writer = writer_model or settings.llm_writing_model
-        console.print(
-            f"[cyan]Generating script for cluster {cluster_id} "
-            f"(Planner: [bold yellow]{effective_planner}[/bold yellow], "
-            f"Writer: [bold yellow]{effective_writer}[/bold yellow])...[/cyan]"
-        )
-        record = service.generate_full_script(
-            cluster_id=cluster_id,
-            aspect_ratio=aspect_ratio,
-            planner_model=planner_model,
-            writer_model=writer_model,
-        )
+        if not as_json:
+            console.print(
+                f"[cyan]Generating script for cluster {cluster_id} "
+                f"(Planner: [bold yellow]{effective_planner}[/bold yellow], "
+                f"Writer: [bold yellow]{effective_writer}[/bold yellow])...[/cyan]"
+            )
+
+        with action_repo.track_operation(
+            stage="script",
+            action="generate_script",
+            actor=actor,
+            details={"cluster_id": cluster_id, "aspect_ratio": aspect_ratio},
+        ):
+            record = service.generate_full_script(
+                cluster_id=cluster_id,
+                aspect_ratio=aspect_ratio,
+                planner_model=planner_model,
+                writer_model=writer_model,
+            )
+
+        words = record.full_narration.split()
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "script_id": record.id,
+                        "title": record.title,
+                        "word_count": len(words),
+                    }
+                )
+            )
+            return
 
         console.print(f"[green]Created script record #{record.id}: '{record.title}'[/green]")
         console.print("\n[bold yellow]Spoken Narration Script:[/bold yellow]")
@@ -476,6 +552,10 @@ def voice(
     aspect_ratio: Annotated[
         str, typer.Option("--aspect-ratio", "-a", help="9:16 or 16:9")
     ] = "9:16",
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
 ) -> None:
     """Synthesize voice track and word-level caption timestamps."""
     settings.ensure_directories()
@@ -486,30 +566,150 @@ def voice(
         script_repo = ScriptRepository(session)
         render_repo = RenderRepository(session)
         cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
 
         script_record = script_repo.get_script_by_id(script_id)
         if not script_record:
-            console.print(f"[red]Script ID {script_id} not found.[/red]")
+            if as_json:
+                err_obj = {"status": "failed", "error": f"Script ID {script_id} not found."}
+                print(json.dumps(err_obj))
+            else:
+                console.print(f"[red]Script ID {script_id} not found.[/red]")
             raise typer.Exit(code=1)
 
         job = render_repo.create_job(script_id=script_id, aspect_ratio=aspect_ratio)
 
-        console.print(f"[cyan]Synthesizing TTS audio for script #{script_id}...[/cyan]")
-        tts = TtsService(storage, cost_repo)
-        audio_path, duration = tts.synthesize_speech(script_record.full_narration, job.id)
-        render_repo.update_job_audio(job.id, audio_path, duration)
-        console.print(f"[green]Audio generated ({duration:.1f}s): {audio_path}[/green]")
+        with action_repo.track_operation(
+            stage="voice",
+            action="synthesize_voice_and_captions",
+            actor=actor,
+            job_id=job.id,
+            details={"script_id": script_id},
+        ):
+            if not as_json:
+                console.print(f"[cyan]Synthesizing TTS audio for script #{script_id}...[/cyan]")
+            tts = TtsService(storage, cost_repo)
+            audio_path, duration = tts.synthesize_speech(script_record.full_narration, job.id)
+            render_repo.update_job_audio(job.id, audio_path, duration)
 
-        console.print("[cyan]Extracting word timestamps with Whisper...[/cyan]")
-        captions_service = CaptionService(storage, cost_repo)
-        captions_path, captions = captions_service.generate_captions(
-            audio_path, job.id, script_record.full_narration, duration
-        )
-        render_repo.update_job_captions(job.id, captions_path)
-        console.print(
-            f"[green]Captions extracted ({len(captions)} words): {captions_path}[/green]"
-        )
+            if not as_json:
+                console.print(f"[green]Audio generated ({duration:.1f}s): {audio_path}[/green]")
+                console.print("[cyan]Extracting word timestamps with Whisper...[/cyan]")
+
+            captions_service = CaptionService(storage, cost_repo)
+            captions_path, captions = captions_service.generate_captions(
+                audio_path, job.id, script_record.full_narration, duration
+            )
+            render_repo.update_job_captions(job.id, captions_path)
+
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "job_id": job.id,
+                        "audio_path": audio_path,
+                        "duration": round(duration, 2),
+                    }
+                )
+            )
+            return
+
+        console.print(f"[green]Captions extracted ({len(captions)} words): {captions_path}[/green]")
         console.print(f"[bold green]Render job #{job.id} prepared for rendering.[/bold green]")
+
+
+@app.command()
+def media(
+    job_id: Annotated[int, typer.Option("--job-id", "-j", help="Target render job ID")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
+) -> None:
+    """Fetch sentence-level visual assets (Pexels / Giphy) for a job."""
+    settings.ensure_directories()
+    init_db()
+    storage = get_storage_service()
+
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        script_repo = ScriptRepository(session)
+        cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
+
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            if as_json:
+                print(json.dumps({"status": "failed", "error": f"Render job {job_id} not found."}))
+            else:
+                console.print(f"[red]Render job {job_id} not found.[/red]")
+            raise typer.Exit(code=1)
+
+        script = script_repo.get_script_by_id(job.script_id)
+        if not script:
+            if as_json:
+                err_obj = {"status": "failed", "error": f"Script {job.script_id} not found."}
+                print(json.dumps(err_obj))
+            else:
+                console.print(f"[red]Script {job.script_id} not found.[/red]")
+            raise typer.Exit(code=1)
+
+        captions: list[WordCaption] = []
+        if job.captions_path:
+            local_cap_path = storage.get_local_path(job.captions_path)
+            if local_cap_path.exists():
+                data = json.loads(local_cap_path.read_text(encoding="utf-8"))
+                captions = [WordCaption(**item) for item in data]
+
+        if not captions:
+            caption_svc = CaptionService(storage, cost_repo)
+            _, captions = caption_svc.generate_captions(
+                audio_path_or_url=job.audio_path or "",
+                job_id=job.id,
+                reference_text=script.full_narration,
+                total_duration=job.duration_seconds or 30.0,
+            )
+
+        media_svc = MediaService(storage_service=storage, cost_repo=cost_repo)
+
+        with action_repo.track_operation(
+            stage="media",
+            action="fetch_media_assets",
+            actor=actor,
+            job_id=job.id,
+            details={"caption_count": len(captions)},
+        ):
+            media_items = media_svc.process_media_for_job(
+                job_id=job.id,
+                captions=captions,
+                beats=script.beats,
+            )
+
+        placements_path = settings.media_cache_dir / f"placements_job_{job.id}.json"
+        placements_path.parent.mkdir(parents=True, exist_ok=True)
+        placements_path.write_text(
+            json.dumps([p.model_dump() for p in media_items], indent=2),
+            encoding="utf-8",
+        )
+
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "job_id": job.id,
+                        "media_count": len(media_items),
+                        "media_items": [p.model_dump() for p in media_items],
+                    }
+                )
+            )
+            return
+
+        console.print(
+            f"[green]Fetched {len(media_items)} media items for job #{job.id}. "
+            f"Saved to {placements_path}[/green]"
+        )
 
 
 @app.command()
@@ -518,6 +718,10 @@ def render(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Mock Remotion render without executing node")
     ] = False,
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
 ) -> None:
     """Render the finalized video through the Remotion engine."""
     init_db()
@@ -527,15 +731,23 @@ def render(
         render_repo = RenderRepository(session)
         cost_repo = CostRepository(session)
         script_repo = ScriptRepository(session)
+        action_repo = ActionLogRepository(session)
 
         job = render_repo.get_job_by_id(job_id)
         if not job:
-            console.print(f"[red]Render job {job_id} not found.[/red]")
+            if as_json:
+                print(json.dumps({"status": "failed", "error": f"Render job {job_id} not found."}))
+            else:
+                console.print(f"[red]Render job {job_id} not found.[/red]")
             raise typer.Exit(code=1)
 
         script_record = script_repo.get_script_by_id(job.script_id)
         if not script_record:
-            console.print(f"[red]Script {job.script_id} not found.[/red]")
+            if as_json:
+                err_obj = {"status": "failed", "error": f"Script {job.script_id} not found."}
+                print(json.dumps(err_obj))
+            else:
+                console.print(f"[red]Script {job.script_id} not found.[/red]")
             raise typer.Exit(code=1)
 
         caption_service = CaptionService(storage, cost_repo)
@@ -546,20 +758,54 @@ def render(
             total_duration=job.duration_seconds or 30.0,
         )
 
+        placements: list[SentenceMediaPlacement] = []
+        placements_path = settings.media_cache_dir / f"placements_job_{job.id}.json"
+        if placements_path.exists():
+            try:
+                raw_p = json.loads(placements_path.read_text(encoding="utf-8"))
+                placements = [SentenceMediaPlacement(**item) for item in raw_p]
+            except Exception:
+                placements = []
+
         audio_local_path = storage.get_local_path(job.audio_path or "")
         service = RenderService(render_repo, cost_repo, storage)
 
-        console.print("[cyan]Writing Remotion render props...[/cyan]")
+        if not as_json:
+            console.print("[cyan]Writing Remotion render props...[/cyan]")
+
         service.prepare_render_props(
             job=job,
             script=script_record,
             captions=captions,
             audio_local_path=audio_local_path,
             duration_seconds=job.duration_seconds or 30.0,
+            media_placements=placements,
         )
 
-        console.print(f"[cyan]Rendering video for job #{job.id}...[/cyan]")
-        output_path = service.execute_render(job_id=job.id, dry_run=dry_run)
+        if not as_json:
+            console.print(f"[cyan]Rendering video for job #{job.id}...[/cyan]")
+
+        with action_repo.track_operation(
+            stage="render",
+            action="render_video",
+            actor=actor,
+            job_id=job.id,
+            details={"dry_run": dry_run},
+        ):
+            output_path = service.execute_render(job_id=job.id, dry_run=dry_run)
+
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "success",
+                        "job_id": job.id,
+                        "output_video_path": str(output_path.resolve()),
+                    }
+                )
+            )
+            return
+
         console.print(f"[bold green]Render completed: {output_path}[/bold green]")
 
 
@@ -624,9 +870,14 @@ def run(
         str | None,
         typer.Option("--gemini-key", help="Direct Google Gemini / AI Studio API key"),
     ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    actor: Annotated[
+        str, typer.Option("--actor", help="Actor identifier for action logging")
+    ] = "cli",
 ) -> None:
     """Execute end-to-end pipeline from news ingestion to final video render."""
-    console.print("[bold cyan]Starting AI News to YouTube Video Pipeline[/bold cyan]")
+    if not as_json:
+        console.print("[bold cyan]Starting AI News to YouTube Video Pipeline[/bold cyan]")
     target_id = cluster_id if cluster_id is not None else None
     effective_url = api_base or litellm_url
     effective_key = api_key or litellm_key
@@ -645,11 +896,81 @@ def run(
         embedding_base_url=embedding_base_url,
         embedding_key=embedding_key,
     )
+    if as_json:
+        print(json.dumps({"status": "success", **result}))
+        return
+
     console.print("\n[bold green]Pipeline Run Completed Successfully[/bold green]")
     console.print(f"Cluster ID: {result['cluster_id']}")
     console.print(f"Script ID:  {result['script_id']}")
     console.print(f"Job ID:     {result['job_id']}")
     console.print(f"Video File: {result['video_path']}")
+
+
+@app.command()
+def logs(
+    limit: Annotated[int, typer.Option("--limit", "-l", help="Number of recent logs to show")] = 50,
+    stage: Annotated[str | None, typer.Option("--stage", help="Filter by pipeline stage")] = None,
+    status: Annotated[
+        str | None, typer.Option("--status", help="Filter by status (started, success, failed)")
+    ] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+) -> None:
+    """Query and display pipeline audit action logs."""
+    init_db()
+    with get_session() as session:
+        repo = ActionLogRepository(session)
+        entries = repo.get_recent_logs(limit=limit, stage=stage, status=status)
+
+        if as_json:
+            out = [
+                {
+                    "id": e.id,
+                    "stage": e.stage,
+                    "action": e.action,
+                    "actor": e.actor,
+                    "status": e.status,
+                    "job_id": e.job_id,
+                    "message": e.message,
+                    "duration_seconds": e.duration_seconds,
+                    "created_at": e.created_at.isoformat() if e.created_at else None,
+                }
+                for e in entries
+            ]
+            print(json.dumps(out))
+            return
+
+        table = Table(title="Pipeline Audit Action Logs")
+        table.add_column("ID", justify="right", style="cyan")
+        table.add_column("Stage", style="blue")
+        table.add_column("Action", style="white")
+        table.add_column("Actor", style="magenta")
+        table.add_column("Status", style="yellow")
+        table.add_column("Job ID", justify="right")
+        table.add_column("Duration (s)", justify="right")
+        table.add_column("Message", style="dim")
+        table.add_column("Time", style="dim")
+
+        for e in entries:
+            dur = f"{e.duration_seconds:.2f}" if e.duration_seconds is not None else "-"
+            job_str = str(e.job_id) if e.job_id is not None else "-"
+            t_str = e.created_at.strftime("%Y-%m-%d %H:%M:%S") if e.created_at else "-"
+            status_style = (
+                "green" if e.status == "success" else ("red" if e.status == "failed" else "yellow")
+            )
+            table.add_row(
+                str(e.id),
+                e.stage,
+                e.action,
+                e.actor,
+                f"[{status_style}]{e.status}[/{status_style}]",
+                job_str,
+                dur,
+                e.message[:40] if e.message else "",
+                t_str,
+            )
+
+        console.print(table)
 
 
 @app.command()

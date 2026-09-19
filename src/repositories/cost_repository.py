@@ -54,8 +54,7 @@ class CostRepository(BaseRepository):
         )
         results = self.session.execute(stmt).all()
         return [
-            {"stage": row[0], "call_count": row[1], "total_usd": float(row[2])}
-            for row in results
+            {"stage": row[0], "call_count": row[1], "total_usd": float(row[2])} for row in results
         ]
 
     def get_per_video_costs(self, limit: int = 10) -> list[dict[str, Any]]:

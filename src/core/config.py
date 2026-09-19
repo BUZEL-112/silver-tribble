@@ -91,7 +91,13 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
     # 5. Providers section
     if "providers" in data and isinstance(data["providers"], dict):
         p = data["providers"]
-        for k in ["openai_api_key", "deepseek_api_key", "gemini_api_key", "pexels_api_key"]:
+        for k in [
+            "openai_api_key",
+            "deepseek_api_key",
+            "gemini_api_key",
+            "pexels_api_key",
+            "giphy_api_key",
+        ]:
             if k in p:
                 flat[k] = p[k]
 
@@ -135,7 +141,31 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "similarity_threshold" in c:
             flat["similarity_threshold"] = c["similarity_threshold"]
 
-    # 10. RSS Feeds section
+    # 10. Media and Branding sections
+    if "media" in data and isinstance(data["media"], dict):
+        med = data["media"]
+        if "cache_dir" in med:
+            flat["media_cache_dir"] = med["cache_dir"]
+        if "ratio" in med:
+            flat["default_media_type_ratio"] = med["ratio"]
+    if "watermark" in data and isinstance(data["watermark"], dict):
+        wm = data["watermark"]
+        if "text" in wm:
+            flat["watermark_text"] = wm["text"]
+        if "image_path" in wm:
+            flat["watermark_image_path"] = wm["image_path"]
+        if "position" in wm:
+            flat["watermark_position"] = wm["position"]
+        if "opacity" in wm:
+            flat["watermark_opacity"] = wm["opacity"]
+    if "timing" in data and isinstance(data["timing"], dict):
+        t = data["timing"]
+        if "intro_delay_seconds" in t:
+            flat["intro_delay_seconds"] = t["intro_delay_seconds"]
+        if "outro_duration_seconds" in t:
+            flat["outro_duration_seconds"] = t["outro_duration_seconds"]
+
+    # 11. RSS Feeds section
     if "rss_feeds" in data and isinstance(data["rss_feeds"], list):
         flat["rss_feeds"] = data["rss_feeds"]
 
@@ -216,7 +246,46 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
     deepseek_api_key: str | None = Field(default=None, description="DeepSeek API key")
     gemini_api_key: str | None = Field(default=None, description="Google Gemini API key")
-    pexels_api_key: str | None = Field(default=None, description="Pexels Stock API key")
+    pexels_api_key: str = Field(default="", description="Pexels Stock API key")
+    giphy_api_key: str = Field(default="", description="Giphy API key")
+
+    # Media and Visual Assets
+    media_cache_dir: Path = Field(
+        default=Path("artifacts/media"),
+        description="Local directory for cached visual media",
+    )
+    default_media_type_ratio: float = Field(
+        default=0.5,
+        description="Ratio of stock clips to comedic GIFs",
+    )
+
+    # Watermark and Branding
+    watermark_text: str = Field(
+        default="",
+        description="Watermark text overlay e.g. @AINewsDesk",
+    )
+    watermark_image_path: str = Field(
+        default="",
+        description="Path to transparent PNG logo",
+    )
+    watermark_position: Literal["top-right", "top-left", "bottom-right", "bottom-left"] = Field(
+        default="top-right",
+        description="Watermark position on screen",
+    )
+    watermark_opacity: float = Field(
+        default=0.8,
+        description="Watermark opacity from 0.0 to 1.0",
+    )
+
+    # Timing Controls
+    intro_delay_seconds: float = Field(
+        default=1.5,
+        description="Splash/watermark display before speech begins",
+    )
+    outro_duration_seconds: float = Field(
+        default=3.0,
+        description="Ending card display after speech ends",
+    )
 
     # Storage Settings
     storage_backend: Literal["local", "s3"] = Field(
@@ -296,9 +365,21 @@ class Settings(BaseSettings):
         """Create required local directories if they do not exist."""
         self.storage_local_dir.mkdir(parents=True, exist_ok=True)
         self.remotion_output_dir.mkdir(parents=True, exist_ok=True)
+        self.media_cache_dir.mkdir(parents=True, exist_ok=True)
         (self.storage_local_dir / "audio").mkdir(parents=True, exist_ok=True)
         (self.storage_local_dir / "captions").mkdir(parents=True, exist_ok=True)
         (self.storage_local_dir / "broll").mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()
+
+
+def reload_settings(config_path: str | Path | None = None) -> Settings:
+    """Hot-reload settings in-place from specified YAML file or active environment."""
+    if config_path:
+        os.environ["APP_CONFIG_FILE"] = str(Path(config_path).resolve())
+    new_settings = Settings()
+    for field_name in Settings.model_fields:
+        setattr(settings, field_name, getattr(new_settings, field_name))
+    settings.ensure_directories()
+    return settings

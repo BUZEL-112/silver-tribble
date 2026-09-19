@@ -71,6 +71,28 @@ class CaptionSegment(BaseModel):
     words: list[WordCaption] = Field(default_factory=list)
 
 
+class SentenceMediaPlacement(BaseModel):
+    """Sentence-level media asset placement mapping."""
+
+    sentence_index: int
+    start_time: float
+    end_time: float
+    keywords: list[str]
+    media_type: Literal["image", "video", "gif"]
+    local_path: str
+    source_url: str
+    provider: Literal["pexels", "giphy", "fallback"]
+
+
+class WatermarkConfig(BaseModel):
+    """Visual watermark overlay configuration."""
+
+    text: str = ""
+    image_path: str = ""
+    position: Literal["top-right", "top-left", "bottom-right", "bottom-left"] = "top-right"
+    opacity: float = 0.8
+
+
 class RenderBeatProp(BaseModel):
     """Beat payload passed into Remotion composition."""
 
@@ -95,6 +117,12 @@ class RenderProps(BaseModel):
     fps: int = Field(default=30)
     beats: list[RenderBeatProp] = Field(default_factory=list)
     captions: list[WordCaption] = Field(default_factory=list)
+    watermark: WatermarkConfig | None = Field(default=None, alias="watermark")
+    media_placements: list[SentenceMediaPlacement] = Field(
+        default_factory=list, alias="mediaPlacements"
+    )
+    intro_delay_seconds: float = Field(default=0.0, alias="introDelaySeconds")
+    outro_duration_seconds: float = Field(default=0.0, alias="outroDurationSeconds")
 
 
 class CostLogCreate(BaseModel):

@@ -11,6 +11,7 @@ from src.core.config import settings
 
 class Base(DeclarativeBase):
     """Base declarative class for all SQLAlchemy ORM entities."""
+
     pass
 
 

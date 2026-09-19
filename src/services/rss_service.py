@@ -30,13 +30,17 @@ DEFAULT_AI_FEEDS: list[dict[str, str]] = [
         "name": "ArXiv AI Recent",
         "url": "https://rss.arxiv.org/rss/cs.AI",
     },
+    {
+        "name": "Hacker News AI",
+        "url": "https://hnrss.org/newest?q=AI",
+    },
 ]
 
 
 class RssService:
     """Fetches and normalizes news entries from configured RSS feeds."""
 
-    def __init__(self, feeds: list[dict[str, str]] | None = None) -> None:
+    def __init__(self, feeds: list[dict[str, str] | str] | None = None) -> None:
         self.feeds = feeds or getattr(settings, "rss_feeds", DEFAULT_AI_FEEDS)
 
     def clean_html(self, raw_html: str) -> str:
@@ -60,8 +64,20 @@ class RssService:
         items: list[FeedItem] = []
 
         for feed_info in self.feeds:
-            source_name = feed_info["name"]
-            feed_url = feed_info["url"]
+            if isinstance(feed_info, str):
+                feed_url = feed_info.strip()
+                source_name = feed_url.split("/")[2] if "//" in feed_url else "RSS Feed"
+            elif isinstance(feed_info, dict):
+                feed_url = str(feed_info.get("url", "")).strip()
+                source_name = str(
+                    feed_info.get("name")
+                    or (feed_url.split("/")[2] if "//" in feed_url else "RSS Feed")
+                )
+            else:
+                continue
+
+            if not feed_url:
+                continue
 
             try:
                 parsed = feedparser.parse(feed_url)

@@ -33,6 +33,10 @@ DEFAULT_RSS_FEEDS: list[dict[str, str]] = [
         "name": "ArXiv AI Recent",
         "url": "https://rss.arxiv.org/rss/cs.AI",
     },
+    {
+        "name": "Hacker News AI",
+        "url": "https://hnrss.org/newest?q=AI",
+    },
 ]
 
 
@@ -166,8 +170,31 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             flat["outro_duration_seconds"] = t["outro_duration_seconds"]
 
     # 11. RSS Feeds section
+    raw_feeds = None
     if "rss_feeds" in data and isinstance(data["rss_feeds"], list):
-        flat["rss_feeds"] = data["rss_feeds"]
+        raw_feeds = data["rss_feeds"]
+    elif "feeds" in data and isinstance(data["feeds"], list):
+        raw_feeds = data["feeds"]
+    elif (
+        "rss" in data
+        and isinstance(data["rss"], dict)
+        and isinstance(data["rss"].get("feeds"), list)
+    ):
+        raw_feeds = data["rss"]["feeds"]
+
+    if raw_feeds is not None:
+        normalized_feeds: list[dict[str, str]] = []
+        for item in raw_feeds:
+            if isinstance(item, str):
+                item_str = item.strip()
+                source_name = item_str.split("/")[2] if "//" in item_str else "RSS Feed"
+                normalized_feeds.append({"name": source_name, "url": item_str})
+            elif isinstance(item, dict) and "url" in item:
+                source_name = item.get("name") or (
+                    item["url"].split("/")[2] if "//" in item["url"] else "RSS Feed"
+                )
+                normalized_feeds.append({"name": str(source_name), "url": str(item["url"]).strip()})
+        flat["rss_feeds"] = normalized_feeds
 
     return {k: v for k, v in flat.items() if v is not None}
 

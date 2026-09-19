@@ -1010,5 +1010,85 @@ def costs() -> None:
             console.print(vid_table)
 
 
+@app.command(name="export-litellm-config")
+def export_litellm_config(
+    output_path: Annotated[
+        Path,
+        typer.Option(
+            "--output",
+            "-o",
+            help="Path to write generated LiteLLM config YAML file",
+        ),
+    ] = Path("config/litellm_config.yaml"),
+) -> None:
+    """Generate LiteLLM proxy configuration automatically from active config.yaml."""
+    planning_model = settings.llm_planning_model
+    writing_model = settings.llm_writing_model
+    embedding_model = settings.llm_embedding_model
+
+    models: list[dict[str, Any]] = []
+
+    def get_litellm_model_name(m: str) -> str:
+        if (
+            m.startswith("gpt")
+            or m.startswith("text-embedding")
+            or m.startswith("o1")
+            or m.startswith("o3")
+        ):
+            return f"openai/{m}"
+        if "deepseek" in m:
+            return f"deepseek/{m}"
+        if "gemini" in m:
+            return f"gemini/{m}"
+        return m
+
+    def get_env_key(m: str) -> str:
+        if "deepseek" in m:
+            return "os.environ/DEEPSEEK_API_KEY"
+        if "gemini" in m:
+            return "os.environ/GEMINI_API_KEY"
+        return "os.environ/OPENAI_API_KEY"
+
+    added: set[str] = set()
+    for m in [planning_model, writing_model, embedding_model]:
+        if not m or m in added or m.lower() in ["local", "fastembed"]:
+            continue
+        added.add(m)
+        models.append(
+            {
+                "model_name": m,
+                "litellm_params": {
+                    "model": get_litellm_model_name(m),
+                    "api_key": get_env_key(m),
+                    "timeout": 30,
+                },
+            }
+        )
+
+    litellm_cfg = {
+        "model_list": models,
+        "router_settings": {
+            "num_retries": 2,
+            "retry_after": 2,
+            "timeout": 40,
+        },
+        "general_settings": {
+            "master_key": settings.litellm_api_key or "sk-litellm-master-key",
+        },
+    }
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    header = (
+        "# ==============================================================================\n"
+        "# Auto-generated LiteLLM Proxy Configuration\n"
+        "# Generated from active application settings / config.yaml\n"
+        "# ==============================================================================\n\n"
+    )
+    import yaml
+
+    output_path.write_text(header + yaml.dump(litellm_cfg, sort_keys=False), encoding="utf-8")
+    console.print(f"[green]Exported LiteLLM configuration to [bold]{output_path}[/bold][/green]")
+
+
 if __name__ == "__main__":
     app()

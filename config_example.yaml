@@ -21,8 +21,12 @@ database:
   # url: "postgresql://postgres:postgres@localhost:5432/ai_news_video"
 
 # ------------------------------------------------------------------------------
-# 2. LiteLLM Proxy / Gateway Settings
+# 2. LiteLLM Proxy / Gateway Settings (Optional)
 # ------------------------------------------------------------------------------
+# LiteLLM proxy is 100% optional. If you supply direct provider keys in
+# Section 4 (providers.openai_api_key, deepseek_api_key, etc.), the pipeline
+# connects directly to the providers without LiteLLM or config/litellm_config.yaml.
+#
 # If running the docker-compose LiteLLM proxy or an external gateway (e.g. OpenRouter):
 litellm:
   base_url: "http://localhost:4000"
@@ -158,7 +162,9 @@ timing:
 # ------------------------------------------------------------------------------
 # 12. Curated AI News RSS Feeds
 # ------------------------------------------------------------------------------
-# List of RSS feeds to scrape during the `ingest` pipeline stage:
+# List of RSS feeds to scrape during the `ingest` pipeline stage.
+# You can add any custom RSS/Atom feeds here as objects with name and url,
+# or simply as raw URL strings:
 rss_feeds:
   - name: "TechCrunch AI"
     url: "https://techcrunch.com/category/artificial-intelligence/feed/"
@@ -170,3 +176,7 @@ rss_feeds:
     url: "https://www.technologyreview.com/topic/artificial-intelligence/feed"
   - name: "ArXiv AI Recent"
     url: "https://rss.arxiv.org/rss/cs.AI"
+  - name: "Hacker News AI"
+    url: "https://hnrss.org/newest?q=AI"
+  - name: "Hacker News Frontpage"
+    url: "https://news.ycombinator.com/rss"

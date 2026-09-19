@@ -73,6 +73,7 @@ def generate_script_task(
     litellm_key: str | None = None,
     openai_key: str | None = None,
     deepseek_key: str | None = None,
+    gemini_key: str | None = None,
 ) -> int:
     """Generate structured beat sheet and comedic narration for a story cluster."""
     with get_session() as session:
@@ -87,6 +88,7 @@ def generate_script_task(
             api_key=litellm_key,
             openai_key=openai_key,
             deepseek_key=deepseek_key,
+            gemini_key=gemini_key,
         )
 
         script_record = script_service.generate_full_script(
@@ -251,6 +253,7 @@ def run_video_pipeline(
         litellm_key=litellm_key,
         openai_key=openai_key,
         deepseek_key=deepseek_key,
+        gemini_key=gemini_key,
     )
     job_id, _audio, _captions, _duration = voice_and_captions_task(
         script_id=script_id,

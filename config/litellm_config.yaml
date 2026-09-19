@@ -1,3 +1,12 @@
+# ==============================================================================
+# LiteLLM Proxy Configuration (Optional)
+# ==============================================================================
+# NOTE: This file is ONLY required if you run the LiteLLM Docker container via
+# docker-compose. For standard CLI, web dashboard, and script execution, you can
+# configure your API keys directly in config.yaml (providers section) or .env,
+# making this file and the LiteLLM container completely redundant.
+# ==============================================================================
+
 model_list:
   - model_name: gpt-4o-mini
     litellm_params:

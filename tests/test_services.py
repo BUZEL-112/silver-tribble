@@ -92,6 +92,33 @@ def test_rss_service_clean_html():
     assert cleaned == "Breaking AI news! Read more"
 
 
+def test_rss_service_feed_initialization_and_normalization():
+    custom_feeds = [
+        {"name": "Hacker News AI", "url": "https://hnrss.org/newest?q=AI"},
+        "https://news.ycombinator.com/rss",
+    ]
+    service = RssService(feeds=custom_feeds)
+    assert len(service.feeds) == 2
+    assert service.feeds[0]["name"] == "Hacker News AI"
+    assert service.feeds[1] == "https://news.ycombinator.com/rss"
+
+
+def test_flatten_yaml_data_rss_feeds_normalization():
+    from src.core.config import flatten_yaml_data
+
+    yaml_dict = {
+        "rss_feeds": [
+            {"name": "Custom Source", "url": "https://example.com/rss"},
+            "https://news.ycombinator.com/rss",
+        ]
+    }
+    flat = flatten_yaml_data(yaml_dict)
+    assert len(flat["rss_feeds"]) == 2
+    assert flat["rss_feeds"][0] == {"name": "Custom Source", "url": "https://example.com/rss"}
+    assert flat["rss_feeds"][1]["name"] == "news.ycombinator.com"
+    assert flat["rss_feeds"][1]["url"] == "https://news.ycombinator.com/rss"
+
+
 def test_article_repository_cluster_status(article_repo: ArticleRepository):
     cluster = article_repo.save_story_cluster(
         cluster_hash="hash_123",

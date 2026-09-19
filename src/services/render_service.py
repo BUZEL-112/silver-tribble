@@ -194,9 +194,14 @@ class RenderService:
             )
             return output_path
 
+        local_remotion = self.remotion_dir / "node_modules" / ".bin" / "remotion"
+        if local_remotion.exists():
+            bin_cmd = [str(local_remotion.resolve())]
+        else:
+            bin_cmd = ["npx", "remotion"]
+
         cmd = [
-            "npx",
-            "remotion",
+            *bin_cmd,
             "render",
             "src/index.ts",
             composition,

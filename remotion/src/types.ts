@@ -53,4 +53,20 @@ export interface RenderProps {
   outroDurationSeconds?: number;
   channelBadgeText?: string;
   showMaterialIndices?: boolean;
+  captionStyle?: "hormozi" | "minimal" | "karaoke" | "news_ticker" | "cinematic";
+  captionLevel?: number;
+  captionFontSize?: number;
+  captionUppercase?: boolean;
+  subscribeTitle?: string;
+  subscribeSubtitle?: string;
+  subscribeButtonText?: string;
+  subscribeDurationSeconds?: number;
+  subscribeStyle?: "card" | "lower_third" | "minimal_badge";
+  subscribeEnabled?: boolean;
+  horizontalBranding?: {
+    watermarkPosition?: "top-right" | "top-left" | "bottom-right" | "bottom-left";
+    captionLevel?: number;
+    channelBadgeText?: string;
+    lowerThirdTitle?: string;
+  };
 }

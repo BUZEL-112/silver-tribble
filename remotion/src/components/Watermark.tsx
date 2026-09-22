@@ -29,10 +29,10 @@ export const Watermark: React.FC<WatermarkProps> = ({ config }) => {
     alignItems: "center",
     gap: "8px",
     padding: "6px 14px",
-    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    backgroundColor: "rgba(0, 0, 0, 0.85)",
     backdropFilter: "blur(4px)",
-    borderRadius: "20px",
-    border: "1px solid rgba(255, 255, 255, 0.15)",
+    borderRadius: "2px",
+    border: "1px solid #3f3f46",
   };
 
   switch (position) {
@@ -69,7 +69,7 @@ export const Watermark: React.FC<WatermarkProps> = ({ config }) => {
           style={{
             color: "#ffffff",
             fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-            fontSize: "18px",
+            fontSize: "16px",
             fontWeight: 700,
             letterSpacing: "0.5px",
             textShadow: "0 2px 4px rgba(0,0,0,0.6)",

@@ -137,9 +137,15 @@ class RenderService:
             encoded_data = base64.b64encode(audio_local_path.read_bytes()).decode("utf-8")
             audio_path_str = f"data:{mime};base64,{encoded_data}"
 
+        is_horizontal = job.aspect_ratio == "16:9"
+        cap_level = settings.horizontal_caption_level if is_horizontal else settings.caption_level
+        badge_text = (
+            settings.horizontal_channel_badge_text if is_horizontal else settings.channel_badge_text
+        )
+
         props = RenderProps(
             videoTitle=script.title,
-            aspectRatio="9:16" if job.aspect_ratio == "9:16" else "16:9",
+            aspectRatio="16:9" if is_horizontal else "9:16",
             audioPath=audio_path_str,
             durationInSeconds=total_duration,
             fps=30,
@@ -149,8 +155,24 @@ class RenderService:
             mediaPlacements=shifted_media,
             introDelaySeconds=intro_delay,
             outroDurationSeconds=outro_duration,
-            channel_badge_text=settings.channel_badge_text,
-            show_material_indices=show_material_indices,
+            channelBadgeText=badge_text,
+            showMaterialIndices=show_material_indices,
+            captionStyle=settings.caption_style,
+            captionLevel=cap_level,
+            captionFontSize=settings.caption_font_size,
+            captionUppercase=settings.caption_uppercase,
+            subscribeTitle=settings.subscribe_title,
+            subscribeSubtitle=settings.subscribe_subtitle,
+            subscribeButtonText=settings.subscribe_button_text,
+            subscribeDurationSeconds=settings.subscribe_duration_seconds,
+            subscribeStyle=settings.subscribe_style,
+            subscribeEnabled=settings.subscribe_enabled,
+            horizontalBranding={
+                "watermarkPosition": settings.horizontal_watermark_position,
+                "captionLevel": settings.horizontal_caption_level,
+                "channelBadgeText": settings.horizontal_channel_badge_text,
+                "lowerThirdTitle": settings.horizontal_lower_third_title,
+            },
         )
 
         if hasattr(self.storage_service, "base_dir") and self.storage_service.base_dir:

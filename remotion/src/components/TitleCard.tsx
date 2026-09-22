@@ -34,11 +34,11 @@ export const TitleCard: React.FC<TitleCardProps> = ({
     <div
       style={{
         position: "absolute",
-        top: isVertical ? "12%" : "8%",
-        left: isVertical ? "6%" : "5%",
-        right: isVertical ? "6%" : "5%",
+        top: isVertical ? "10%" : "6%",
+        left: isVertical ? "6%" : "6%",
+        right: isVertical ? "6%" : "6%",
         zIndex: 50,
-        transform: `translateY(${(1 - slideIn) * -40}px)`,
+        transform: `translateY(${(1 - slideIn) * -30}px)`,
         opacity: slideIn,
       }}
     >
@@ -48,24 +48,24 @@ export const TitleCard: React.FC<TitleCardProps> = ({
           display: "inline-flex",
           alignItems: "center",
           gap: "8px",
-          backgroundColor: "#0284c7",
-          color: "#ffffff",
-          padding: "6px 14px",
-          borderRadius: "6px",
-          fontSize: isVertical ? "20px" : "16px",
-          fontWeight: 800,
+          backgroundColor: "#ffffff",
+          color: "#000000",
+          padding: "5px 12px",
+          borderRadius: "2px",
+          fontSize: isVertical ? "18px" : "15px",
+          fontWeight: 900,
           textTransform: "uppercase",
-          letterSpacing: "1.5px",
-          marginBottom: "12px",
-          boxShadow: "0 4px 14px rgba(2,132,199,0.4)",
+          letterSpacing: "1.2px",
+          marginBottom: "10px",
+          border: "1px solid #ffffff",
         }}
       >
         <span
           style={{
-            width: "10px",
-            height: "10px",
-            borderRadius: "50%",
-            backgroundColor: "#22c55e",
+            width: "8px",
+            height: "8px",
+            borderRadius: "0px",
+            backgroundColor: "#000000",
             display: "inline-block",
           }}
         />
@@ -75,25 +75,25 @@ export const TitleCard: React.FC<TitleCardProps> = ({
       {/* Main Kinetic Headline Box */}
       <div
         style={{
-          backgroundColor: "rgba(15, 23, 42, 0.9)",
-          borderLeft: "6px solid #38bdf8",
-          borderTop: "1px solid rgba(255,255,255,0.1)",
-          borderRight: "1px solid rgba(255,255,255,0.1)",
-          borderBottom: "1px solid rgba(255,255,255,0.1)",
-          borderRadius: "8px",
-          padding: isVertical ? "20px 24px" : "18px 24px",
+          backgroundColor: "rgba(10, 10, 10, 0.95)",
+          borderLeft: "4px solid #ffffff",
+          borderTop: "1px solid #27272a",
+          borderRight: "1px solid #27272a",
+          borderBottom: "1px solid #27272a",
+          borderRadius: "2px",
+          padding: isVertical ? "18px 22px" : "16px 22px",
           backdropFilter: "blur(12px)",
-          boxShadow: "0 10px 30px rgba(0, 0, 0, 0.6)",
         }}
       >
         <div
           style={{
-            color: "#f8fafc",
+            color: "#ffffff",
             fontFamily: "'Inter', system-ui, sans-serif",
-            fontSize: isVertical ? "32px" : "26px",
-            fontWeight: 800,
+            fontSize: isVertical ? "30px" : "24px",
+            fontWeight: 900,
             lineHeight: 1.25,
-            marginBottom: "6px",
+            marginBottom: onScreenText ? "6px" : "0px",
+            letterSpacing: "0.2px",
           }}
         >
           {title}
@@ -102,12 +102,12 @@ export const TitleCard: React.FC<TitleCardProps> = ({
         {onScreenText && (
           <div
             style={{
-              color: "#38bdf8",
+              color: "#a1a1aa",
               fontFamily: "'Inter', system-ui, sans-serif",
-              fontSize: isVertical ? "22px" : "18px",
+              fontSize: isVertical ? "20px" : "16px",
               fontWeight: 700,
               textTransform: "uppercase",
-              letterSpacing: "1.2px",
+              letterSpacing: "1px",
             }}
           >
             {onScreenText}

@@ -147,6 +147,21 @@ class SettingsUpdateRequest(BaseModel):
     intro_delay_seconds: float | None = Field(default=None, ge=0.0)
     outro_duration_seconds: float | None = Field(default=None, ge=0.0)
     cluster_review_timeout_seconds: float | None = Field(default=None, ge=1.0)
+    channel_badge_text: str | None = None
+    caption_style: str | None = None
+    caption_level: float | None = Field(default=None, ge=5.0, le=90.0)
+    caption_font_size: int | None = Field(default=None, ge=20, le=96)
+    caption_uppercase: bool | None = None
+    subscribe_title: str | None = None
+    subscribe_subtitle: str | None = None
+    subscribe_button_text: str | None = None
+    subscribe_duration_seconds: float | None = Field(default=None, ge=0.0)
+    subscribe_style: str | None = None
+    subscribe_enabled: bool | None = None
+    horizontal_watermark_position: WatermarkPosition | None = None
+    horizontal_caption_level: float | None = Field(default=None, ge=5.0, le=90.0)
+    horizontal_channel_badge_text: str | None = None
+    horizontal_lower_third_title: str | None = None
 
 
 class ConfigLoadRequest(BaseModel):
@@ -720,6 +735,50 @@ def get_clusters_count(
         return {"count": count}
 
 
+@app.get("/api/stats")
+def get_platform_stats() -> dict[str, Any]:
+    """Retrieve aggregate KPI metrics across all subsystems."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        render_repo = RenderRepository(session)
+        asset_repo = AssetRepository(session)
+        cost_repo = CostRepository(session)
+
+        articles_count = art_repo.count_articles()
+        clusters_count = art_repo.count_story_clusters()
+        jobs = render_repo.get_recent_jobs(limit=500)
+        jobs_count = len(jobs)
+        completed_jobs = len([j for j in jobs if j.status == "completed"])
+        assets = asset_repo.list_assets(limit=500)
+        assets_count = len(assets)
+        total_spend = cost_repo.get_total_spend()
+
+        return {
+            "articles_count": articles_count,
+            "clusters_count": clusters_count,
+            "jobs_count": jobs_count,
+            "completed_jobs_count": completed_jobs,
+            "assets_count": assets_count,
+            "total_spend_usd": round(total_spend, 4),
+        }
+
+
+@app.get("/api/costs")
+def get_pipeline_costs() -> dict[str, Any]:
+    """Retrieve spend analytics grouped by stage and per-video job."""
+    with get_session() as session:
+        cost_repo = CostRepository(session)
+        total_spend = cost_repo.get_total_spend()
+        spend_by_stage = cost_repo.get_spend_by_stage()
+        per_video_costs = cost_repo.get_per_video_costs(limit=20)
+
+        return {
+            "total_spend_usd": round(total_spend, 4),
+            "spend_by_stage": spend_by_stage,
+            "per_video_costs": per_video_costs,
+        }
+
+
 @app.get("/api/clusters/trending")
 def get_trending_clusters(
     limit: int = Query(10, ge=1, le=50),
@@ -1183,6 +1242,21 @@ def get_settings() -> dict[str, Any]:
         "outro_duration_seconds": settings.outro_duration_seconds,
         "cluster_review_timeout_seconds": settings.cluster_review_timeout_seconds,
         "default_media_type_ratio": settings.default_media_type_ratio,
+        "channel_badge_text": settings.channel_badge_text,
+        "caption_style": settings.caption_style,
+        "caption_level": settings.caption_level,
+        "caption_font_size": settings.caption_font_size,
+        "caption_uppercase": settings.caption_uppercase,
+        "subscribe_title": settings.subscribe_title,
+        "subscribe_subtitle": settings.subscribe_subtitle,
+        "subscribe_button_text": settings.subscribe_button_text,
+        "subscribe_duration_seconds": settings.subscribe_duration_seconds,
+        "subscribe_style": settings.subscribe_style,
+        "subscribe_enabled": settings.subscribe_enabled,
+        "horizontal_watermark_position": settings.horizontal_watermark_position,
+        "horizontal_caption_level": settings.horizontal_caption_level,
+        "horizontal_channel_badge_text": settings.horizontal_channel_badge_text,
+        "horizontal_lower_third_title": settings.horizontal_lower_third_title,
         "pexels_configured": bool(settings.pexels_api_key),
         "giphy_configured": bool(settings.giphy_api_key),
     }
@@ -1205,6 +1279,36 @@ def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
         settings.outro_duration_seconds = req.outro_duration_seconds
     if req.cluster_review_timeout_seconds is not None:
         settings.cluster_review_timeout_seconds = req.cluster_review_timeout_seconds
+    if req.channel_badge_text is not None:
+        settings.channel_badge_text = req.channel_badge_text
+    if req.caption_style is not None:
+        settings.caption_style = req.caption_style
+    if req.caption_level is not None:
+        settings.caption_level = req.caption_level
+    if req.caption_font_size is not None:
+        settings.caption_font_size = req.caption_font_size
+    if req.caption_uppercase is not None:
+        settings.caption_uppercase = req.caption_uppercase
+    if req.subscribe_title is not None:
+        settings.subscribe_title = req.subscribe_title
+    if req.subscribe_subtitle is not None:
+        settings.subscribe_subtitle = req.subscribe_subtitle
+    if req.subscribe_button_text is not None:
+        settings.subscribe_button_text = req.subscribe_button_text
+    if req.subscribe_duration_seconds is not None:
+        settings.subscribe_duration_seconds = req.subscribe_duration_seconds
+    if req.subscribe_style is not None:
+        settings.subscribe_style = req.subscribe_style
+    if req.subscribe_enabled is not None:
+        settings.subscribe_enabled = req.subscribe_enabled
+    if req.horizontal_watermark_position is not None:
+        settings.horizontal_watermark_position = req.horizontal_watermark_position
+    if req.horizontal_caption_level is not None:
+        settings.horizontal_caption_level = req.horizontal_caption_level
+    if req.horizontal_channel_badge_text is not None:
+        settings.horizontal_channel_badge_text = req.horizontal_channel_badge_text
+    if req.horizontal_lower_third_title is not None:
+        settings.horizontal_lower_third_title = req.horizontal_lower_third_title
 
     with get_session() as session:
         action_repo = ActionLogRepository(session)
@@ -1213,11 +1317,14 @@ def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
             action="update_settings",
             actor="web",
             status="success",
-            message="Updated watermark and timing configuration",
+            message="Updated watermark, captions, and branding configuration",
             details={
                 "watermark_text": settings.watermark_text,
                 "watermark_position": settings.watermark_position,
-                "intro_delay_seconds": settings.intro_delay_seconds,
+                "caption_style": settings.caption_style,
+                "caption_level": settings.caption_level,
+                "subscribe_title": settings.subscribe_title,
+                "horizontal_caption_level": settings.horizontal_caption_level,
             },
         )
 

@@ -5,6 +5,7 @@ from typing import Annotated, Any
 
 import typer
 from rich.console import Console
+from rich.panel import Panel
 from rich.table import Table
 
 from src.core.config import settings
@@ -25,9 +26,12 @@ from src.services.health_service import HealthService
 from src.services.media_service import MediaService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
+from src.services.script_auditor_service import ScriptAuditorService
 from src.services.script_service import ScriptService
 from src.services.storage_service import get_storage_service
+from src.services.subtitle_service import SubtitleService
 from src.services.tts_service import TtsService
+from src.services.youtube_metadata_service import YouTubeMetadataService
 
 app = typer.Typer(
     name="ai-video",
@@ -36,6 +40,36 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def print_studio_banner() -> None:
+    """Print clean ASCII studio banner."""
+    banner = (
+        "========================================================================\n"
+        "     AI VIDEO STUDIO: AUTONOMOUS YOUTUBE PRODUCTION PIPELINE v2.0       \n"
+        "  Ingestion | Clustering | Scripting | TTS | Motion Graphics | YouTube  \n"
+        "========================================================================"
+    )
+    console.print(Panel(banner, style="bold blue", border_style="blue"))
+
+
+@app.callback(invoke_without_command=True)
+def main_callback(
+    ctx: typer.Context,
+    version: Annotated[bool, typer.Option("--version", "-v", help="Show studio version")] = False,
+) -> None:
+    """Autonomous AI Video Production Studio CLI."""
+    if version:
+        console.print("[bold blue]AI Video Studio[/bold blue] version 2.0.0")
+        raise typer.Exit()
+    if ctx.invoked_subcommand is None:
+        print_studio_banner()
+
+
+@app.command(name="banner")
+def show_banner() -> None:
+    """Display studio startup ASCII banner."""
+    print_studio_banner()
 
 
 def update_env_file(updates: dict[str, str], env_path: Path = Path(".env")) -> None:
@@ -1902,6 +1936,262 @@ def prune_cache(
         f"{result.files_deleted} unindexed files out of {result.files_scanned} scanned, "
         f"freeing {mb_freed:.2f} MB."
     )
+
+
+@app.command(name="audit")
+def audit_script(
+    script_id: Annotated[int, typer.Argument(help="ID of script to audit")],
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output audit report as formatted JSON payload"),
+    ] = False,
+) -> None:
+    """Audit script retention strength, hook quality, and pacing."""
+    with get_session() as session:
+        repo = ScriptRepository(session)
+        script = repo.get_script_by_id(script_id)
+        if not script:
+            console.print(f"[bold red]Error:[/bold red] Script #{script_id} not found.")
+            raise typer.Exit(code=1)
+
+        title = script.title
+        narration = script.full_narration
+        beats = script.beats if isinstance(script.beats, list) else None
+
+    auditor = ScriptAuditorService()
+    report = auditor.audit_script(
+        title=title,
+        full_narration=narration,
+        beats=beats,
+    )
+
+    if json_output:
+        typer.echo(report.model_dump_json(indent=2))
+        return
+
+    table = Table(title=f"Retention & Pacing Audit: Script #{script_id}")
+    table.add_column("Metric", style="cyan", no_wrap=True)
+    table.add_column("Value", style="bold")
+    table.add_column("Assessment", style="white")
+
+    score_color = (
+        "green" if report.hook_score >= 80 else ("yellow" if report.hook_score >= 60 else "red")
+    )
+    hook_desc = (
+        "High hook retention"
+        if report.hook_score >= 80
+        else ("Moderate hook retention" if report.hook_score >= 60 else "Low hook retention")
+    )
+    table.add_row(
+        "Hook Score",
+        f"[{score_color}]{report.hook_score:.1f}/100[/{score_color}]",
+        hook_desc,
+    )
+    table.add_row(
+        "Pacing",
+        f"{report.words_per_minute:.1f} WPM",
+        report.pacing_rating,
+    )
+    table.add_row(
+        "Duration",
+        f"{report.estimated_duration_seconds:.1f}s",
+        "Estimated spoken length",
+    )
+    table.add_row(
+        "Word Count",
+        str(report.word_count),
+        "Total words in narration",
+    )
+    table.add_row(
+        "Question Hook",
+        "Yes" if report.has_question_hook else "No",
+        "Curiosity question loop in opening",
+    )
+    table.add_row(
+        "Breaking Trigger",
+        "Yes" if report.has_breaking_trigger else "No",
+        "Urgency trigger in hook sentence",
+    )
+
+    console.print(table)
+
+    if report.recommendations:
+        console.print("\n[bold green]Actionable Recommendations:[/bold green]")
+        for sugg in report.recommendations:
+            console.print(f"  * {sugg}")
+
+
+@app.command(name="publish")
+def publish_package(
+    job_id: Annotated[int, typer.Argument(help="ID of completed render job")],
+    save_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--save-dir",
+            "-o",
+            help="Optional directory to save metadata and subtitle files",
+        ),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Output YouTube metadata and subtitles as JSON payload",
+        ),
+    ] = False,
+) -> None:
+    """Generate YouTube publishing package including title variants, chapters, and subtitles."""
+    storage = get_storage_service()
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        script_repo = ScriptRepository(session)
+
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            console.print(f"[bold red]Error:[/bold red] Render job #{job_id} not found.")
+            raise typer.Exit(code=1)
+
+        script = script_repo.get_script_by_id(job.script_id)
+        if not script:
+            console.print(f"[bold red]Error:[/bold red] Script #{job.script_id} not found.")
+            raise typer.Exit(code=1)
+
+        title = script.title
+        narration = script.full_narration
+        beats = script.beats if isinstance(script.beats, list) else None
+        captions_path = job.captions_path
+        duration_seconds = job.duration_seconds or 0.0
+
+        captions: list[WordCaption] = []
+        if captions_path:
+            local_cap = storage.get_local_path(captions_path)
+            if local_cap.exists():
+                raw = json.loads(local_cap.read_text(encoding="utf-8"))
+                captions = [WordCaption(**c) for c in raw]
+
+    meta_svc = YouTubeMetadataService()
+    meta = meta_svc.generate_metadata(
+        title=title,
+        full_narration=narration,
+        beats=beats,
+        captions=captions,
+        duration_seconds=duration_seconds,
+    )
+
+    sub_svc = SubtitleService()
+    srt_content = sub_svc.generate_srt(captions)
+    vtt_content = sub_svc.generate_vtt(captions)
+
+    if json_output:
+        payload = {
+            "job_id": job_id,
+            "metadata": meta.model_dump(),
+            "srt_subtitles": srt_content,
+            "vtt_subtitles": vtt_content,
+        }
+        typer.echo(json.dumps(payload, indent=2))
+        return
+
+    console.print(
+        Panel(
+            f"[bold green]YouTube Publishing Package: Job #{job_id}[/bold green]",
+            style="blue",
+        )
+    )
+    primary_title = meta.title_options[0] if meta.title_options else "Untitled Video"
+    console.print(f"\n[bold cyan]Primary Title:[/bold cyan]\n{primary_title}")
+
+    if len(meta.title_options) > 1:
+        console.print("\n[bold cyan]Title Options:[/bold cyan]")
+        for opt in meta.title_options[1:]:
+            console.print(f"  * {opt}")
+
+    console.print(f"\n[bold cyan]Description & Chapters:[/bold cyan]\n{meta.description}")
+    console.print(f"\n[bold cyan]Tags:[/bold cyan]\n{', '.join(meta.tags)}")
+    if meta.hashtags:
+        console.print(f"\n[bold cyan]Hashtags:[/bold cyan]\n{' '.join(meta.hashtags)}")
+
+    if save_dir:
+        save_dir.mkdir(parents=True, exist_ok=True)
+        meta_file = save_dir / f"youtube_metadata_job_{job_id}.json"
+        meta_file.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
+        srt_file = save_dir / f"job_{job_id}.srt"
+        srt_file.write_text(srt_content, encoding="utf-8")
+        vtt_file = save_dir / f"job_{job_id}.vtt"
+        vtt_file.write_text(vtt_content, encoding="utf-8")
+        console.print(f"\n[bold green]Saved publishing package to:[/bold green] {save_dir}")
+
+
+@app.command(name="trending")
+def trending_clusters(
+    limit: Annotated[
+        int,
+        typer.Option("--limit", "-n", help="Number of trending clusters to show"),
+    ] = 10,
+    hours_back: Annotated[
+        int,
+        typer.Option("--hours-back", "-h", help="Lookback window in hours"),
+    ] = 72,
+    json_output: Annotated[
+        bool,
+        typer.Option("--json", help="Output trending clusters as formatted JSON payload"),
+    ] = False,
+) -> None:
+    """Display velocity and priority ranked trending story clusters."""
+    with get_session() as session:
+        repo = ArticleRepository(session)
+        raw_trending = repo.get_trending_clusters(limit=limit, hours_back=hours_back)
+        trending_data = [
+            {
+                "id": c.id,
+                "title": c.title or "Untitled",
+                "article_count": c.article_count,
+                "created_at": c.created_at,
+                "score": score,
+            }
+            for c, score in raw_trending
+        ]
+
+    if json_output:
+        items = [
+            {
+                "id": item["id"],
+                "title": item["title"],
+                "score": round(item["score"], 3),
+                "article_count": item["article_count"],
+                "created_at": item["created_at"].isoformat() if item["created_at"] else None,
+            }
+            for item in trending_data
+        ]
+        typer.echo(json.dumps(items, indent=2))
+        return
+
+    if not trending_data:
+        console.print("[yellow]No trending clusters found in the specified window.[/yellow]")
+        return
+
+    table = Table(title=f"Trending Story Clusters (Past {hours_back} Hours)")
+    table.add_column("Rank", style="bold cyan", justify="right")
+    table.add_column("Cluster ID", style="bold", justify="right")
+    table.add_column("Velocity Score", style="magenta", justify="right")
+    table.add_column("Title", style="white")
+    table.add_column("Articles", style="green", justify="right")
+    table.add_column("Created", style="dim")
+
+    for idx, item in enumerate(trending_data, start=1):
+        created_str = (
+            item["created_at"].strftime("%Y-%m-%d %H:%M") if item["created_at"] else "Recently"
+        )
+        table.add_row(
+            f"#{idx}",
+            str(item["id"]),
+            f"{item['score']:.3f}",
+            item["title"],
+            str(item["article_count"]),
+            created_str,
+        )
+
+    console.print(table)
 
 
 if __name__ == "__main__":

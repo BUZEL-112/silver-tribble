@@ -94,6 +94,11 @@ class ArticleRepository(BaseRepository):
         self.session.flush()
         return cluster
 
+    def count_articles(self) -> int:
+        """Count total stored articles in repository."""
+        stmt = select(func.count(Article.id))
+        return self.session.scalar(stmt) or 0
+
     def count_story_clusters(
         self,
         status: str | None = None,

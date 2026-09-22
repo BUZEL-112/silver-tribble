@@ -1,7 +1,7 @@
 """Pydantic schemas for data validation and domain contracts."""
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -146,6 +146,19 @@ class RenderProps(BaseModel):
     outro_duration_seconds: float = Field(default=0.0, alias="outroDurationSeconds")
     channel_badge_text: str = Field(default="AI NEWS BY ESWAR", alias="channelBadgeText")
     show_material_indices: bool = Field(default=False, alias="showMaterialIndices")
+    caption_style: str = Field(default="hormozi", alias="captionStyle")
+    caption_level: float = Field(default=30.0, alias="captionLevel")
+    caption_font_size: int = Field(default=48, alias="captionFontSize")
+    caption_uppercase: bool = Field(default=True, alias="captionUppercase")
+    subscribe_title: str = Field(default="SUBSCRIBE FOR DAILY AI UPDATES", alias="subscribeTitle")
+    subscribe_subtitle: str = Field(
+        default="@AINewsDesk | Engineering First", alias="subscribeSubtitle"
+    )
+    subscribe_button_text: str = Field(default="SUBSCRIBE", alias="subscribeButtonText")
+    subscribe_duration_seconds: float = Field(default=3.5, alias="subscribeDurationSeconds")
+    subscribe_style: str = Field(default="card", alias="subscribeStyle")
+    subscribe_enabled: bool = Field(default=True, alias="subscribeEnabled")
+    horizontal_branding: dict[str, Any] | None = Field(default=None, alias="horizontalBranding")
 
 
 class CostLogCreate(BaseModel):

@@ -30,6 +30,20 @@ def test_settings_api() -> None:
         "watermark_opacity": 0.75,
         "intro_delay_seconds": 2.5,
         "outro_duration_seconds": 4.0,
+        "caption_style": "cinematic",
+        "caption_level": 45.0,
+        "caption_font_size": 52,
+        "caption_uppercase": False,
+        "subscribe_title": "SUBSCRIBE TO AI BREAKDOWNS",
+        "subscribe_subtitle": "@AINewsDesk | Raw Engineering",
+        "subscribe_button_text": "JOIN DESK",
+        "subscribe_duration_seconds": 4.5,
+        "subscribe_style": "lower_third",
+        "subscribe_enabled": True,
+        "horizontal_watermark_position": "top-left",
+        "horizontal_caption_level": 18.0,
+        "horizontal_channel_badge_text": "AI NEWS DESK WIDESCREEN",
+        "horizontal_lower_third_title": "FRONTIER REASONING ANALYSIS",
     }
     res_post = client.post("/api/settings", json=update_payload)
     assert res_post.status_code == 200
@@ -39,6 +53,20 @@ def test_settings_api() -> None:
     assert updated["watermark_opacity"] == 0.75
     assert updated["intro_delay_seconds"] == 2.5
     assert updated["outro_duration_seconds"] == 4.0
+    assert updated["caption_style"] == "cinematic"
+    assert updated["caption_level"] == 45.0
+    assert updated["caption_font_size"] == 52
+    assert updated["caption_uppercase"] is False
+    assert updated["subscribe_title"] == "SUBSCRIBE TO AI BREAKDOWNS"
+    assert updated["subscribe_subtitle"] == "@AINewsDesk | Raw Engineering"
+    assert updated["subscribe_button_text"] == "JOIN DESK"
+    assert updated["subscribe_duration_seconds"] == 4.5
+    assert updated["subscribe_style"] == "lower_third"
+    assert updated["subscribe_enabled"] is True
+    assert updated["horizontal_watermark_position"] == "top-left"
+    assert updated["horizontal_caption_level"] == 18.0
+    assert updated["horizontal_channel_badge_text"] == "AI NEWS DESK WIDESCREEN"
+    assert updated["horizontal_lower_third_title"] == "FRONTIER REASONING ANALYSIS"
 
 
 def test_logs_api() -> None:
@@ -322,3 +350,26 @@ def test_clusters_and_articles_endpoints() -> None:
     count_data = res_count.json()
     assert "count" in count_data
     assert count_data["count"] >= 1
+
+
+def test_platform_stats_and_costs_api() -> None:
+    """Verify KPI stats ribbon and cost analytics endpoints."""
+    res_stats = client.get("/api/stats")
+    assert res_stats.status_code == 200
+    stats = res_stats.json()
+    assert "articles_count" in stats
+    assert "clusters_count" in stats
+    assert "jobs_count" in stats
+    assert "completed_jobs_count" in stats
+    assert "assets_count" in stats
+    assert "total_spend_usd" in stats
+    assert isinstance(stats["total_spend_usd"], (int, float))
+
+    res_costs = client.get("/api/costs")
+    assert res_costs.status_code == 200
+    costs = res_costs.json()
+    assert "total_spend_usd" in costs
+    assert "spend_by_stage" in costs
+    assert "per_video_costs" in costs
+    assert isinstance(costs["spend_by_stage"], list)
+    assert isinstance(costs["per_video_costs"], list)

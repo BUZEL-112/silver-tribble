@@ -37,6 +37,16 @@ export const MainVideo: React.FC<RenderProps> = ({
   outroDurationSeconds = 3.5,
   channelBadgeText = "AI NEWS BY ESWAR",
   showMaterialIndices = false,
+  captionStyle = "hormozi",
+  captionLevel,
+  captionFontSize,
+  captionUppercase = true,
+  subscribeTitle,
+  subscribeSubtitle,
+  subscribeButtonText,
+  subscribeStyle = "card",
+  subscribeEnabled = true,
+  horizontalBranding,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -257,11 +267,23 @@ export const MainVideo: React.FC<RenderProps> = ({
           captions={captions}
           currentTime={currentTime}
           aspectRatio={aspectRatio}
+          captionStyle={captionStyle}
+          captionLevel={captionLevel}
+          captionFontSize={captionFontSize}
+          captionUppercase={captionUppercase}
         />
       )}
 
       {/* Final Call to Action Card - appears only after speech concludes */}
-      {isOutroCardVisible && <OutroCard aspectRatio={aspectRatio} />}
+      {isOutroCardVisible && subscribeEnabled && (
+        <OutroCard
+          aspectRatio={aspectRatio}
+          subscribeTitle={subscribeTitle}
+          subscribeSubtitle={subscribeSubtitle}
+          subscribeButtonText={subscribeButtonText}
+          subscribeStyle={subscribeStyle}
+        />
+      )}
     </div>
   );
 };

@@ -189,6 +189,58 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             flat["channel_badge_text"] = b["channel_badge"]
         if "watermark_text" in b:
             flat["watermark_text"] = b["watermark_text"]
+        if "caption_style" in b:
+            flat["caption_style"] = b["caption_style"]
+        if "caption_level" in b:
+            flat["caption_level"] = b["caption_level"]
+        if "caption_font_size" in b:
+            flat["caption_font_size"] = b["caption_font_size"]
+        if "caption_uppercase" in b:
+            flat["caption_uppercase"] = b["caption_uppercase"]
+        if "subscribe_title" in b:
+            flat["subscribe_title"] = b["subscribe_title"]
+        if "subscribe_subtitle" in b:
+            flat["subscribe_subtitle"] = b["subscribe_subtitle"]
+        if "subscribe_button_text" in b:
+            flat["subscribe_button_text"] = b["subscribe_button_text"]
+        if "subscribe_duration_seconds" in b:
+            flat["subscribe_duration_seconds"] = b["subscribe_duration_seconds"]
+        if "subscribe_style" in b:
+            flat["subscribe_style"] = b["subscribe_style"]
+        if "subscribe_enabled" in b:
+            flat["subscribe_enabled"] = b["subscribe_enabled"]
+        if "horizontal_watermark_position" in b:
+            flat["horizontal_watermark_position"] = b["horizontal_watermark_position"]
+        if "horizontal_caption_level" in b:
+            flat["horizontal_caption_level"] = b["horizontal_caption_level"]
+        if "horizontal_channel_badge_text" in b:
+            flat["horizontal_channel_badge_text"] = b["horizontal_channel_badge_text"]
+        if "horizontal_lower_third_title" in b:
+            flat["horizontal_lower_third_title"] = b["horizontal_lower_third_title"]
+    if "captions" in data and isinstance(data["captions"], dict):
+        c = data["captions"]
+        if "style" in c:
+            flat["caption_style"] = c["style"]
+        if "level" in c:
+            flat["caption_level"] = c["level"]
+        if "font_size" in c:
+            flat["caption_font_size"] = c["font_size"]
+        if "uppercase" in c:
+            flat["caption_uppercase"] = c["uppercase"]
+    if "subscribe" in data and isinstance(data["subscribe"], dict):
+        s = data["subscribe"]
+        if "title" in s:
+            flat["subscribe_title"] = s["title"]
+        if "subtitle" in s:
+            flat["subscribe_subtitle"] = s["subtitle"]
+        if "button_text" in s:
+            flat["subscribe_button_text"] = s["button_text"]
+        if "duration_seconds" in s:
+            flat["subscribe_duration_seconds"] = s["duration_seconds"]
+        if "style" in s:
+            flat["subscribe_style"] = s["style"]
+        if "enabled" in s:
+            flat["subscribe_enabled"] = s["enabled"]
     if "timing" in data and isinstance(data["timing"], dict):
         t = data["timing"]
         if "intro_delay_seconds" in t:
@@ -411,6 +463,70 @@ class Settings(BaseSettings):
     watermark_opacity: float = Field(
         default=0.8,
         description="Watermark opacity from 0.0 to 1.0",
+    )
+
+    # Caption Customization and Positioning
+    caption_style: Literal["hormozi", "minimal", "karaoke", "news_ticker", "cinematic"] = Field(
+        default="hormozi",
+        description="Caption animation and typography preset",
+    )
+    caption_level: float = Field(
+        default=30.0,
+        description="Vertical caption position percentage offset from bottom (10 to 85)",
+    )
+    caption_font_size: int = Field(
+        default=48,
+        description="Base caption font size in pixels",
+    )
+    caption_uppercase: bool = Field(
+        default=True,
+        description="Force uppercase typography on captions",
+    )
+
+    # Ending Subscribe Watermark and Call-to-Action
+    subscribe_title: str = Field(
+        default="SUBSCRIBE FOR DAILY AI UPDATES",
+        description="Headline text for the ending subscribe call to action",
+    )
+    subscribe_subtitle: str = Field(
+        default="@AINewsDesk | Engineering First",
+        description="Subheadline or channel handle for ending subscribe card",
+    )
+    subscribe_button_text: str = Field(
+        default="SUBSCRIBE",
+        description="Button CTA label on ending card",
+    )
+    subscribe_duration_seconds: float = Field(
+        default=3.5,
+        description="Duration of the ending subscribe watermark card",
+    )
+    subscribe_style: Literal["card", "lower_third", "minimal_badge"] = Field(
+        default="card",
+        description="Visual layout preset for ending subscribe watermark",
+    )
+    subscribe_enabled: bool = Field(
+        default=True,
+        description="Enable ending subscribe watermark outro",
+    )
+
+    # Horizontal (16:9) Branding Options
+    horizontal_watermark_position: Literal[
+        "top-right", "top-left", "bottom-right", "bottom-left"
+    ] = Field(
+        default="top-right",
+        description="Watermark position on 16:9 widescreen canvas",
+    )
+    horizontal_caption_level: float = Field(
+        default=15.0,
+        description="Vertical caption position percentage offset from bottom for 16:9 canvas",
+    )
+    horizontal_channel_badge_text: str = Field(
+        default="AI NEWS DESK",
+        description="Channel badge text for 16:9 landscape videos",
+    )
+    horizontal_lower_third_title: str = Field(
+        default="BREAKING AI ARCHITECTURE",
+        description="Default lower-third banner headline for 16:9 landscape videos",
     )
 
     # Timing Controls

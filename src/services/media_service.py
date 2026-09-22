@@ -1,4 +1,6 @@
+import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Literal
@@ -11,8 +13,12 @@ from src.models.schemas import (
     SentenceMediaPlacement,
     WordCaption,
 )
+from src.repositories.asset_repository import AssetRepository
 from src.repositories.cost_repository import CostRepository
+from src.services.brand_card_service import BrandCardService
+from src.services.image_search_service import ImageSearchService
 from src.services.media_inspector import MediaInspector
+from src.services.media_router import MediaRouter
 from src.services.storage_service import StorageService, get_storage_service
 
 STOP_WORDS = {
@@ -208,15 +214,21 @@ class MediaService:
         self,
         storage_service: StorageService | None = None,
         cost_repo: CostRepository | None = None,
+        asset_repo: AssetRepository | None = None,
         pexels_api_key: str | None = None,
+        pixabay_api_key: str | None = None,
         giphy_api_key: str | None = None,
         media_cache_dir: Path | None = None,
         default_ratio: float | None = None,
     ) -> None:
         self.storage_service = storage_service or get_storage_service()
         self.cost_repo = cost_repo
+        self.asset_repo = asset_repo
         self.pexels_api_key = (
             pexels_api_key if pexels_api_key is not None else settings.pexels_api_key
+        )
+        self.pixabay_api_key = (
+            pixabay_api_key if pixabay_api_key is not None else settings.pixabay_api_key
         )
         self.giphy_api_key = giphy_api_key if giphy_api_key is not None else settings.giphy_api_key
         self.media_cache_dir = media_cache_dir or settings.media_cache_dir
@@ -224,6 +236,17 @@ class MediaService:
             default_ratio if default_ratio is not None else settings.default_media_type_ratio
         )
         self.inspector = MediaInspector()
+        self.image_search = ImageSearchService()
+        self.brand_cards = BrandCardService()
+        self.router = MediaRouter(
+            storage_service=self.storage_service,
+            cost_repo=self.cost_repo,
+            asset_repo=self.asset_repo,
+            inspector=self.inspector,
+            image_search_service=self.image_search,
+            brand_card_service=self.brand_cards,
+            media_cache_dir=self.media_cache_dir,
+        )
         self.media_cache_dir.mkdir(parents=True, exist_ok=True)
         public_media = settings.remotion_project_dir / "public" / "media"
         if not public_media.exists() and not public_media.is_symlink():
@@ -311,17 +334,25 @@ class MediaService:
         query: str,
         media_type: Literal["video", "image"] = "video",
         excluded_urls: set[str] | None = None,
+        aspect_ratio: str = "9:16",
     ) -> tuple[str, str] | None:
         """Search Pexels API for video or photo URL, filtering out excluded_urls."""
         if not self.pexels_api_key:
             return None
 
         headers = {"Authorization": self.pexels_api_key}
+        orientation = "portrait" if aspect_ratio == "9:16" else "landscape"
+
+        # Sanitize and condense query into clean keywords
+        clean_words = [
+            w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS
+        ]
+        effective_query = " ".join(clean_words[:4]) if len(clean_words) >= 2 else query
 
         try:
             with httpx.Client(timeout=10.0) as client:
                 if media_type == "video":
-                    url = f"https://api.pexels.com/videos/search?query={query}&per_page=15&orientation=portrait"
+                    url = f"https://api.pexels.com/videos/search?query={effective_query}&per_page=15&orientation={orientation}"
                     resp = client.get(url, headers=headers)
                     if resp.status_code == 200:
                         data = resp.json()
@@ -343,7 +374,7 @@ class MediaService:
                             return link, "mp4"
 
                 # Fallback or photo search
-                photo_url = f"https://api.pexels.com/v1/search?query={query}&per_page=15&orientation=portrait"
+                photo_url = f"https://api.pexels.com/v1/search?query={effective_query}&per_page=15&orientation={orientation}"
                 resp = client.get(photo_url, headers=headers)
                 if resp.status_code == 200:
                     data = resp.json()
@@ -357,6 +388,64 @@ class MediaService:
                             continue
                         return src_url, "jpg"
 
+        except Exception:
+            return None
+
+        return None
+
+    def search_pixabay(
+        self,
+        query: str,
+        media_type: Literal["video", "image"] = "video",
+        excluded_urls: set[str] | None = None,
+        aspect_ratio: str = "9:16",
+    ) -> tuple[str, str] | None:
+        """Search Pixabay API for stock video or photo URL, filtering out excluded_urls."""
+        if not self.pixabay_api_key:
+            return None
+
+        clean_words = [
+            w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS
+        ]
+        effective_query = "+".join(clean_words[:3]) if clean_words else query
+        orientation = "vertical" if aspect_ratio == "9:16" else "horizontal"
+
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                if media_type == "video":
+                    url = (
+                        f"https://pixabay.com/api/videos/?key={self.pixabay_api_key}"
+                        f"&q={effective_query}&orientation={orientation}&per_page=10"
+                    )
+                    resp = client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        hits = data.get("hits", [])
+                        for hit in hits:
+                            videos = hit.get("videos", {})
+                            for res_key in ["medium", "large", "small", "tiny"]:
+                                if res_key in videos and videos[res_key].get("url"):
+                                    v_url = videos[res_key]["url"]
+                                    if excluded_urls and v_url in excluded_urls:
+                                        continue
+                                    return v_url, "mp4"
+
+                # Photo search fallback
+                img_url = (
+                    f"https://pixabay.com/api/?key={self.pixabay_api_key}"
+                    f"&q={effective_query}&image_type=photo&orientation={orientation}&per_page=10"
+                )
+                resp = client.get(img_url)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    hits = data.get("hits", [])
+                    for hit in hits:
+                        src_url = hit.get("largeImageURL") or hit.get("webformatURL")
+                        if not src_url:
+                            continue
+                        if excluded_urls and src_url in excluded_urls:
+                            continue
+                        return src_url, "jpg"
         except Exception:
             return None
 
@@ -434,11 +523,100 @@ class MediaService:
             return False, destination_path
         return False, destination_path
 
+    def generate_visual_query(
+        self,
+        sentence_text: str,
+        beat_info: dict[str, Any] | None = None,
+        keywords: list[str] | None = None,
+    ) -> tuple[str, list[str], Literal["video", "gif"]]:
+        """Derive high-relevance visual search terms and media format for a sentence."""
+        lower_sent = sentence_text.lower()
+        extracted_kw = keywords or self.extract_keywords(sentence_text, max_keywords=3)
+
+        # Check beat context
+        beat_type = (beat_info or {}).get("beat_type", "context")
+        visual_dir = (beat_info or {}).get("visual_direction", "").lower()
+
+        # Check if beat or sentence warrants a reaction GIF / meme
+        is_reaction = (
+            beat_type in ["skepticism", "reaction"]
+            or any(
+                p in lower_sent
+                for p in [
+                    "spoiler alert",
+                    "good luck",
+                    "terrible business",
+                    "nobody ever",
+                    "having none of it",
+                    "panicking",
+                    "roller coaster",
+                ]
+            )
+        )
+
+        if is_reaction and self.giphy_api_key:
+            if any(p in lower_sent for p in ["skeptic", "having none of it", "terrible"]):
+                return "skeptical eye roll reaction", extracted_kw, "gif"
+            if any(p in lower_sent for p in ["panic", "alarm", "doomsday"]):
+                return "shocked panic reaction", extracted_kw, "gif"
+            if any(p in lower_sent for p in ["nobody ever", "good luck"]):
+                return "confused facepalm reaction", extracted_kw, "gif"
+            return "funny tech reaction", extracted_kw, "gif"
+
+        # Check if visual_direction from beat contains concrete visual scenes
+        if visual_dir:
+            if any(k in visual_dir for k in ["server", "data center", "rack"]):
+                return "data center glowing server rack", extracted_kw, "video"
+            if any(k in visual_dir for k in ["chip", "semiconductor", "wafer"]):
+                return "semiconductor microchip silicon wafer", extracted_kw, "video"
+            if any(k in visual_dir for k in ["robot", "humanoid", "arm"]):
+                return "humanoid robot technology", extracted_kw, "video"
+            if any(k in visual_dir for k in ["code", "terminal", "typing", "screen"]):
+                return "computer programming code screen", extracted_kw, "video"
+            if any(k in visual_dir for k in ["headline", "glitch", "breaking"]):
+                return "breaking news digital technology", extracted_kw, "video"
+            if any(k in visual_dir for k in ["press", "conference", "podium", "interview"]):
+                return "press conference microphones media", extracted_kw, "video"
+
+        # Domain-anchored semantic matching for stock b-roll
+        if any(
+            k in lower_sent
+            for k in ["jensen", "huang", "nvidia", "gpu", "blackwell", "rubin", "hopper"]
+        ):
+            return "nvidia gpu microchip semiconductor", extracted_kw, "video"
+        if any(
+            k in lower_sent
+            for k in ["dario", "amodei", "anthropic", "claude", "altman", "openai", "chatgpt"]
+        ):
+            return "artificial intelligence neural network data center", extracted_kw, "video"
+        if any(k in lower_sent for k in ["server", "hardware", "infrastructure", "compute", "cluster"]):
+            return "data center glowing server room", extracted_kw, "video"
+        if any(k in lower_sent for k in ["chip", "semiconductor", "silicon", "transistor", "nanometer"]):
+            return "semiconductor silicon chip circuit board", extracted_kw, "video"
+        if any(k in lower_sent for k in ["evaluator", "evaluators", "safety", "inspect", "audit", "security"]):
+            return "cybersecurity digital security server room", extracted_kw, "video"
+        if any(k in lower_sent for k in ["regulat", "treaties", "agreements", "democratic", "global", "treaty"]):
+            return "global digital network connection technology", extracted_kw, "video"
+        if any(k in lower_sent for k in ["robot", "agent", "agents", "autonomous", "superintelligence", "gods"]):
+            return "futuristic humanoid robot artificial intelligence", extracted_kw, "video"
+        if any(k in lower_sent for k in ["code", "coding", "software", "developer", "engineer"]):
+            return "software developer coding computer screen", extracted_kw, "video"
+        if any(k in lower_sent for k in ["slow", "brake", "brakes", "pause", "speed", "pace", "emergency"]):
+            return "cyber warning digital technology interface", extracted_kw, "video"
+        if any(k in lower_sent for k in ["money", "billion", "billions", "venture", "market", "gold rush", "trillion"]):
+            return "silicon valley corporate tech meeting", extracted_kw, "video"
+        if any(k in lower_sent for k in ["wifi", "wi-fi", "network", "internet", "cloud"]):
+            return "digital cloud networking cyber tech", extracted_kw, "video"
+
+        primary_kw = extracted_kw[0] if extracted_kw else "technology"
+        return f"artificial intelligence {primary_kw}", extracted_kw, "video"
+
     def process_media_for_job(
         self,
         job_id: int,
         captions: list[WordCaption],
         beats: list[dict[str, Any]] | None = None,
+        aspect_ratio: str = "9:16",
     ) -> list[SentenceMediaPlacement]:
         """Generate keywords, fetch assets with deduplication, GIF-freeze, and inspector gate."""
         sentences = self.group_captions_into_sentences(captions)
@@ -448,134 +626,42 @@ class MediaService:
         beats_list = beats or []
         placements: list[SentenceMediaPlacement] = []
         used_urls: set[str] = set()
+        total_sentences = len(sentences)
 
         for idx, sentence_info in enumerate(sentences):
             start_t = sentence_info["start_time"]
             end_t = sentence_info["end_time"]
             text = sentence_info["text"]
-            lower_text = text.lower()
 
-            keywords = self.extract_keywords(text, max_keywords=3)
-            base_kw = keywords[0] if keywords else "technology"
-
-            # Domain-anchored query mapping to prevent generic/meme mismatches
-            if any(k in lower_text for k in ["jensen", "huang", "nvidia"]):
-                query_str = "nvidia gpu semiconductor microchip artificial intelligence"
-            elif any(k in lower_text for k in ["dario", "amodei", "anthropic", "openai", "sam altman"]):
-                query_str = "artificial intelligence neural network futuristic data center"
-            elif any(k in lower_text for k in ["brakes", "slow", "pace", "frontier", "police"]):
-                query_str = "server room futuristic cyber security technology"
-            elif any(k in lower_text for k in ["regulat", "treaties", "agreements", "democratic", "global"]):
-                query_str = "global digital network connection artificial intelligence"
-            elif any(k in lower_text for k in ["diary", "privacy", "secret", "evaluators", "trust"]):
-                query_str = "cybersecurity digital data privacy matrix code"
-            elif any(k in lower_text for k in ["server", "hardware", "chip", "semiconductor", "models"]):
-                query_str = "data center glowing server rack technology"
-            elif any(k in lower_text for k in ["robot", "agent", "agents", "autonomous", "superintelligence", "gods"]):
-                query_str = "futuristic humanoid robot artificial intelligence"
-            elif any(k in lower_text for k in ["code", "coding", "software", "developer"]):
-                query_str = "programming code screen computer developer technology"
-            elif any(k in lower_text for k in ["wifi", "wi-fi", "password", "passwords"]):
-                query_str = "digital networking router cyber tech futuristic"
-            else:
-                query_str = f"artificial intelligence futuristic technology {base_kw}"
-
-            chosen_placement: SentenceMediaPlacement | None = None
-
-            if self.pexels_api_key:
-                # Default to vertical video with deduplication across the video
-                result = self.search_pexels(query_str, media_type="video", excluded_urls=used_urls)
-                if not result:
-                    result = self.search_pexels(
-                        f"artificial intelligence technology {base_kw}",
-                        media_type="video",
-                        excluded_urls=used_urls,
-                    )
-                if not result:
-                    result = self.search_pexels(
-                        "artificial intelligence technology",
-                        media_type="video",
-                        excluded_urls=used_urls,
-                    )
-                if result:
-                    source_url, ext = result
-                    dest_file = self.media_cache_dir / f"job_{job_id}_sent_{idx}.{ext}"
-                    ok, final_path = self.download_asset(source_url, dest_file)
-                    if ok:
-                        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
-                        approved, _ = self.inspector.inspect_candidate(
-                            sentence_text=text,
-                            keywords=keywords,
-                            media_path=final_path,
-                            media_type=actual_type,
-                        )
-                        if approved:
-                            used_urls.add(source_url)
-                            chosen_placement = SentenceMediaPlacement(
-                                sentence_index=idx,
-                                start_time=start_t,
-                                end_time=end_t,
-                                keywords=keywords,
-                                media_type=actual_type,
-                                local_path=str(final_path.resolve()),
-                                source_url=source_url,
-                                provider="pexels",
-                            )
-                        else:
-                            used_urls.add(source_url)
-
-            if not chosen_placement and self.giphy_api_key:
-                reaction_query = f"{base_kw} technology reaction"
-                result = self.search_giphy(reaction_query)
-                if not result:
-                    result = self.search_giphy("technology reaction")
-                if result:
-                    source_url, ext = result
-                    dest_file = self.media_cache_dir / f"job_{job_id}_sent_{idx}.{ext}"
-                    ok, final_path = self.download_asset(source_url, dest_file)
-                    if ok:
-                        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
-                        approved, _ = self.inspector.inspect_candidate(
-                            sentence_text=text,
-                            keywords=keywords,
-                            media_path=final_path,
-                            media_type=actual_type,
-                        )
-                        if approved:
-                            used_urls.add(source_url)
-                            chosen_placement = SentenceMediaPlacement(
-                                sentence_index=idx,
-                                start_time=start_t,
-                                end_time=end_t,
-                                keywords=keywords,
-                                media_type=actual_type,
-                                local_path=str(final_path.resolve()),
-                                source_url=source_url,
-                                provider="giphy",
-                            )
-                        else:
-                            used_urls.add(source_url)
-
-            # Graceful fallback when keys missing or search returned no results
-            if not chosen_placement:
-                chosen_placement = SentenceMediaPlacement(
-                    sentence_index=idx,
-                    start_time=start_t,
-                    end_time=end_t,
-                    keywords=keywords,
-                    media_type="image",
-                    local_path="",
-                    source_url="",
-                    provider="fallback",
+            matching_beat = None
+            if beats_list:
+                beat_idx = min(
+                    len(beats_list) - 1,
+                    int(idx / max(1, total_sentences) * len(beats_list)),
                 )
+                matching_beat = beats_list[beat_idx]
 
-            placements.append(chosen_placement)
+            placement = self.router.route_and_fetch(
+                job_id=job_id,
+                sentence_index=idx,
+                sentence_text=text,
+                start_time=start_t,
+                end_time=end_t,
+                beat_info=matching_beat,
+                used_urls=used_urls,
+                aspect_ratio=aspect_ratio,
+                media_service_ref=self,
+            )
+            placements.append(placement)
 
         # Continuous interval clamping: eliminate black gaps between consecutive clips
         for i in range(len(placements) - 1):
             placements[i].end_time = placements[i + 1].start_time
         if placements and captions:
             placements[-1].end_time = round(captions[-1].end, 2)
+
+        # Persist placements to disk
+        self.save_job_placements(job_id, placements)
 
         if self.cost_repo:
             self.cost_repo.log_cost(
@@ -591,3 +677,192 @@ class MediaService:
             )
 
         return placements
+
+    def get_job_placements(self, job_id: int) -> list[SentenceMediaPlacement]:
+        """Read saved sentence media placements for a given render job."""
+        placements_file = self.media_cache_dir / f"placements_job_{job_id}.json"
+        if not placements_file.exists():
+            return []
+        try:
+            data = json.loads(placements_file.read_text(encoding="utf-8"))
+            return [SentenceMediaPlacement.model_validate(item) for item in data]
+        except Exception:
+            return []
+
+    def save_job_placements(
+        self, job_id: int, placements: list[SentenceMediaPlacement]
+    ) -> Path:
+        """Persist placements to disk and sync with existing render_props.json if present."""
+        self.media_cache_dir.mkdir(parents=True, exist_ok=True)
+        placements_file = self.media_cache_dir / f"placements_job_{job_id}.json"
+        placements_data = [p.model_dump() for p in placements]
+        placements_file.write_text(
+            json.dumps(placements_data, indent=2), encoding="utf-8"
+        )
+
+        # Also update render_props if props file exists
+        props_file = (
+            settings.storage_local_dir / "render_props" / f"props_job_{job_id}.json"
+        )
+        if props_file.exists():
+            try:
+                props_dict = json.loads(props_file.read_text(encoding="utf-8"))
+                props_dict["mediaPlacements"] = placements_data
+                props_file.write_text(
+                    json.dumps(props_dict, indent=2), encoding="utf-8"
+                )
+            except Exception:
+                pass
+
+        return placements_file
+
+    def update_placement_media(
+        self,
+        job_id: int,
+        sentence_index: int,
+        new_media_path_or_url: str,
+        new_media_type: Literal["video", "image", "gif"] | None = None,
+        new_query: str | None = None,
+        provider: Literal["pexels", "giphy", "fallback", "custom"] = "custom",
+    ) -> SentenceMediaPlacement:
+        """Replace media asset for a specific sentence index by path or URL."""
+        placements = self.get_job_placements(job_id)
+        if not placements:
+            raise ValueError(f"No placements found for job {job_id}")
+
+        target_idx = None
+        for i, p in enumerate(placements):
+            if p.sentence_index == sentence_index:
+                target_idx = i
+                break
+
+        if target_idx is None:
+            raise ValueError(
+                f"Sentence index {sentence_index} not found in placements for job {job_id}"
+            )
+
+        resolved_path = ""
+        resolved_url = new_media_path_or_url
+        is_url = new_media_path_or_url.startswith(("http://", "https://"))
+
+        if is_url:
+            ext = "mp4"
+            if ".gif" in new_media_path_or_url.lower():
+                ext = "gif"
+            elif any(e in new_media_path_or_url.lower() for e in [".jpg", ".jpeg"]):
+                ext = "jpg"
+            elif ".png" in new_media_path_or_url.lower():
+                ext = "png"
+            dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_custom.{ext}"
+            ok, final_path = self.download_asset(new_media_path_or_url, dest)
+            if not ok:
+                raise ValueError(f"Failed to download asset from {new_media_path_or_url}")
+            resolved_path = str(final_path.resolve())
+            resolved_url = new_media_path_or_url
+        else:
+            local_p = Path(new_media_path_or_url)
+            if not local_p.is_absolute():
+                local_p = Path.cwd() / local_p
+            if not local_p.exists():
+                raise FileNotFoundError(f"Local media file not found: {local_p}")
+            dest = (
+                self.media_cache_dir
+                / f"job_{job_id}_sent_{sentence_index}_custom{local_p.suffix}"
+            )
+            if local_p.resolve() != dest.resolve():
+                import shutil
+
+                shutil.copy2(local_p, dest)
+            resolved_path = str(dest.resolve())
+            resolved_url = str(dest.resolve())
+
+        # Determine media type
+        p_path = Path(resolved_path)
+        if new_media_type:
+            inferred_type = new_media_type
+        elif p_path.suffix.lower() == ".mp4":
+            inferred_type = "video"
+        elif p_path.suffix.lower() == ".gif":
+            inferred_type = "gif"
+        else:
+            inferred_type = "image"
+
+        placements[target_idx].local_path = resolved_path
+        placements[target_idx].source_url = resolved_url
+        placements[target_idx].media_type = inferred_type
+        placements[target_idx].provider = provider
+        if new_query:
+            placements[target_idx].query = new_query
+
+        self.save_job_placements(job_id, placements)
+        return placements[target_idx]
+
+    def search_and_replace_placement(
+        self,
+        job_id: int,
+        sentence_index: int,
+        query: str,
+        provider: Literal["pexels", "giphy"] = "pexels",
+        media_type: Literal["video", "image"] = "video",
+        aspect_ratio: str = "9:16",
+    ) -> SentenceMediaPlacement:
+        """Search Pexels or Giphy with user query and replace media at sentence_index."""
+        placements = self.get_job_placements(job_id)
+        if not placements:
+            raise ValueError(f"No placements found for job {job_id}")
+
+        target_idx = None
+        for i, p in enumerate(placements):
+            if p.sentence_index == sentence_index:
+                target_idx = i
+                break
+
+        if target_idx is None:
+            raise ValueError(
+                f"Sentence index {sentence_index} not found in placements for job {job_id}"
+            )
+
+        if provider == "pexels":
+            res = self.search_pexels(
+                query=query, media_type=media_type, aspect_ratio=aspect_ratio
+            )
+            if not res:
+                raise ValueError(f"No Pexels {media_type} found for query '{query}'")
+            source_url, ext = res
+        elif provider == "giphy":
+            res = self.search_giphy(query=query)
+            if not res:
+                raise ValueError(f"No Giphy GIF found for query '{query}'")
+            source_url, ext = res
+        elif provider == "google_search":
+            res = self.image_search.search_image(query=query)
+            if not res:
+                raise ValueError(f"No Google/Web image found for query '{query}'")
+            source_url, ext = res
+        elif provider == "brand_card":
+            dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_card.png"
+            self.brand_cards.generate_card(query, dest)
+            placements[target_idx].local_path = str(dest.resolve())
+            placements[target_idx].source_url = ""
+            placements[target_idx].media_type = "image"
+            placements[target_idx].provider = "brand_card"
+            placements[target_idx].query = query
+            self.save_job_placements(job_id, placements)
+            return placements[target_idx]
+        else:
+            raise ValueError(f"Unsupported provider: {provider}")
+
+        dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
+        ok, final_path = self.download_asset(source_url, dest)
+        if not ok:
+            raise RuntimeError(f"Failed to download asset from {source_url}")
+
+        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
+        placements[target_idx].local_path = str(final_path.resolve())
+        placements[target_idx].source_url = source_url
+        placements[target_idx].media_type = actual_type
+        placements[target_idx].provider = provider
+        placements[target_idx].query = query
+
+        self.save_job_placements(job_id, placements)
+        return placements[target_idx]

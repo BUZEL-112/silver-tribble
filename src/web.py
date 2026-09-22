@@ -1,33 +1,48 @@
 """FastAPI web server and interactive dashboard for AI Video Production Platform."""
 
 import json
+import math
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from src.core.config import find_yaml_config_path, reload_settings, settings
 from src.core.database import get_session, init_db
-from src.flows.video_pipeline_flow import run_video_pipeline
-from src.models.schemas import SentenceMediaPlacement, WordCaption
+from src.flows.video_pipeline_flow import run_roundup_pipeline, run_video_pipeline
+from src.models.schemas import (
+    HealthStatus,
+    PruneResult,
+    ScriptAuditReport,
+    SentenceMediaPlacement,
+    VisualAssetResponse,
+    WordCaption,
+    YouTubeMetadata,
+)
 from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
+from src.repositories.asset_repository import AssetRepository
 from src.repositories.cost_repository import CostRepository
 from src.repositories.render_repository import RenderRepository
 from src.repositories.script_repository import ScriptRepository
+from src.services.cache_pruning_service import CachePruningService
 from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
+from src.services.health_service import HealthService
 from src.services.media_service import MediaService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
+from src.services.script_auditor_service import ScriptAuditorService
 from src.services.script_service import ScriptService
 from src.services.storage_service import get_storage_service
+from src.services.subtitle_service import SubtitleService
 from src.services.tts_service import TtsService
+from src.services.youtube_metadata_service import YouTubeMetadataService
 
 settings.ensure_directories()
 init_db()
@@ -81,10 +96,38 @@ class RenderCreateRequest(BaseModel):
     dry_run: bool = False
 
 
+class MediaPlacementUpdateRequest(BaseModel):
+    query: str | None = None
+    file_path: str | None = None
+    url: str | None = None
+    provider: str | None = "pexels"
+
+
+class JobReRenderRequest(BaseModel):
+    dry_run: bool = False
+    show_material_indices: bool = False
+
+
 class PipelineRunRequest(BaseModel):
     cluster_id: int | None = None
+    cluster_ids: list[int] | None = None
     aspect_ratio: str = "9:16"
     dry_run: bool = False
+
+
+class RoundupRunRequest(BaseModel):
+    cluster_ids: list[int] | None = None
+    top_n: int = 3
+    aspect_ratio: str = "9:16"
+    dry_run: bool = False
+    writer_model: str | None = None
+
+
+class RoundupScriptRequest(BaseModel):
+    cluster_ids: list[int] | None = None
+    top_n: int = 3
+    aspect_ratio: str = "9:16"
+    writer_model: str | None = None
 
 
 class ScriptUpdateRequest(BaseModel):
@@ -103,6 +146,7 @@ class SettingsUpdateRequest(BaseModel):
     watermark_opacity: float | None = Field(default=None, ge=0.0, le=1.0)
     intro_delay_seconds: float | None = Field(default=None, ge=0.0)
     outro_duration_seconds: float | None = Field(default=None, ge=0.0)
+    cluster_review_timeout_seconds: float | None = Field(default=None, ge=1.0)
 
 
 class ConfigLoadRequest(BaseModel):
@@ -167,11 +211,13 @@ def trigger_cluster(
                 embedded_count = service.generate_embeddings_for_new_articles(model=model)
                 clusters = service.cluster_recent_articles(threshold=threshold)
 
-        top_id = clusters[0].id if clusters else None
+            top_id = clusters[0].id if clusters else None
+            clusters_count = len(clusters)
+
         return {
             "status": "success",
             "articles_embedded": embedded_count,
-            "clusters_created": len(clusters),
+            "clusters_created": clusters_count,
             "top_cluster_id": top_id,
         }
     except Exception as exc:
@@ -303,7 +349,12 @@ def trigger_media(req: MediaCreateRequest) -> dict[str, Any]:
                     total_duration=job.duration_seconds or 30.0,
                 )
 
-            media_svc = MediaService(storage_service=storage, cost_repo=cost_repo)
+            asset_repo = AssetRepository(session)
+            media_svc = MediaService(
+                storage_service=storage,
+                cost_repo=cost_repo,
+                asset_repo=asset_repo,
+            )
 
             with action_repo.track_operation(
                 stage="media",
@@ -383,7 +434,12 @@ def trigger_render(req: RenderCreateRequest) -> dict[str, Any]:
                     placements = []
 
             if not placements:
-                media_svc = MediaService(storage_service=storage, cost_repo=cost_repo)
+                asset_repo = AssetRepository(session)
+                media_svc = MediaService(
+                    storage_service=storage,
+                    cost_repo=cost_repo,
+                    asset_repo=asset_repo,
+                )
                 placements = media_svc.process_media_for_job(
                     job_id=job.id,
                     captions=captions,
@@ -431,12 +487,117 @@ def trigger_run_all(req: PipelineRunRequest) -> dict[str, Any]:
     try:
         result = run_video_pipeline(
             cluster_id=req.cluster_id,
+            cluster_ids=req.cluster_ids,
             aspect_ratio=req.aspect_ratio,
             dry_run=req.dry_run,
         )
         return {"status": "success", **result}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/pipeline/roundup")
+def trigger_roundup_pipeline(req: RoundupRunRequest) -> dict[str, Any]:
+    """Run multi-story roundup pipeline end-to-end to finished video."""
+    try:
+        sorted_ids = sorted(list(set(req.cluster_ids))) if req.cluster_ids else None
+        result = run_roundup_pipeline(
+            cluster_ids=sorted_ids,
+            top_n=req.top_n,
+            aspect_ratio=req.aspect_ratio,
+            dry_run=req.dry_run,
+            writer_model=req.writer_model,
+        )
+        return {"status": "success", **result}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/pipeline/roundup-script")
+def trigger_roundup_script(req: RoundupScriptRequest) -> dict[str, Any]:
+    """Generate multi-story news roundup script across clusters."""
+    try:
+        with get_session() as session:
+            art_repo = ArticleRepository(session)
+            script_repo = ScriptRepository(session)
+            cost_repo = CostRepository(session)
+            action_repo = ActionLogRepository(session)
+
+            if req.cluster_ids:
+                target_ids = sorted(list(set(req.cluster_ids)))
+            else:
+                recent = art_repo.get_recent_clusters(limit=req.top_n * 2)
+                pending = [c for c in recent if c.status == "pending"]
+                pool = pending if len(pending) >= req.top_n else recent
+                target_ids = sorted([c.id for c in pool[: req.top_n]])
+
+            if not target_ids:
+                raise HTTPException(status_code=404, detail="No story clusters found for roundup.")
+
+            service = ScriptService(
+                article_repo=art_repo,
+                script_repo=script_repo,
+                cost_repo=cost_repo,
+            )
+
+            with action_repo.track_operation(
+                stage="script",
+                action="generate_roundup_script",
+                actor="web",
+                details={"cluster_ids": target_ids, "aspect_ratio": req.aspect_ratio},
+            ):
+                record = service.generate_roundup_script(
+                    cluster_ids=target_ids,
+                    aspect_ratio=req.aspect_ratio,
+                    model=req.writer_model,
+                )
+
+            words = record.full_narration.split()
+            return {
+                "status": "success",
+                "script_id": record.id,
+                "title": record.title,
+                "cluster_ids": target_ids,
+                "beats_count": len(record.beats),
+                "word_count": len(words),
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/assets", response_model=list[VisualAssetResponse])
+def get_assets(
+    limit: int = Query(50, ge=1, le=200),
+    provider: str | None = Query(None),
+    emotion: str | None = Query(None),
+) -> list[VisualAssetResponse]:
+    """Query visual assets from the reusable asset library."""
+    with get_session() as session:
+        repo = AssetRepository(session)
+        records = repo.list_assets(limit=limit, provider=provider, emotion=emotion)
+        return [
+            VisualAssetResponse(
+                id=r.id,
+                asset_hash=r.asset_hash,
+                source_url=r.source_url,
+                local_path=r.local_path,
+                media_type=r.media_type,
+                provider=r.provider,
+                query=r.query or "",
+                tags=r.tags or [],
+                emotion_tags=r.emotion_tags or [],
+                shot_type=r.shot_type,
+                aspect_ratio=r.aspect_ratio,
+                vlm_score=r.vlm_score,
+                vlm_reason=r.vlm_reason,
+                usage_count=r.usage_count,
+                created_at=r.created_at,
+                last_used_at=r.last_used_at,
+            )
+            for r in records
+        ]
 
 
 @app.get("/api/logs")
@@ -467,21 +628,183 @@ def get_logs(
 
 
 @app.get("/api/clusters")
-def get_clusters(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
-    """List recent story clusters."""
+def get_clusters(
+    page: int | None = Query(None, ge=1, description="Page number for pagination"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
+    limit: int | None = Query(None, ge=1, le=200, description="Legacy limit parameter"),
+    status: str | None = Query(None, description="Filter by status (pending, completed)"),
+    search: str | None = Query(None, description="Search keyword in title or summary"),
+    include_articles: bool = Query(True, description="Whether to include member articles"),
+    response: Response = None,
+) -> Any:
+    """List story clusters with support for pagination, search, and constituent articles."""
     with get_session() as session:
         art_repo = ArticleRepository(session)
-        clusters = art_repo.get_recent_clusters(limit=limit)
+
+        if page is not None:
+            clusters, total = art_repo.list_story_clusters_paginated(
+                status=status,
+                search=search,
+                page=page,
+                page_size=page_size,
+            )
+            total_pages = math.ceil(total / page_size) if page_size > 0 else 1
+        else:
+            effective_limit = limit or 50
+            clusters = art_repo.get_recent_clusters(limit=effective_limit)
+            total = art_repo.count_story_clusters(status=status, search=search)
+            total_pages = 1
+
+        if response is not None:
+            response.headers["X-Total-Count"] = str(total)
+
+        articles_map: dict[int, dict[str, Any]] = {}
+        if include_articles:
+            all_art_ids = [aid for c in clusters for aid in (c.article_ids or [])]
+            if all_art_ids:
+                articles = art_repo.get_articles_by_ids(all_art_ids)
+                articles_map = {
+                    a.id: {
+                        "id": a.id,
+                        "title": a.title,
+                        "link": a.link,
+                        "source": a.source,
+                        "summary": a.summary,
+                        "published_at": a.published_at.isoformat() if a.published_at else None,
+                        "created_at": a.created_at.isoformat() if a.created_at else None,
+                    }
+                    for a in articles
+                }
+
+        results: list[dict[str, Any]] = []
+        for c in clusters:
+            cluster_articles = (
+                [articles_map[aid] for aid in (c.article_ids or []) if aid in articles_map]
+                if include_articles
+                else []
+            )
+            results.append(
+                {
+                    "id": c.id,
+                    "cluster_hash": c.cluster_hash,
+                    "title": c.title,
+                    "summary": c.summary,
+                    "article_count": c.article_count,
+                    "article_ids": c.article_ids or [],
+                    "articles": cluster_articles,
+                    "status": c.status,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                }
+            )
+
+        if page is not None:
+            return {
+                "items": results,
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "total_pages": total_pages,
+            }
+        return results
+
+
+@app.get("/api/clusters/count")
+def get_clusters_count(
+    status: str | None = Query(None, description="Filter by status"),
+    search: str | None = Query(None, description="Search keyword"),
+) -> dict[str, int]:
+    """Retrieve fast aggregate count of story clusters."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        count = art_repo.count_story_clusters(status=status, search=search)
+        return {"count": count}
+
+
+@app.get("/api/clusters/trending")
+def get_trending_clusters(
+    limit: int = Query(10, ge=1, le=50),
+    hours_back: int = Query(72, ge=1, le=720),
+) -> list[dict[str, Any]]:
+    """Retrieve velocity and priority ranked trending story clusters."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        trending = art_repo.get_trending_clusters(limit=limit, hours_back=hours_back)
         return [
             {
                 "id": c.id,
+                "cluster_hash": c.cluster_hash,
                 "title": c.title,
                 "summary": c.summary,
                 "article_count": c.article_count,
-                "status": c.status,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
+                "score": round(score, 3),
             }
-            for c in clusters
+            for c, score in trending
+        ]
+
+
+@app.get("/api/clusters/{cluster_id}")
+def get_cluster(cluster_id: int) -> dict[str, Any]:
+    """Retrieve details for a single cluster including its constituent articles."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        cluster = art_repo.get_cluster_by_id(cluster_id)
+        if not cluster:
+            raise HTTPException(status_code=404, detail=f"Story cluster {cluster_id} not found")
+
+        articles: list[dict[str, Any]] = []
+        if cluster.article_ids:
+            art_records = art_repo.get_articles_by_ids(cluster.article_ids)
+            articles = [
+                {
+                    "id": a.id,
+                    "title": a.title,
+                    "link": a.link,
+                    "source": a.source,
+                    "summary": a.summary,
+                    "published_at": a.published_at.isoformat() if a.published_at else None,
+                    "created_at": a.created_at.isoformat() if a.created_at else None,
+                }
+                for a in art_records
+            ]
+
+        return {
+            "id": cluster.id,
+            "cluster_hash": cluster.cluster_hash,
+            "title": cluster.title,
+            "summary": cluster.summary,
+            "article_count": cluster.article_count,
+            "article_ids": cluster.article_ids or [],
+            "articles": articles,
+            "status": cluster.status,
+            "created_at": cluster.created_at.isoformat() if cluster.created_at else None,
+        }
+
+
+@app.get("/api/clusters/{cluster_id}/articles")
+def get_cluster_articles(cluster_id: int) -> list[dict[str, Any]]:
+    """Retrieve all articles belonging to a specific story cluster."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        cluster = art_repo.get_cluster_by_id(cluster_id)
+        if not cluster:
+            raise HTTPException(status_code=404, detail=f"Story cluster {cluster_id} not found")
+
+        if not cluster.article_ids:
+            return []
+
+        art_records = art_repo.get_articles_by_ids(cluster.article_ids)
+        return [
+            {
+                "id": a.id,
+                "title": a.title,
+                "link": a.link,
+                "source": a.source,
+                "summary": a.summary,
+                "published_at": a.published_at.isoformat() if a.published_at else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+            }
+            for a in art_records
         ]
 
 
@@ -541,6 +864,23 @@ def update_script(script_id: int, req: ScriptUpdateRequest) -> dict[str, Any]:
         }
 
 
+@app.get("/api/scripts/{script_id}/audit", response_model=ScriptAuditReport)
+def audit_script(script_id: int) -> ScriptAuditReport:
+    """Audit script retention, hook strength, pacing, and viral potential."""
+    with get_session() as session:
+        repo = ScriptRepository(session)
+        script = repo.get_script_by_id(script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail=f"Script {script_id} not found")
+
+        auditor = ScriptAuditorService()
+        return auditor.audit_script(
+            title=script.title,
+            full_narration=script.full_narration,
+            beats=script.beats if isinstance(script.beats, list) else None,
+        )
+
+
 @app.get("/api/jobs")
 def get_jobs(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
     """List render jobs and their status."""
@@ -567,6 +907,270 @@ def get_jobs(limit: int = Query(50, ge=1, le=200)) -> list[dict[str, Any]]:
         return results
 
 
+@app.get("/api/jobs/{job_id}/media")
+def get_job_media(job_id: int) -> list[dict[str, Any]]:
+    """Retrieve indexed sentence-level visual placements for a render job."""
+    storage = get_storage_service()
+    with get_session() as session:
+        cost_repo = CostRepository(session)
+        asset_repo = AssetRepository(session)
+        media_svc = MediaService(
+            storage_service=storage,
+            cost_repo=cost_repo,
+            asset_repo=asset_repo,
+        )
+        placements = media_svc.get_job_placements(job_id)
+        return [p.model_dump() for p in placements]
+
+
+@app.put("/api/jobs/{job_id}/media/{sentence_index}")
+def update_job_media_placement(
+    job_id: int,
+    sentence_index: int,
+    req: MediaPlacementUpdateRequest,
+) -> dict[str, Any]:
+    """Replace visual media for a specific sentence index by search query, local file, or URL."""
+    storage = get_storage_service()
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        cost_repo = CostRepository(session)
+        asset_repo = AssetRepository(session)
+        action_repo = ActionLogRepository(session)
+
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+
+        media_svc = MediaService(
+            storage_service=storage,
+            cost_repo=cost_repo,
+            asset_repo=asset_repo,
+        )
+
+        if not req.query and not req.file_path and not req.url:
+            raise HTTPException(
+                status_code=400,
+                detail="Must provide either query, file_path, or url to update placement",
+            )
+
+        with action_repo.track_operation(
+            stage="media",
+            action="edit_media_placement",
+            actor="web",
+            job_id=job.id,
+            details={"sentence_index": sentence_index},
+        ):
+            if req.query:
+                prov = req.provider or "pexels"
+                updated = media_svc.search_and_replace_placement(
+                    job_id=job.id,
+                    sentence_index=sentence_index,
+                    query=req.query,
+                    provider=prov,
+                    media_type="video",
+                    aspect_ratio=job.aspect_ratio or "9:16",
+                )
+            elif req.file_path:
+                updated = media_svc.update_placement_media(
+                    job_id=job.id,
+                    sentence_index=sentence_index,
+                    new_media_path_or_url=req.file_path,
+                    provider="custom",
+                )
+            else:
+                updated = media_svc.update_placement_media(
+                    job_id=job.id,
+                    sentence_index=sentence_index,
+                    new_media_path_or_url=req.url or "",
+                    provider="custom",
+                )
+
+        return {
+            "status": "success",
+            "job_id": job.id,
+            "placement": updated.model_dump(),
+        }
+
+
+@app.post("/api/jobs/{job_id}/re-render")
+def trigger_job_re_render(job_id: int, req: JobReRenderRequest) -> dict[str, Any]:
+    """Re-render finalized video using updated media placements."""
+    storage = get_storage_service()
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        script_repo = ScriptRepository(session)
+        cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
+
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+
+        script = script_repo.get_script_by_id(job.script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail=f"Script {job.script_id} not found")
+
+        captions: list[WordCaption] = []
+        if job.captions_path:
+            local_cap_path = storage.get_local_path(job.captions_path)
+            if local_cap_path.exists():
+                cap_data = json.loads(local_cap_path.read_text(encoding="utf-8"))
+                captions = [WordCaption(**item) for item in cap_data]
+
+        render_svc = RenderService(render_repo, cost_repo, storage)
+        with action_repo.track_operation(
+            stage="render",
+            action="re_render_video",
+            actor="web",
+            job_id=job.id,
+            details={"dry_run": req.dry_run, "show_indices": req.show_material_indices},
+        ):
+            out_path = render_svc.re_render_job(
+                job_id=job.id,
+                dry_run=req.dry_run,
+                show_material_indices=req.show_material_indices,
+                script=script,
+                captions=captions,
+            )
+
+        return {
+            "status": "success",
+            "job_id": job.id,
+            "output_video_path": str(out_path.resolve()),
+        }
+
+
+@app.get("/api/jobs/{job_id}/video")
+def stream_job_video(job_id: int) -> FileResponse:
+    """Stream rendered MP4 video for in-browser playback."""
+    storage = get_storage_service()
+    with get_session() as session:
+        repo = RenderRepository(session)
+        job = repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+        if not job.output_video_path:
+            raise HTTPException(
+                status_code=404, detail=f"Video output path for job {job_id} is missing"
+            )
+
+        local_path = storage.get_local_path(job.output_video_path)
+        if not local_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Video file for job {job_id} not found on disk"
+            )
+
+        return FileResponse(
+            path=str(local_path),
+            media_type="video/mp4",
+            filename=local_path.name,
+        )
+
+
+@app.get("/api/jobs/{job_id}/download")
+def download_job_video(job_id: int) -> FileResponse:
+    """Download the finalized rendered video file with attachment disposition."""
+    storage = get_storage_service()
+    with get_session() as session:
+        repo = RenderRepository(session)
+        job = repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+        if not job.output_video_path:
+            raise HTTPException(
+                status_code=404, detail=f"Video output path for job {job_id} is missing"
+            )
+
+        local_path = storage.get_local_path(job.output_video_path)
+        if not local_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Video file for job {job_id} not found on disk"
+            )
+
+        return FileResponse(
+            path=str(local_path),
+            media_type="video/mp4",
+            filename=local_path.name,
+            headers={"Content-Disposition": f'attachment; filename="{local_path.name}"'},
+        )
+
+
+@app.get("/api/jobs/{job_id}/subtitles")
+def get_job_subtitles(
+    job_id: int,
+    format: Literal["srt", "vtt"] = Query("srt"),
+    download: bool = Query(False),
+) -> Any:
+    """Generate or retrieve SRT/WebVTT subtitles for a rendered job."""
+    storage = get_storage_service()
+    with get_session() as session:
+        repo = RenderRepository(session)
+        job = repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+        if not job.captions_path:
+            raise HTTPException(
+                status_code=404, detail=f"Captions path for job {job_id} is missing"
+            )
+
+        local_cap_path = storage.get_local_path(job.captions_path)
+        if not local_cap_path.exists():
+            raise HTTPException(
+                status_code=404, detail=f"Captions file for job {job_id} not found on disk"
+            )
+
+        raw_captions = json.loads(local_cap_path.read_text(encoding="utf-8"))
+        captions = [WordCaption(**c) for c in raw_captions]
+
+        subtitle_svc = SubtitleService()
+        if format == "vtt":
+            content = subtitle_svc.generate_vtt(captions)
+            media_type = "text/vtt"
+            filename = f"job_{job_id}.vtt"
+        else:
+            content = subtitle_svc.generate_srt(captions)
+            media_type = "text/plain"
+            filename = f"job_{job_id}.srt"
+
+        if download:
+            headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+            return Response(content=content, media_type=media_type, headers=headers)
+
+        return {"job_id": job_id, "format": format, "content": content}
+
+
+@app.get("/api/jobs/{job_id}/youtube-metadata", response_model=YouTubeMetadata)
+def get_job_youtube_metadata(job_id: int) -> YouTubeMetadata:
+    """Generate YouTube package including title, description, timestamped chapters, and tags."""
+    storage = get_storage_service()
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        script_repo = ScriptRepository(session)
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+
+        script = script_repo.get_script_by_id(job.script_id)
+        if not script:
+            raise HTTPException(status_code=404, detail=f"Script for job {job_id} not found")
+
+        captions: list[WordCaption] = []
+        if job.captions_path:
+            local_cap_path = storage.get_local_path(job.captions_path)
+            if local_cap_path.exists():
+                raw = json.loads(local_cap_path.read_text(encoding="utf-8"))
+                captions = [WordCaption(**c) for c in raw]
+
+        metadata_svc = YouTubeMetadataService()
+        return metadata_svc.generate_metadata(
+            title=script.title,
+            full_narration=script.full_narration,
+            beats=script.beats if isinstance(script.beats, list) else None,
+            captions=captions,
+            duration_seconds=job.duration_seconds or 0.0,
+        )
+
+
 @app.get("/api/settings")
 def get_settings() -> dict[str, Any]:
     """Retrieve current branding, watermark, and timing configuration."""
@@ -577,6 +1181,7 @@ def get_settings() -> dict[str, Any]:
         "watermark_opacity": settings.watermark_opacity,
         "intro_delay_seconds": settings.intro_delay_seconds,
         "outro_duration_seconds": settings.outro_duration_seconds,
+        "cluster_review_timeout_seconds": settings.cluster_review_timeout_seconds,
         "default_media_type_ratio": settings.default_media_type_ratio,
         "pexels_configured": bool(settings.pexels_api_key),
         "giphy_configured": bool(settings.giphy_api_key),
@@ -598,6 +1203,8 @@ def update_settings(req: SettingsUpdateRequest) -> dict[str, Any]:
         settings.intro_delay_seconds = req.intro_delay_seconds
     if req.outro_duration_seconds is not None:
         settings.outro_duration_seconds = req.outro_duration_seconds
+    if req.cluster_review_timeout_seconds is not None:
+        settings.cluster_review_timeout_seconds = req.cluster_review_timeout_seconds
 
     with get_session() as session:
         action_repo = ActionLogRepository(session)
@@ -734,6 +1341,24 @@ def save_config_yaml(req: ConfigSaveRequest) -> dict[str, Any]:
         "config_source": settings.config_source_label,
         "settings": get_settings(),
     }
+
+
+@app.get("/api/health", response_model=HealthStatus)
+def get_system_health() -> HealthStatus:
+    """Run comprehensive system diagnostics on database, storage, tools, and providers."""
+    health_svc = HealthService()
+    return health_svc.run_health_check()
+
+
+@app.post("/api/system/prune", response_model=PruneResult)
+def prune_system_cache(
+    retention_hours: int | None = Query(None, ge=1, le=8760),
+) -> PruneResult:
+    """Prune unindexed temporary media files older than retention hours."""
+    with get_session() as session:
+        asset_repo = AssetRepository(session)
+        pruning_svc = CachePruningService(asset_repo=asset_repo)
+        return pruning_svc.prune_cache(retention_hours=retention_hours)
 
 
 # ---------------------------------------------------------------------------

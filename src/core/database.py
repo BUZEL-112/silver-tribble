@@ -3,7 +3,7 @@
 from collections.abc import Generator
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from src.core.config import settings
@@ -25,7 +25,20 @@ def build_engine(database_url: str | None = None):
     connect_args = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
-        return create_engine(url, connect_args=connect_args, echo=False)
+        connect_args["timeout"] = 30
+        eng = create_engine(url, connect_args=connect_args, echo=False)
+
+        @event.listens_for(eng, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            try:
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.execute("PRAGMA busy_timeout=30000")
+            finally:
+                cursor.close()
+
+        return eng
 
     return create_engine(
         url,
@@ -55,6 +68,18 @@ def init_db(target_engine=None) -> None:
             conn.commit()
 
     Base.metadata.create_all(bind=active_engine)
+
+    if "sqlite" in url_str:
+        with active_engine.connect() as conn:
+            try:
+                res = conn.execute(text("PRAGMA table_info(scripts)")).fetchall()
+                if res:
+                    col_names = [r[1] for r in res]
+                    if "cluster_ids" not in col_names:
+                        conn.execute(text("ALTER TABLE scripts ADD COLUMN cluster_ids JSON DEFAULT '[]'"))
+                        conn.commit()
+            except Exception:
+                pass
 
 
 @contextmanager

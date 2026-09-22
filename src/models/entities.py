@@ -65,6 +65,7 @@ class ScriptRecord(Base):
     cluster_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("story_clusters.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    cluster_ids: Mapped[list[int] | None] = mapped_column(JSON, nullable=True, default=list)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     aspect_ratio: Mapped[str] = mapped_column(String(20), nullable=False, default="9:16")
     beats: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False, default=list)
@@ -131,3 +132,27 @@ class ActionLog(Base):
     details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     duration_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
+class VisualAsset(Base):
+    """Reusable visual asset record with emotion, VLM verification, and usage metadata."""
+
+    __tablename__ = "visual_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    asset_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    source_url: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    local_path: Mapped[str] = mapped_column(String(1000), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(20), nullable=False, default="image")
+    provider: Mapped[str] = mapped_column(String(50), nullable=False)
+    query: Mapped[str] = mapped_column(String(255), nullable=False, default="", index=True)
+    tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    emotion_tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    shot_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    aspect_ratio: Mapped[str] = mapped_column(String(20), nullable=False, default="9:16")
+    vlm_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+    vlm_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+    last_used_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+

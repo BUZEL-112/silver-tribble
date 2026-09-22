@@ -73,6 +73,33 @@ class RssService:
             return datetime.fromtimestamp(mktime(entry.updated_parsed))
         return None
 
+    @staticmethod
+    def canonicalize_url(url: str) -> str:
+        """Strip tracking parameters, fragments, and trailing slashes to deduplicate stories."""
+        if not url:
+            return ""
+        from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
+
+        parsed = urlparse(url.strip())
+        tracking_prefixes = {"utm_", "fbclid", "gclid", "ref", "source", "rss", "feed", "mc_cid", "mc_eid"}
+        filtered_queries = [
+            (k, v)
+            for k, v in parse_qsl(parsed.query, keep_blank_values=False)
+            if not any(k.lower().startswith(prefix) for prefix in tracking_prefixes)
+        ]
+        new_query = urlencode(filtered_queries)
+        clean_path = parsed.path.rstrip("/") if parsed.path != "/" else "/"
+        return urlunparse(
+            (
+                parsed.scheme.lower(),
+                parsed.netloc.lower(),
+                clean_path,
+                "",
+                new_query,
+                "",
+            )
+        )
+
     def fetch_all_feeds(self) -> list[FeedItem]:
         """Iterate over all feeds, parse entries, and return normalized items."""
         items: list[FeedItem] = []
@@ -97,7 +124,8 @@ class RssService:
                 parsed = feedparser.parse(feed_url)
                 for entry in parsed.entries:
                     title = getattr(entry, "title", "").strip()
-                    link = getattr(entry, "link", "").strip()
+                    raw_link = getattr(entry, "link", "").strip()
+                    link = self.canonicalize_url(raw_link)
                     if not title or not link:
                         continue
 

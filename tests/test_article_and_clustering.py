@@ -3,7 +3,9 @@
 from src.models.schemas import FeedItem
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository
+from src.repositories.script_repository import ScriptRepository
 from src.services.clustering_service import ClusteringService
+from src.services.script_service import ScriptService
 
 
 def test_save_feed_items_deduplication(article_repo: ArticleRepository):
@@ -78,3 +80,59 @@ def test_clustering_similar_articles(
     # The largest cluster should contain the 2 DeepSeek articles
     assert clusters[0].article_count == 2
     assert clusters[1].article_count == 1
+
+
+def test_generate_roundup_script(
+    article_repo: ArticleRepository,
+    script_repo: ScriptRepository,
+    cost_repo: CostRepository,
+):
+    """Verify multi-cluster roundup script generation gathers top stories and formats beats."""
+    items = [
+        FeedItem(
+            title="OpenAI Releases O3 Model",
+            link="https://news.com/o3",
+            summary="OpenAI launches new reasoning model O3 with benchmark wins.",
+            source="TechCrunch",
+        ),
+        FeedItem(
+            title="Anthropic Launches Claude 3.7",
+            link="https://news.com/claude37",
+            summary="Anthropic announces hybrid reasoning architecture Claude 3.7 Sonnet.",
+            source="VentureBeat",
+        ),
+    ]
+    saved = article_repo.save_feed_items(items)
+
+    cluster1 = article_repo.save_story_cluster(
+        cluster_hash="hash_o3_story",
+        title="OpenAI Releases O3 Model",
+        summary="O3 reasoning release details.",
+        article_ids=[saved[0].id],
+    )
+    cluster2 = article_repo.save_story_cluster(
+        cluster_hash="hash_claude_story",
+        title="Anthropic Launches Claude 3.7",
+        summary="Claude 3.7 hybrid reasoning details.",
+        article_ids=[saved[1].id],
+    )
+
+    script_service = ScriptService(
+        article_repo=article_repo,
+        script_repo=script_repo,
+        cost_repo=cost_repo,
+    )
+
+    roundup_script = script_service.generate_roundup_script(
+        cluster_ids=[cluster1.id, cluster2.id],
+        aspect_ratio="9:16",
+    )
+
+    assert roundup_script is not None
+    assert "Roundup" in roundup_script.title
+    assert len(roundup_script.beats) >= 4
+    assert len(roundup_script.full_narration) > 50
+    # Beats should have emotion and shot_type
+    assert "emotion" in roundup_script.beats[0]
+    assert "shot_type" in roundup_script.beats[0]
+

@@ -36,11 +36,16 @@ export const MainVideo: React.FC<RenderProps> = ({
   introDelaySeconds = 0,
   outroDurationSeconds = 3.5,
   channelBadgeText = "AI NEWS BY ESWAR",
+  showMaterialIndices = false,
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
   const currentTime = frame / fps;
+
+  const activePlacement = mediaPlacements.find(
+    (m) => currentTime >= m.start_time && currentTime < m.end_time
+  );
 
   // Spoken narration timeline
   const lastCaption = captions.length > 0 ? captions[captions.length - 1] : null;
@@ -209,6 +214,31 @@ export const MainVideo: React.FC<RenderProps> = ({
 
       {/* Watermark Overlay */}
       {watermark && <Watermark config={watermark} />}
+
+      {/* Review Mode Scene Index Overlay */}
+      {showMaterialIndices && activePlacement && (
+        <div
+          style={{
+            position: "absolute",
+            top: 24,
+            left: 24,
+            zIndex: 100,
+            backgroundColor: "rgba(5, 7, 12, 0.88)",
+            border: "1px solid rgba(59, 130, 246, 0.7)",
+            color: "#60a5fa",
+            padding: "6px 12px",
+            borderRadius: "8px",
+            fontFamily: "monospace",
+            fontSize: aspectRatio === "9:16" ? "20px" : "14px",
+            fontWeight: 700,
+            letterSpacing: "0.05em",
+            pointerEvents: "none",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+          }}
+        >
+          [Scene #{activePlacement.sentence_index}] {activePlacement.start_time.toFixed(1)}s - {activePlacement.end_time.toFixed(1)}s
+        </div>
+      )}
 
       {/* Dynamic Title and Lower-Third Card */}
       {!isOutroCardVisible && (

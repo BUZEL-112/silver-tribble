@@ -224,3 +224,81 @@ def test_e2e_full_pipeline_cli_dry_run():
     assert result.exit_code == 0
     assert "Pipeline Run Completed Successfully" in result.output
     assert f"Cluster ID: {cluster_id}" in result.output
+
+
+def test_e2e_roundup_and_assets_cli():
+    """E2E Test 6: News roundup pipeline and visual asset library CLI commands."""
+    import json
+    import uuid
+
+    init_db()
+    uid = uuid.uuid4().hex[:8]
+
+    with get_session() as session:
+        art1 = Article(
+            title=f"Roundup Test Story 1 {uid}",
+            link=f"https://example.com/roundup-story-1-{uid}",
+            source="ArsTechnica",
+            summary="Story 1 on frontier AI advancements.",
+        )
+        art2 = Article(
+            title=f"Roundup Test Story 2 {uid}",
+            link=f"https://example.com/roundup-story-2-{uid}",
+            source="TechCrunch",
+            summary="Story 2 on high efficiency neural hardware.",
+        )
+        session.add_all([art1, art2])
+        session.commit()
+
+        c1 = StoryCluster(
+            cluster_hash=f"hash_roundup_1_{uid}",
+            title=f"Roundup Test Story 1 {uid}",
+            summary="Story 1 summary",
+            article_ids=[art1.id],
+            status="pending",
+        )
+        c2 = StoryCluster(
+            cluster_hash=f"hash_roundup_2_{uid}",
+            title=f"Roundup Test Story 2 {uid}",
+            summary="Story 2 summary",
+            article_ids=[art2.id],
+            status="pending",
+        )
+        session.add_all([c1, c2])
+        session.commit()
+        c1_id = c1.id
+        c2_id = c2.id
+
+    runner = CliRunner()
+
+    # Test 1: Roundup script generation JSON output
+    res_script = runner.invoke(
+        app,
+        ["roundup", "--cluster-ids", f"{c1_id},{c2_id}", "--json"],
+    )
+    assert res_script.exit_code == 0
+    data = json.loads(res_script.output)
+    assert data["status"] == "success"
+    assert "script_id" in data
+    assert data["beats_count"] > 0
+
+    # Test 2: Full roundup pipeline dry-run
+    res_pipeline = runner.invoke(
+        app,
+        [
+            "roundup",
+            "--cluster-ids",
+            f"{c1_id},{c2_id}",
+            "--run",
+            "--dry-run",
+            "--json",
+        ],
+    )
+    assert res_pipeline.exit_code == 0
+    pipe_data = json.loads(res_pipeline.output)
+    assert pipe_data["status"] == "success"
+    assert "video_path" in pipe_data
+
+    # Test 3: Assets CLI command
+    res_assets = runner.invoke(app, ["assets"])
+    assert res_assets.exit_code == 0

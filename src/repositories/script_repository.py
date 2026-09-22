@@ -16,10 +16,13 @@ class ScriptRepository(BaseRepository):
         aspect_ratio: str,
         beats: list[dict[str, Any]],
         full_narration: str,
+        cluster_ids: list[int] | None = None,
     ) -> ScriptRecord:
         """Store newly generated script record."""
+        effective_cluster_ids = cluster_ids if cluster_ids is not None else [cluster_id]
         script = ScriptRecord(
             cluster_id=cluster_id,
+            cluster_ids=effective_cluster_ids,
             title=title,
             aspect_ratio=aspect_ratio,
             beats=beats,

@@ -50,6 +50,7 @@ class RenderService:
         intro_delay_seconds: float | None = None,
         outro_duration_seconds: float | None = None,
         watermark_config: WatermarkConfig | None = None,
+        show_material_indices: bool = False,
     ) -> Path:
         """Calculate beat timeline intervals with timing offsets and write render_props.json."""
         raw_beats = script.beats or []
@@ -58,7 +59,10 @@ class RenderService:
         total_duration = round(intro_delay + duration_seconds + outro_duration, 2)
 
         # Distribute timeline evenly across beats based on relative target durations
-        total_target = sum(b.get("estimated_duration_seconds", 10.0) for b in raw_beats)
+        total_target = sum(
+            float(b.get("estimated_duration_seconds") or b.get("target_duration_seconds") or 10.0)
+            for b in raw_beats
+        )
         if total_target <= 0:
             total_target = 1.0
 
@@ -66,7 +70,11 @@ class RenderService:
         elapsed = 0.0
 
         for idx, beat in enumerate(raw_beats):
-            target = beat.get("estimated_duration_seconds", 10.0)
+            target = float(
+                beat.get("estimated_duration_seconds")
+                or beat.get("target_duration_seconds")
+                or 10.0
+            )
             beat_duration = (target / total_target) * duration_seconds
             start_t = round(elapsed + intro_delay, 2)
             end_t = round(min(elapsed + beat_duration, duration_seconds) + intro_delay, 2)
@@ -142,6 +150,7 @@ class RenderService:
             introDelaySeconds=intro_delay,
             outroDurationSeconds=outro_duration,
             channel_badge_text=settings.channel_badge_text,
+            show_material_indices=show_material_indices,
         )
 
         if hasattr(self.storage_service, "base_dir") and self.storage_service.base_dir:
@@ -251,3 +260,57 @@ class RenderService:
             error_details = f"Remotion render failed with exit code {e.returncode}:\n{e.stderr}"
             self.render_repo.fail_job(job_id, error_details)
             raise RuntimeError(error_details) from e
+
+    def re_render_job(
+        self,
+        job_id: int,
+        dry_run: bool = False,
+        show_material_indices: bool = False,
+        script: ScriptRecord | None = None,
+        captions: list[WordCaption] | None = None,
+    ) -> Path:
+        """Re-render video for an existing job using updated media placements."""
+        job = self.render_repo.get_job_by_id(job_id)
+        if not job:
+            raise ValueError(f"RenderJob with id {job_id} not found")
+
+        from src.repositories.script_repository import ScriptRepository
+
+        script_repo = ScriptRepository(self.render_repo.session)
+        resolved_script = script_repo.get_script_by_id(job.script_id)
+        if resolved_script is None:
+            if script is not None:
+                resolved_script = script
+            else:
+                raise ValueError(f"Script with id {job.script_id} not found")
+
+        resolved_captions: list[WordCaption] = captions or []
+        if not resolved_captions and job.captions_path:
+            local_cap_path = self.storage_service.get_local_path(job.captions_path)
+            if local_cap_path.exists():
+                import json
+
+                data = json.loads(local_cap_path.read_text(encoding="utf-8"))
+                resolved_captions = [WordCaption(**item) for item in data]
+
+        placements: list[SentenceMediaPlacement] = []
+        placements_file = settings.media_cache_dir / f"placements_job_{job.id}.json"
+        if placements_file.exists():
+            import json
+
+            data = json.loads(placements_file.read_text(encoding="utf-8"))
+            placements = [SentenceMediaPlacement.model_validate(item) for item in data]
+
+        audio_local_path = self.storage_service.get_local_path(job.audio_path or "")
+
+        self.prepare_render_props(
+            job=job,
+            script=resolved_script,
+            captions=resolved_captions,
+            audio_local_path=audio_local_path,
+            duration_seconds=job.duration_seconds or 30.0,
+            media_placements=placements,
+            show_material_indices=show_material_indices,
+        )
+
+        return self.execute_render(job_id=job.id, dry_run=dry_run)

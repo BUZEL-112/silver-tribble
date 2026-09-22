@@ -21,10 +21,12 @@ class TtsService:
         storage_service: StorageService,
         cost_repo: CostRepository,
         api_key: str | None = None,
+        tts_provider: str | None = None,
     ) -> None:
         self.storage_service = storage_service
         self.cost_repo = cost_repo
         self.api_key = api_key or settings.gemini_api_key
+        self.tts_provider = tts_provider or settings.tts_provider
 
     def _synthesize_edge_tts(
         self,
@@ -83,7 +85,6 @@ class TtsService:
     def _generate_synthetic_wav(self, text: str, output_path: Path) -> float:
         """Create a silent placeholder WAV file with calibrated duration for tests/offline."""
         word_count = max(len(text.split()), 1)
-        # Average reading rate: roughly 2.6 words per second
         duration_seconds = max(word_count / 2.6, 2.0)
         sample_rate = 24000
         total_frames = int(duration_seconds * sample_rate)
@@ -101,7 +102,7 @@ class TtsService:
         self,
         text: str,
         job_id: int,
-        voice_name: str = "en-US-ChristopherNeural",
+        voice_name: str = "Puck",
     ) -> tuple[str, float]:
         """Synthesize script text into audio and store the file.
 
@@ -113,7 +114,7 @@ class TtsService:
 
         character_count = len(text)
         duration_seconds: float
-        provider = "edge_tts"
+        provider = "gemini"
         model_name = voice_name
         cost_usd = 0.0
 
@@ -121,60 +122,71 @@ class TtsService:
         for pattern, replacement in PHONETIC_TTS_PRONUNCIATIONS:
             spoken_text = pattern.sub(replacement, spoken_text)
 
-        # Try edge-tts first for high quality, natural neural narration
-        try:
-            edge_voice = voice_name if "Neural" in voice_name else "en-US-ChristopherNeural"
-            duration_seconds = self._synthesize_edge_tts(spoken_text, local_temp_file, edge_voice)
-            provider = "edge_tts"
-            model_name = edge_voice
-        except Exception:
-            # Fallback to Gemini if configured
-            gemini_success = False
-            if self.api_key and self.api_key != "your_gemini_api_key_here":
-                try:
-                    from google import genai
-                    from google.genai import types
+        synthesized = False
 
-                    client = genai.Client(api_key=self.api_key)
-                    g_voice = "Puck" if "Neural" in voice_name else voice_name
-                    response = client.models.generate_content(
-                        model="gemini-2.0-flash",
-                        contents=spoken_text,
-                        config=types.GenerateContentConfig(
-                            response_modalities=["AUDIO"],
-                            speech_config=types.SpeechConfig(
-                                voice_config=types.VoiceConfig(
-                                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                        voice_name=g_voice
-                                    )
+        # 1. Primary: Try Gemini 2.0 Flash Audio if configured and selected
+        should_try_gemini_first = self.tts_provider in ["gemini", "auto"]
+        if should_try_gemini_first and self.api_key and self.api_key != "your_gemini_api_key_here":
+            try:
+                from google import genai
+                from google.genai import types
+
+                client = genai.Client(api_key=self.api_key)
+                g_voice = "Puck" if "Neural" in voice_name else voice_name
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash",
+                    contents=spoken_text,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["AUDIO"],
+                        speech_config=types.SpeechConfig(
+                            voice_config=types.VoiceConfig(
+                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                                    voice_name=g_voice
                                 )
-                            ),
+                            )
                         ),
-                    )
+                    ),
+                )
 
-                    audio_bytes = None
-                    for part in response.candidates[0].content.parts:
-                        if hasattr(part, "inline_data") and part.inline_data:
-                            audio_bytes = part.inline_data.data
-                            break
+                audio_bytes = None
+                for part in response.candidates[0].content.parts:
+                    if hasattr(part, "inline_data") and part.inline_data:
+                        audio_bytes = part.inline_data.data
+                        break
 
-                    if audio_bytes:
-                        local_temp_file.write_bytes(audio_bytes)
-                        with wave.open(str(local_temp_file), "rb") as w:
-                            frames = w.getnframes()
-                            rate = w.getframerate()
-                            duration_seconds = frames / float(rate)
-                        provider = "gemini"
-                        model_name = "gemini-2.0-flash-audio"
-                        cost_usd = (character_count / 1000.0) * 0.04
-                        gemini_success = True
-                except Exception:
-                    gemini_success = False
+                if audio_bytes:
+                    local_temp_file.write_bytes(audio_bytes)
+                    with wave.open(str(local_temp_file), "rb") as w:
+                        frames = w.getnframes()
+                        rate = w.getframerate()
+                        duration_seconds = frames / float(rate)
+                    provider = "gemini"
+                    model_name = f"gemini-2.0-flash-audio-{g_voice}"
+                    cost_usd = (character_count / 1000.0) * 0.04
+                    synthesized = True
+            except Exception:
+                synthesized = False
 
-            if not gemini_success:
-                duration_seconds = self._generate_synthetic_wav(text, local_temp_file)
-                provider = "synthetic_fallback"
-                model_name = "silent_wav"
+        # 2. Secondary fallback: edge-tts neural voice
+        if not synthesized:
+            try:
+                edge_voice = (
+                    voice_name
+                    if "Neural" in voice_name
+                    else "en-US-ChristopherNeural"
+                )
+                duration_seconds = self._synthesize_edge_tts(spoken_text, local_temp_file, edge_voice)
+                provider = "edge_tts"
+                model_name = edge_voice
+                synthesized = True
+            except Exception:
+                synthesized = False
+
+        # 3. Tertiary fallback: calibrated synthetic WAV
+        if not synthesized:
+            duration_seconds = self._generate_synthetic_wav(text, local_temp_file)
+            provider = "synthetic_fallback"
+            model_name = "silent_wav"
 
         self.cost_repo.log_cost(
             CostLogCreate(

@@ -1,6 +1,6 @@
 """Repository for article ingestion, embeddings, and story clustering."""
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 
 from src.models.entities import Article, StoryCluster
 from src.models.schemas import FeedItem
@@ -94,6 +94,57 @@ class ArticleRepository(BaseRepository):
         self.session.flush()
         return cluster
 
+    def count_story_clusters(
+        self,
+        status: str | None = None,
+        search: str | None = None,
+    ) -> int:
+        """Count total story clusters matching status and search filter."""
+        stmt = select(func.count(StoryCluster.id))
+        if status:
+            stmt = stmt.where(StoryCluster.status == status)
+        if search:
+            pattern = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    StoryCluster.title.ilike(pattern),
+                    StoryCluster.summary.ilike(pattern),
+                )
+            )
+        return self.session.scalar(stmt) or 0
+
+    def list_story_clusters_paginated(
+        self,
+        status: str | None = None,
+        search: str | None = None,
+        page: int = 1,
+        page_size: int = 10,
+    ) -> tuple[list[StoryCluster], int]:
+        """Return paginated story clusters and total matching count."""
+        total = self.count_story_clusters(status=status, search=search)
+        stmt = select(StoryCluster)
+        if status:
+            stmt = stmt.where(StoryCluster.status == status)
+        if search:
+            pattern = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    StoryCluster.title.ilike(pattern),
+                    StoryCluster.summary.ilike(pattern),
+                )
+            )
+        offset_val = max(0, (page - 1) * page_size)
+        stmt = (
+            stmt.order_by(
+                StoryCluster.article_count.desc(),
+                StoryCluster.created_at.desc(),
+            )
+            .offset(offset_val)
+            .limit(page_size)
+        )
+        items = list(self.session.scalars(stmt).all())
+        return items, total
+
     def list_story_clusters(
         self,
         status: str | None = None,
@@ -108,6 +159,10 @@ class ArticleRepository(BaseRepository):
             StoryCluster.created_at.desc(),
         ).limit(limit)
         return list(self.session.scalars(stmt).all())
+
+    def get_recent_clusters(self, limit: int = 20) -> list[StoryCluster]:
+        """Alias to list_story_clusters for retrieving recent story clusters."""
+        return self.list_story_clusters(limit=limit)
 
     def get_cluster_by_id(self, cluster_id: int) -> StoryCluster | None:
         """Find a single story cluster by primary key."""
@@ -126,3 +181,40 @@ class ArticleRepository(BaseRepository):
         if cluster:
             cluster.status = status
             self.session.flush()
+
+    def get_trending_clusters(
+        self,
+        limit: int = 10,
+        status: str | None = "pending",
+        hours_back: int | None = 72,
+    ) -> list[tuple[StoryCluster, float]]:
+        """Rank clusters by trending velocity based on volume, sources, and recency."""
+        from datetime import UTC, datetime
+
+        clusters = self.list_story_clusters(status=status, limit=limit * 3)
+        if not clusters:
+            return []
+
+        now = datetime.now(UTC)
+        scored_clusters: list[tuple[StoryCluster, float]] = []
+
+        for c in clusters:
+            created = c.created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=UTC)
+            age_hours = max((now - created).total_seconds() / 3600.0, 0.1)
+
+            if hours_back is not None and age_hours > hours_back:
+                continue
+
+            articles = self.get_articles_by_ids(c.article_ids)
+            distinct_sources = len({a.source for a in articles if a.source})
+            article_count = len(articles)
+
+            recency_multiplier = 1.0 / (1.0 + (age_hours / 12.0))
+
+            velocity_score = (article_count * 2.0 + distinct_sources * 3.0) * recency_multiplier
+            scored_clusters.append((c, round(velocity_score, 2)))
+
+        scored_clusters.sort(key=lambda x: x[1], reverse=True)
+        return scored_clusters[:limit]

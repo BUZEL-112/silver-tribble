@@ -20,6 +20,7 @@
       </div>
       <div class="flex space-x-1" id="nav-tabs">
         <button onclick="switchTab('pipeline')" id="tab-btn-pipeline" class="tab-btn active px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Operations</button>
+        <button onclick="switchTab('clusters')" id="tab-btn-clusters" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Story Clusters</button>
         <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Action Logs</button>
         <button onclick="switchTab('script')" id="tab-btn-script" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Script Editor</button>
         <button onclick="switchTab('media')" id="tab-btn-media" class="tab-btn px-3 py-1.5 rounded-md text-sm font-medium border border-transparent transition">Media Gallery</button>
@@ -58,7 +59,10 @@
               <div class="font-medium text-white mt-1">Cluster Stories</div>
               <div class="text-xs text-slate-400 mt-1">Embeddings & groups</div>
             </div>
-            <button onclick="triggerStage('cluster')" class="mt-4 w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Cluster</button>
+            <div class="mt-4 space-y-1.5">
+              <button onclick="triggerStage('cluster')" class="w-full py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Run Cluster</button>
+              <button onclick="switchTab('clusters')" class="w-full py-1 text-center text-xs text-purple-400 hover:text-purple-300 font-medium">Browse Clusters &rarr;</button>
+            </div>
           </div>
 
           <div class="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between">
@@ -109,7 +113,110 @@
       </div>
     </section>
 
-    <!-- TAB 2: AUDIT ACTION LOG -->
+    <!-- TAB 2: STORY CLUSTERS & ARTICLES INTELLIGENCE -->
+    <section id="tab-clusters" class="space-y-6 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div>
+            <div class="flex items-center space-x-3">
+              <h2 class="text-lg font-bold text-white tracking-tight">Story Clusters &amp; Ingested Articles</h2>
+              <span id="clusters-count-badge" class="px-2.5 py-0.5 rounded-full bg-blue-950/80 border border-blue-500/30 text-blue-400 font-mono text-xs font-semibold">0 Clusters</span>
+            </div>
+            <p class="text-sm text-slate-400 mt-1">Explore grouped story clusters, examine their member articles and source URLs, and launch video scripts directly.</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="triggerStage('ingest')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Ingest News</button>
+            <button onclick="triggerStage('cluster')" class="px-3 py-1.5 bg-purple-900/40 hover:bg-purple-800/60 border border-purple-700/50 text-purple-300 text-xs font-medium rounded transition">Run Clustering</button>
+            <button onclick="loadClusters()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded transition shadow">Refresh</button>
+          </div>
+        </div>
+
+        <!-- Filter & Multi-Selection Toolbar -->
+        <div class="flex flex-wrap items-center justify-between bg-slate-950/80 border border-slate-800 rounded-lg p-3.5 gap-3 mb-6">
+          <div class="flex flex-wrap items-center gap-3 flex-1 min-w-[280px]">
+            <input
+              type="text"
+              id="clusters-search-input"
+              oninput="onClusterSearchInput()"
+              placeholder="Search headline keywords, topics, or article sources..."
+              class="bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-white placeholder-slate-500 flex-1 min-w-[220px] focus:outline-none focus:border-blue-500"
+            >
+            <select
+              id="clusters-status-filter"
+              onchange="onClusterStatusChange()"
+              class="bg-slate-900 border border-slate-800 rounded px-3 py-1.5 text-xs text-slate-300 focus:outline-none focus:border-blue-500"
+            >
+              <option value="">All Statuses</option>
+              <option value="pending">Pending</option>
+              <option value="completed">Completed</option>
+              <option value="processing">Processing</option>
+            </select>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <span id="selected-clusters-label" class="text-xs font-mono text-slate-400">0 selected</span>
+            <button
+              id="btn-select-all-clusters"
+              onclick="toggleSelectAllClusters()"
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 rounded transition font-medium"
+            >Select Page</button>
+            <button
+              id="btn-multi-script"
+              onclick="generateScriptForSelected()"
+              disabled
+              class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-xs font-semibold rounded transition shadow"
+            >Generate Script</button>
+            <button
+              id="btn-multi-run"
+              onclick="runPipelineForSelected()"
+              disabled
+              class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:hover:bg-indigo-600 text-xs font-semibold rounded transition shadow"
+            >Run Video</button>
+          </div>
+        </div>
+
+        <!-- Clusters Container -->
+        <div id="clusters-container" class="space-y-4">
+          <div class="text-center py-12 text-slate-500 text-sm">Loading story clusters...</div>
+        </div>
+
+        <!-- Clusters Pagination Controls -->
+        <div id="clusters-pagination-bar" class="flex flex-wrap items-center justify-between gap-4 mt-6 pt-4 border-t border-slate-800 text-xs">
+          <div class="flex items-center gap-3">
+            <span id="clusters-pagination-info" class="text-slate-400 font-mono">Showing 0 to 0 of 0 clusters</span>
+            <div class="flex items-center gap-1.5 text-slate-400">
+              <span>Per page:</span>
+              <select
+                id="clusters-page-size"
+                onchange="changeClusterPageSize(this.value)"
+                class="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-slate-300 focus:outline-none focus:border-blue-500"
+              >
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button
+              id="btn-clusters-prev"
+              onclick="goToClusterPage(currentClusterPage - 1)"
+              disabled
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 text-slate-300 font-medium rounded transition"
+            >Previous</button>
+            <span id="clusters-page-indicator" class="font-mono text-slate-300 px-2">Page 1 of 1</span>
+            <button
+              id="btn-clusters-next"
+              onclick="goToClusterPage(currentClusterPage + 1)"
+              disabled
+              class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-30 disabled:hover:bg-slate-800 text-slate-300 font-medium rounded transition"
+            >Next</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: AUDIT ACTION LOG -->
     <section id="tab-logs" class="space-y-4 hidden">
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
         <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -195,30 +302,52 @@
       </div>
     </section>
 
-    <!-- TAB 4: MEDIA & VIDEO GALLERY -->
+    <!-- TAB 4: MEDIA & VIDEO GALLERY (INDEX-BASED SCENE REVIEW & SWAPPING) -->
     <section id="tab-media" class="space-y-6 hidden">
       <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl">
-        <div class="flex items-center justify-between mb-4">
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
             <h2 class="text-lg font-bold text-white">Media & Video Gallery</h2>
-            <p class="text-sm text-slate-400">View sentence-level visual placements and play finalized video renders.</p>
+            <p class="text-sm text-slate-400">Review indexed scenes [Scene #N], swap visual assets, and re-stitch video.</p>
           </div>
-          <div class="flex items-center space-x-3">
-            <input type="number" id="gallery-job-id" placeholder="Job ID" class="bg-slate-950 border border-slate-800 rounded px-3 py-1 text-sm w-28 text-white">
+          <div class="flex flex-wrap items-center gap-3">
+            <input type="number" id="gallery-job-id" placeholder="Job ID" class="bg-slate-950 border border-slate-800 rounded px-3 py-1.5 text-sm w-28 text-white">
             <button onclick="loadGalleryJob()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Load Job Assets</button>
+            <button onclick="triggerReRender()" id="btn-re-render" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded transition">Re-Render Video</button>
           </div>
+        </div>
+
+        <!-- Render Controls Toolbar -->
+        <div class="flex flex-wrap items-center justify-between bg-slate-950/80 border border-slate-800 rounded-lg px-4 py-2.5 mb-6 text-xs text-slate-300">
+          <div class="flex items-center space-x-4">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" id="gallery-show-indices" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+              <span class="font-medium">Review Mode (Overlay Scene Index Badges on Video)</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input type="checkbox" id="gallery-dry-run" class="rounded bg-slate-900 border-slate-700 text-blue-600 focus:ring-0">
+              <span>Dry Run</span>
+            </label>
+          </div>
+          <div id="gallery-render-status" class="font-mono text-slate-400">Select a Job ID to inspect scenes.</div>
         </div>
 
         <!-- Video Player Preview -->
         <div id="video-player-container" class="bg-slate-950 border border-slate-800 rounded-lg p-4 mb-6 hidden">
-          <h3 class="text-sm font-semibold text-slate-300 mb-2">Final Video Preview</h3>
-          <video id="html5-video-player" controls class="max-h-96 rounded mx-auto bg-black"></video>
+          <div class="flex items-center justify-between mb-2">
+            <h3 class="text-sm font-semibold text-slate-300">Rendered Video Output</h3>
+            <span id="active-scene-indicator" class="text-xs font-mono text-blue-400 bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded">Active Scene: -</span>
+          </div>
+          <video id="html5-video-player" controls class="max-h-96 rounded mx-auto bg-black shadow-lg"></video>
         </div>
 
         <!-- Placements Asset Grid -->
-        <h3 class="text-sm font-semibold text-slate-300 mb-3">Sentence Asset Placements</h3>
-        <div id="placements-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          <div class="text-xs text-slate-500 col-span-full">Enter a Job ID above to inspect visual assets.</div>
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="text-sm font-semibold text-slate-300">Indexed Scene Materials (<span id="scene-count-badge">0</span> scenes)</h3>
+          <span class="text-xs text-slate-500">Every scene is indexed: edit by search query, direct URL, or local file</span>
+        </div>
+        <div id="placements-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="text-xs text-slate-500 col-span-full">Enter a Job ID above and click Load Job Assets.</div>
         </div>
       </div>
     </section>
@@ -351,6 +480,7 @@
       if (targetSec) targetSec.classList.remove("hidden");
       if (targetBtn) targetBtn.classList.add("active");
 
+      if (tabId === "clusters") loadClusters();
       if (tabId === "logs") loadLogs();
       if (tabId === "branding") loadSettings();
       if (tabId === "config") {
@@ -553,9 +683,14 @@
       }
     }
 
+    let currentJobPlacements = [];
+
     async function loadGalleryJob() {
       const jobId = document.getElementById("gallery-job-id").value;
       if (!jobId) return;
+
+      const statusEl = document.getElementById("gallery-render-status");
+      statusEl.textContent = `Loading job #${jobId} assets...`;
 
       try {
         const jobsRes = await fetch("/api/jobs");
@@ -568,24 +703,199 @@
         if (job && job.output_video_path) {
           playerContainer.classList.remove("hidden");
           const filename = job.output_video_path.split("/").pop();
-          videoPlayer.src = `/static/videos/${filename}`;
+          videoPlayer.src = `/static/videos/${filename}?t=${Date.now()}`;
           videoPlayer.load();
+
+          videoPlayer.ontimeupdate = () => {
+            const cur = videoPlayer.currentTime;
+            let activeIdx = null;
+            for (const p of currentJobPlacements) {
+              const card = document.getElementById(`scene-card-${p.sentence_index}`);
+              if (cur >= p.start_time && cur < p.end_time) {
+                activeIdx = p.sentence_index;
+                if (card) {
+                  card.classList.add("ring-2", "ring-blue-500", "bg-slate-900");
+                }
+              } else if (card) {
+                card.classList.remove("ring-2", "ring-blue-500", "bg-slate-900");
+              }
+            }
+            const ind = document.getElementById("active-scene-indicator");
+            if (ind) {
+              ind.textContent = activeIdx !== null ? `Active Scene: #${activeIdx}` : "Active Scene: -";
+            }
+          };
         } else {
           playerContainer.classList.add("hidden");
         }
 
-        const grid = document.getElementById("placements-grid");
-        grid.innerHTML = '<div class="text-xs text-slate-500">Checking media placements...</div>';
+        const mediaRes = await fetch(`/api/jobs/${jobId}/media`);
+        if (!mediaRes.ok) throw new Error("Failed to load media placements");
+        currentJobPlacements = await mediaRes.json();
 
-        grid.innerHTML = `
-          <div class="bg-slate-950 border border-slate-800 p-3 rounded-lg">
-            <div class="text-xs font-bold text-slate-300">Job #${jobId} Visual Summary</div>
-            <div class="text-xs text-slate-400 mt-1">Status: ${job ? job.status : 'unknown'}</div>
-            <div class="text-xs text-slate-400 mt-1">Audio: ${job && job.audio_path ? job.audio_path : 'none'}</div>
-          </div>
-        `;
+        document.getElementById("scene-count-badge").textContent = currentJobPlacements.length;
+        renderPlacements(jobId, currentJobPlacements);
+        statusEl.textContent = `Loaded ${currentJobPlacements.length} scenes for Job #${jobId}.`;
       } catch (err) {
         console.error("Gallery load error:", err);
+        statusEl.textContent = `Error: ${err.message}`;
+      }
+    }
+
+    function renderPlacements(jobId, placements) {
+      const grid = document.getElementById("placements-grid");
+      grid.innerHTML = "";
+
+      if (!placements || placements.length === 0) {
+        grid.innerHTML = '<div class="text-xs text-slate-500 col-span-full">No media placements found for this job. Run Stage 5 (Media Retrieval) first.</div>';
+        return;
+      }
+
+      placements.forEach(p => {
+        const card = document.createElement("div");
+        card.id = `scene-card-${p.sentence_index}`;
+        card.className = "bg-slate-950 border border-slate-800 rounded-lg p-3 transition duration-150 flex flex-col justify-between";
+
+        let previewUrl = "";
+        if (p.local_path) {
+          const fname = p.local_path.split("/").pop();
+          previewUrl = `/static/media/${fname}`;
+        } else if (p.source_url) {
+          previewUrl = p.source_url;
+        }
+
+        const isVideo = p.media_type === "video" || (previewUrl && previewUrl.endsWith(".mp4"));
+        const mediaTag = isVideo
+          ? `<video src="${previewUrl}" class="w-full h-36 object-cover rounded bg-black mb-2" controls muted preload="metadata"></video>`
+          : `<img src="${previewUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23111827\'/><text x=\'50\' y=\'50\' fill=\'%2364748b\' font-size=\'12\' text-anchor=\'middle\' dy=\'.3em\'>No Preview</text></svg>'}" class="w-full h-36 object-cover rounded bg-black mb-2" alt="Scene preview">`;
+
+        const provBadge = p.provider === "pexels" ? "bg-green-950/60 text-green-400 border-green-800/40"
+          : (p.provider === "giphy" ? "bg-pink-950/60 text-pink-400 border-pink-800/40" : "bg-purple-950/60 text-purple-400 border-purple-800/40");
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-bold text-xs px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 border border-blue-800/50">Scene #${p.sentence_index}</span>
+              <span class="text-[11px] font-mono text-slate-400">${p.start_time.toFixed(1)}s - ${p.end_time.toFixed(1)}s</span>
+              <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded border ${provBadge}">${p.media_type} (${p.provider})</span>
+            </div>
+
+            ${mediaTag}
+
+            <div class="mb-2">
+              <div class="text-[11px] text-slate-300 italic mb-1 line-clamp-2">${p.text ? '"' + p.text + '"' : 'Sentence text not cached'}</div>
+              <div class="text-[10px] text-slate-400 font-mono truncate" title="${p.query || ''}">Query: ${p.query || '-'}</div>
+            </div>
+          </div>
+
+          <div class="border-t border-slate-800/80 pt-2 mt-2 space-y-2">
+            <div class="text-[11px] font-semibold text-slate-400">Replace Scene Asset</div>
+            <div class="flex gap-1.5">
+              <select id="prov-select-${p.sentence_index}" class="bg-slate-900 border border-slate-800 rounded px-1.5 py-1 text-[11px] text-slate-300">
+                <option value="pexels" ${p.provider === 'pexels' ? 'selected' : ''}>Pexels</option>
+                <option value="giphy" ${p.provider === 'giphy' ? 'selected' : ''}>Giphy</option>
+                <option value="custom">Custom URL / File</option>
+              </select>
+              <input type="text" id="input-asset-${p.sentence_index}" placeholder="New search keywords or file/URL..." value="${p.query || ''}" class="bg-slate-900 border border-slate-800 rounded px-2 py-1 text-[11px] text-white flex-1 min-w-0">
+            </div>
+            <div class="flex items-center justify-between">
+              <span id="status-msg-${p.sentence_index}" class="text-[10px] font-mono text-slate-500"></span>
+              <button onclick="swapSceneAsset(${jobId}, ${p.sentence_index})" id="btn-swap-${p.sentence_index}" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded text-slate-200 transition">Swap Asset</button>
+            </div>
+          </div>
+        `;
+
+        grid.appendChild(card);
+      });
+    }
+
+    async function swapSceneAsset(jobId, sentenceIndex) {
+      const inputEl = document.getElementById(`input-asset-${sentenceIndex}`);
+      const provEl = document.getElementById(`prov-select-${sentenceIndex}`);
+      const btn = document.getElementById(`btn-swap-${sentenceIndex}`);
+      const statusMsg = document.getElementById(`status-msg-${sentenceIndex}`);
+
+      const val = inputEl.value.trim();
+      if (!val) {
+        alert("Please enter a search query, direct URL, or local file path");
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = "Updating...";
+      statusMsg.textContent = "Searching...";
+
+      let payload = {};
+      const provChoice = provEl.value;
+      if (val.startsWith("http://") || val.startsWith("https://")) {
+        payload = { url: val, provider: "custom" };
+      } else if (val.startsWith("/") || val.includes(".mp4") || val.includes(".gif") || val.includes(".png") || val.includes(".jpg")) {
+        payload = { file_path: val, provider: "custom" };
+      } else {
+        payload = { query: val, provider: provChoice };
+      }
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/media/${sentenceIndex}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to update placement");
+
+        statusMsg.textContent = "Saved";
+        statusMsg.className = "text-[10px] font-mono text-green-400";
+        btn.textContent = "Updated";
+
+        setTimeout(() => {
+          loadGalleryJob();
+        }, 500);
+      } catch (err) {
+        console.error("Error updating scene asset:", err);
+        statusMsg.textContent = "Failed";
+        statusMsg.className = "text-[10px] font-mono text-red-400";
+        alert("Error swapping asset: " + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    async function triggerReRender() {
+      const jobId = document.getElementById("gallery-job-id").value;
+      if (!jobId) {
+        alert("Please enter a Job ID first");
+        return;
+      }
+
+      const showIndices = document.getElementById("gallery-show-indices").checked;
+      const dryRun = document.getElementById("gallery-dry-run").checked;
+      const btn = document.getElementById("btn-re-render");
+      const statusEl = document.getElementById("gallery-render-status");
+
+      btn.disabled = true;
+      btn.textContent = "Rendering Video...";
+      statusEl.textContent = `Re-rendering video for Job #${jobId} (indices overlay: ${showIndices})...`;
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/re-render`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dry_run: dryRun, show_material_indices: showIndices })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Re-render failed");
+
+        statusEl.textContent = `Render completed: ${data.output_video_path}`;
+        alert("Video re-rendered successfully!");
+        loadGalleryJob();
+      } catch (err) {
+        console.error("Re-render error:", err);
+        statusEl.textContent = `Render failed: ${err.message}`;
+        alert("Re-render error: " + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Re-Render Video";
       }
     }
 
@@ -710,6 +1020,362 @@
         statusEl.textContent = "Error: " + err.message;
         alert("Error applying configuration: " + err.message);
       }
+    }
+
+    // Story Clusters and Articles Intelligence Logic
+    let currentClusterPage = 1;
+    let currentClusterPageSize = 10;
+    let currentClusterTotal = 0;
+    let currentClusterTotalPages = 1;
+    let currentClusterItems = [];
+    let selectedClusterIds = new Set();
+    let clusterSearchTimer = null;
+
+    function onClusterSearchInput() {
+      if (clusterSearchTimer) clearTimeout(clusterSearchTimer);
+      clusterSearchTimer = setTimeout(() => {
+        loadClusters(1);
+      }, 300);
+    }
+
+    function onClusterStatusChange() {
+      loadClusters(1);
+    }
+
+    function changeClusterPageSize(newSize) {
+      currentClusterPageSize = parseInt(newSize, 10) || 10;
+      loadClusters(1);
+    }
+
+    function goToClusterPage(page) {
+      if (page < 1 || page > currentClusterTotalPages) return;
+      loadClusters(page);
+    }
+
+    async function loadClusters(page = 1) {
+      const container = document.getElementById("clusters-container");
+      if (!container) return;
+      container.innerHTML = '<div class="text-center py-12 text-slate-500 text-sm">Loading story clusters...</div>';
+
+      currentClusterPage = page;
+      const query = (document.getElementById("clusters-search-input")?.value || "").trim();
+      const statusFilter = (document.getElementById("clusters-status-filter")?.value || "").trim();
+
+      const params = new URLSearchParams({
+        page: String(currentClusterPage),
+        page_size: String(currentClusterPageSize),
+        include_articles: "true"
+      });
+      if (query) params.set("search", query);
+      if (statusFilter) params.set("status", statusFilter);
+
+      try {
+        const res = await fetch("/api/clusters?" + params.toString());
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+          currentClusterItems = data;
+          currentClusterTotal = data.length;
+          currentClusterTotalPages = 1;
+        } else {
+          currentClusterItems = data.items || [];
+          currentClusterTotal = data.total || 0;
+          currentClusterTotalPages = data.total_pages || 1;
+          currentClusterPage = data.page || 1;
+        }
+
+        renderClustersList(currentClusterItems);
+        updateClustersPaginationUI();
+        updateClustersSelectionUI();
+      } catch (err) {
+        container.innerHTML = `<div class="text-center py-8 text-red-400 text-xs">Failed to load clusters: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    function updateClustersPaginationUI() {
+      const info = document.getElementById("clusters-pagination-info");
+      const indicator = document.getElementById("clusters-page-indicator");
+      const btnPrev = document.getElementById("btn-clusters-prev");
+      const btnNext = document.getElementById("btn-clusters-next");
+      const badge = document.getElementById("clusters-count-badge");
+
+      if (badge) {
+        badge.textContent = `${currentClusterTotal} Cluster${currentClusterTotal === 1 ? "" : "s"}`;
+      }
+
+      if (currentClusterTotal === 0) {
+        if (info) info.textContent = "No clusters found";
+        if (indicator) indicator.textContent = "Page 1 of 1";
+        if (btnPrev) btnPrev.disabled = true;
+        if (btnNext) btnNext.disabled = true;
+        return;
+      }
+
+      const start = (currentClusterPage - 1) * currentClusterPageSize + 1;
+      const end = Math.min(currentClusterPage * currentClusterPageSize, currentClusterTotal);
+      if (info) info.textContent = `Showing ${start} to ${end} of ${currentClusterTotal} clusters`;
+      if (indicator) indicator.textContent = `Page ${currentClusterPage} of ${currentClusterTotalPages}`;
+      if (btnPrev) btnPrev.disabled = currentClusterPage <= 1;
+      if (btnNext) btnNext.disabled = currentClusterPage >= currentClusterTotalPages;
+    }
+
+    function filterClusters() {
+      loadClusters(1);
+    }
+
+    function renderClustersList(clusters) {
+      const container = document.getElementById("clusters-container");
+      if (!clusters || clusters.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-12 border border-dashed border-slate-800 rounded-xl">
+            <p class="text-slate-400 text-sm font-medium">No story clusters found matching filter criteria.</p>
+            <p class="text-slate-600 text-xs mt-1">Run RSS ingestion and clustering to populate news stories.</p>
+            <div class="mt-4 flex justify-center gap-2">
+              <button onclick="triggerStage('ingest')" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition">Ingest RSS</button>
+              <button onclick="triggerStage('cluster')" class="px-3 py-1.5 bg-purple-900/60 hover:bg-purple-800 text-purple-200 text-xs font-medium rounded transition">Run Cluster</button>
+            </div>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = clusters.map(c => {
+        const isChecked = selectedClusterIds.has(c.id) ? "checked" : "";
+        const isCompleted = c.status === "completed";
+        const statusColor = isCompleted
+          ? "text-green-400 bg-green-950/60 border-green-800/60"
+          : "text-yellow-400 bg-yellow-950/60 border-yellow-800/60";
+        const articleCount = c.article_count || (c.articles ? c.articles.length : 0);
+        const articles = c.articles || [];
+        const dateStr = c.created_at ? new Date(c.created_at).toLocaleString() : "Recently";
+
+        const articlesHtml = articles.length === 0
+          ? '<div class="text-xs text-slate-500 italic py-2">No raw article details available.</div>'
+          : articles.map(a => `
+            <div class="bg-slate-950 border border-slate-800/90 rounded-lg p-3 hover:border-slate-700 transition">
+              <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-cyan-400 font-semibold">Art #${a.id}</span>
+                  <span class="px-2 py-0.5 bg-slate-800/80 text-slate-300 font-medium rounded text-[11px]">${escapeHtml(a.source || "Unknown Source")}</span>
+                  ${a.published_at ? `<span class="text-slate-500 text-[11px] font-mono">${new Date(a.published_at).toLocaleDateString()}</span>` : ""}
+                </div>
+                ${a.link ? `<a href="${escapeHtml(a.link)}" target="_blank" rel="noopener noreferrer" class="text-blue-400 hover:text-blue-300 font-medium text-[11px] flex items-center gap-1 hover:underline">Read Source &UpperRightArrow;</a>` : ""}
+              </div>
+              <div class="font-medium text-slate-200 text-xs mt-1.5 leading-snug">${escapeHtml(a.title || "")}</div>
+              ${a.summary ? `<div class="text-[11px] text-slate-400 mt-1 leading-relaxed line-clamp-2">${escapeHtml(a.summary)}</div>` : ""}
+            </div>
+          `).join("");
+
+        return `
+          <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-slate-700/80 transition shadow-md" id="cluster-card-${c.id}">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="chk-cluster-${c.id}"
+                  ${isChecked}
+                  onchange="toggleClusterSelect(${c.id})"
+                  class="rounded bg-slate-950 border-slate-700 text-blue-600 focus:ring-0 w-4 h-4 cursor-pointer"
+                >
+                <span class="px-2.5 py-1 bg-blue-950/80 border border-blue-500/40 text-blue-400 font-mono font-bold text-xs rounded-md">Cluster #${c.id}</span>
+                <span class="px-2 py-0.5 text-xs font-mono font-medium rounded-full border ${statusColor}">${escapeHtml(c.status || "pending")}</span>
+                <span class="px-2.5 py-0.5 bg-slate-800 text-purple-300 text-xs font-mono rounded-full font-medium">${articleCount} Article${articleCount === 1 ? "" : "s"}</span>
+              </div>
+              <div class="flex items-center space-x-2">
+                <span class="text-[11px] text-slate-500 font-mono mr-1">${dateStr}</span>
+                <button
+                  onclick="scriptSingleCluster(${c.id})"
+                  class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-xs font-medium rounded transition text-white shadow"
+                >Script</button>
+                <button
+                  onclick="runPipelineSingleCluster(${c.id})"
+                  class="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-medium rounded transition text-slate-200"
+                >Run Video</button>
+              </div>
+            </div>
+
+            <div class="mt-3">
+              <h3 class="text-sm font-semibold text-white leading-snug">${escapeHtml(c.title || "Untitled Story")}</h3>
+              ${c.summary ? `<div class="text-xs text-slate-400 mt-2 bg-slate-950/60 p-3 rounded-lg border border-slate-800/60 leading-relaxed font-sans">${escapeHtml(c.summary)}</div>` : ""}
+            </div>
+
+            <div class="mt-4 pt-3 border-t border-slate-800/60">
+              <button
+                onclick="toggleClusterArticles(${c.id})"
+                id="btn-toggle-articles-${c.id}"
+                class="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 focus:outline-none"
+              >
+                <span id="arrow-articles-${c.id}">&#9656;</span>
+                <span id="label-articles-${c.id}">View ${articles.length} Member Article${articles.length === 1 ? "" : "s"}</span>
+              </button>
+              <div id="cluster-articles-${c.id}" class="mt-3 space-y-2.5 hidden">
+                ${articlesHtml}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function toggleClusterArticles(clusterId) {
+      const container = document.getElementById(`cluster-articles-${clusterId}`);
+      const arrow = document.getElementById(`arrow-articles-${clusterId}`);
+      const label = document.getElementById(`label-articles-${clusterId}`);
+      if (!container) return;
+      const isHidden = container.classList.contains("hidden");
+      if (isHidden) {
+        container.classList.remove("hidden");
+        if (arrow) arrow.innerHTML = "&#9662;";
+        if (label) label.textContent = label.textContent.replace("View", "Hide");
+      } else {
+        container.classList.add("hidden");
+        if (arrow) arrow.innerHTML = "&#9656;";
+        if (label) label.textContent = label.textContent.replace("Hide", "View");
+      }
+    }
+
+    function toggleClusterSelect(clusterId) {
+      if (selectedClusterIds.has(clusterId)) {
+        selectedClusterIds.delete(clusterId);
+      } else {
+        selectedClusterIds.add(clusterId);
+      }
+      updateClustersSelectionUI();
+    }
+
+    function toggleSelectAllClusters() {
+      const pageIds = currentClusterItems.map(c => c.id);
+      const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedClusterIds.has(id));
+      if (allPageSelected) {
+        pageIds.forEach(id => selectedClusterIds.delete(id));
+      } else {
+        pageIds.forEach(id => selectedClusterIds.add(id));
+      }
+      renderClustersList(currentClusterItems);
+      updateClustersSelectionUI();
+    }
+
+    function updateClustersSelectionUI() {
+      const count = selectedClusterIds.size;
+      const label = document.getElementById("selected-clusters-label");
+      const btnScript = document.getElementById("btn-multi-script");
+      const btnRun = document.getElementById("btn-multi-run");
+      const btnSelectAll = document.getElementById("btn-select-all-clusters");
+
+      const sortedIds = Array.from(selectedClusterIds).sort((a, b) => a - b);
+      if (label) {
+        label.textContent = count === 0
+          ? "0 selected"
+          : `${count} selected (${sortedIds.map(id => "#" + id).join(", ")})`;
+      }
+      if (btnScript) btnScript.disabled = count === 0;
+      if (btnRun) btnRun.disabled = count === 0;
+      if (btnSelectAll) {
+        const pageIds = currentClusterItems.map(c => c.id);
+        const allPageSelected = pageIds.length > 0 && pageIds.every(id => selectedClusterIds.has(id));
+        btnSelectAll.textContent = allPageSelected ? "Deselect Page" : "Select Page";
+      }
+    }
+
+    async function scriptSingleCluster(clusterId) {
+      logToConsole(`Generating single-story script for Cluster #${clusterId}...`);
+      try {
+        const res = await fetch("/api/pipeline/script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cluster_id: clusterId, aspect_ratio: "9:16" })
+        });
+        const data = await res.json();
+        logToConsole(`[SCRIPT] Created script #${data.script_id}: ` + JSON.stringify(data));
+        if (data.script_id) {
+          const inputEl = document.getElementById("script-id-input");
+          if (inputEl) inputEl.value = data.script_id;
+          switchTab("script");
+          loadScript();
+        }
+      } catch (err) {
+        logToConsole(`[SCRIPT] Error: ` + err.message);
+      }
+    }
+
+    async function runPipelineSingleCluster(clusterId) {
+      if (!confirm(`Run full video pipeline for Cluster #${clusterId}?`)) return;
+      logToConsole(`Starting video pipeline for Cluster #${clusterId}...`);
+      try {
+        const res = await fetch("/api/pipeline/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cluster_id: clusterId, aspect_ratio: "9:16", dry_run: false })
+        });
+        const data = await res.json();
+        logToConsole(`[PIPELINE] Execution triggered: ` + JSON.stringify(data));
+      } catch (err) {
+        logToConsole(`[PIPELINE] Error: ` + err.message);
+      }
+    }
+
+    async function generateScriptForSelected() {
+      const ids = Array.from(selectedClusterIds).sort((a, b) => a - b);
+      if (ids.length === 0) return;
+
+      if (ids.length === 1) {
+        return scriptSingleCluster(ids[0]);
+      }
+
+      logToConsole(`Generating multi-cluster roundup script for Clusters: ${ids.join(", ")} in numerical order...`);
+      try {
+        const res = await fetch("/api/pipeline/roundup-script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cluster_ids: ids, aspect_ratio: "9:16" })
+        });
+        const data = await res.json();
+        logToConsole(`[ROUNDUP SCRIPT] Created script #${data.script_id}: ` + JSON.stringify(data));
+        if (data.script_id) {
+          const inputEl = document.getElementById("script-id-input");
+          if (inputEl) inputEl.value = data.script_id;
+          switchTab("script");
+          loadScript();
+        }
+      } catch (err) {
+        logToConsole(`[ROUNDUP SCRIPT] Error: ` + err.message);
+      }
+    }
+
+    async function runPipelineForSelected() {
+      const ids = Array.from(selectedClusterIds).sort((a, b) => a - b);
+      if (ids.length === 0) return;
+
+      const desc = ids.length === 1 ? `Cluster #${ids[0]}` : `Multi-Cluster Roundup (${ids.join(", ")})`;
+      if (!confirm(`Run video pipeline for ${desc}?`)) return;
+
+      logToConsole(`Starting video pipeline for ${desc} in numerical order...`);
+      try {
+        const payload = ids.length === 1
+          ? { cluster_id: ids[0], aspect_ratio: "9:16", dry_run: false }
+          : { cluster_ids: ids, aspect_ratio: "9:16", dry_run: false };
+
+        const res = await fetch("/api/pipeline/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        logToConsole(`[PIPELINE] Execution triggered: ` + JSON.stringify(data));
+      } catch (err) {
+        logToConsole(`[PIPELINE] Error: ` + err.message);
+      }
+    }
+
+    function escapeHtml(text) {
+      if (!text) return "";
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
     }
 
     // Auto poll logs every 4 seconds if tab is active

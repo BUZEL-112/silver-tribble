@@ -20,7 +20,13 @@ from src.services.script_service import ScriptService
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate script for story cluster")
-    parser.add_argument("--cluster-id", type=int, default=None, help="Target cluster ID")
+    parser.add_argument("--cluster-id", type=int, default=None, help="Target single cluster ID")
+    parser.add_argument(
+        "--cluster-ids",
+        type=str,
+        default=None,
+        help="Comma-separated cluster IDs for multi-story script (e.g. 1,2,3)",
+    )
     parser.add_argument(
         "--auto-top",
         action="store_true",
@@ -41,37 +47,51 @@ def main() -> None:
             cost_repo = CostRepository(session)
             action_repo = ActionLogRepository(session)
 
-            target_id = args.cluster_id
-            if target_id is None:
-                if args.auto_top:
-                    recent = art_repo.get_recent_clusters(limit=10)
-                    pending = [c for c in recent if c.status == "pending"]
-                    if not pending and recent:
-                        pending = recent
-                    if not pending:
-                        raise ValueError("No story clusters found to generate script for.")
-                    target_id = pending[0].id
-                else:
-                    raise ValueError("Must provide either --cluster-id or --auto-top")
-
             service = ScriptService(
                 article_repo=art_repo,
                 script_repo=script_repo,
                 cost_repo=cost_repo,
             )
 
-            with action_repo.track_operation(
-                stage="script",
-                action="generate_script",
-                actor=args.actor,
-                details={"cluster_id": target_id, "aspect_ratio": args.aspect_ratio},
-            ):
-                record = service.generate_full_script(
-                    cluster_id=target_id,
-                    aspect_ratio=args.aspect_ratio,
-                    planner_model=args.planner_model,
-                    writer_model=args.writer_model,
-                )
+            if args.cluster_ids:
+                target_ids = [int(x.strip()) for x in args.cluster_ids.split(",") if x.strip()]
+                with action_repo.track_operation(
+                    stage="script",
+                    action="generate_roundup_script",
+                    actor=args.actor,
+                    details={"cluster_ids": target_ids, "aspect_ratio": args.aspect_ratio},
+                ):
+                    record = service.generate_roundup_script(
+                        cluster_ids=target_ids,
+                        aspect_ratio=args.aspect_ratio,
+                        model=args.writer_model,
+                    )
+            else:
+                target_id = args.cluster_id
+                if target_id is None:
+                    if args.auto_top:
+                        recent = art_repo.get_recent_clusters(limit=10)
+                        pending = [c for c in recent if c.status == "pending"]
+                        if not pending and recent:
+                            pending = recent
+                        if not pending:
+                            raise ValueError("No story clusters found to generate script for.")
+                        target_id = pending[0].id
+                    else:
+                        raise ValueError("Must provide either --cluster-id, --cluster-ids, or --auto-top")
+
+                with action_repo.track_operation(
+                    stage="script",
+                    action="generate_script",
+                    actor=args.actor,
+                    details={"cluster_id": target_id, "aspect_ratio": args.aspect_ratio},
+                ):
+                    record = service.generate_full_script(
+                        cluster_id=target_id,
+                        aspect_ratio=args.aspect_ratio,
+                        planner_model=args.planner_model,
+                        writer_model=args.writer_model,
+                    )
 
             words = record.full_narration.split()
             result = {

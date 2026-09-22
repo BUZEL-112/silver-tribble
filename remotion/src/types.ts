@@ -13,6 +13,8 @@ export interface RenderBeatProp {
   broll_video_path?: string | null;
   start_time: number;
   end_time: number;
+  emotion?: string;
+  shot_type?: string;
 }
 
 export interface WatermarkConfig {
@@ -30,7 +32,11 @@ export interface SentenceMediaItem {
   media_type: "image" | "video" | "gif";
   local_path: string;
   source_url: string;
-  provider: "pexels" | "giphy" | "fallback";
+  provider: "pexels" | "pixabay" | "giphy" | "google_search" | "brand_card" | "flux_generation" | "ai_generated" | "asset_library" | "fallback" | "custom" | string;
+  text?: string;
+  query?: string;
+  emotion?: string;
+  shot_type?: string;
 }
 
 export interface RenderProps {
@@ -46,4 +52,5 @@ export interface RenderProps {
   introDelaySeconds?: number;
   outroDurationSeconds?: number;
   channelBadgeText?: string;
+  showMaterialIndices?: boolean;
 }

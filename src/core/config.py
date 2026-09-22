@@ -100,10 +100,17 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             "deepseek_api_key",
             "gemini_api_key",
             "pexels_api_key",
+            "pixabay_api_key",
             "giphy_api_key",
+            "flux_api_key",
+            "flux_endpoint",
         ]:
             if k in p:
                 flat[k] = p[k]
+        if "image_generation_provider" in p:
+            flat["image_generation_provider"] = p["image_generation_provider"]
+        if "tts_provider" in p:
+            flat["tts_provider"] = p["tts_provider"]
 
     # 6. Storage section
     if "storage" in data and isinstance(data["storage"], dict):
@@ -188,6 +195,17 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             flat["intro_delay_seconds"] = t["intro_delay_seconds"]
         if "outro_duration_seconds" in t:
             flat["outro_duration_seconds"] = t["outro_duration_seconds"]
+        if "cluster_review_timeout_seconds" in t:
+            flat["cluster_review_timeout_seconds"] = t["cluster_review_timeout_seconds"]
+        if "review_timeout_seconds" in t:
+            flat["cluster_review_timeout_seconds"] = t["review_timeout_seconds"]
+
+    if "review" in data and isinstance(data["review"], dict):
+        rev = data["review"]
+        if "timeout_seconds" in rev:
+            flat["cluster_review_timeout_seconds"] = rev["timeout_seconds"]
+        if "cluster_review_timeout_seconds" in rev:
+            flat["cluster_review_timeout_seconds"] = rev["cluster_review_timeout_seconds"]
 
     # 11. Prompts & System Prompts section
     if "prompts" in data and isinstance(data["prompts"], dict):
@@ -234,6 +252,18 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
                 )
                 normalized_feeds.append({"name": str(source_name), "url": str(item["url"]).strip()})
         flat["rss_feeds"] = normalized_feeds
+
+    # 13. Webhooks & Housekeeping
+    if "webhooks" in data and isinstance(data["webhooks"], dict):
+        wh = data["webhooks"]
+        if "url" in wh:
+            flat["webhook_url"] = wh["url"]
+        if "secret" in wh:
+            flat["webhook_secret"] = wh["secret"]
+    if "housekeeping" in data and isinstance(data["housekeeping"], dict):
+        hk = data["housekeeping"]
+        if "cache_retention_hours" in hk:
+            flat["cache_retention_hours"] = hk["cache_retention_hours"]
 
     return {k: v for k, v in flat.items() if v is not None}
 
@@ -313,12 +343,30 @@ class Settings(BaseSettings):
     deepseek_api_key: str | None = Field(default=None, description="DeepSeek API key")
     gemini_api_key: str | None = Field(default=None, description="Google Gemini API key")
     pexels_api_key: str = Field(default="", description="Pexels Stock API key")
+    pixabay_api_key: str = Field(default="", description="Pixabay Stock API key")
     giphy_api_key: str = Field(default="", description="Giphy API key")
+    flux_api_key: str = Field(default="", description="FLUX or AI generation API key")
+    flux_endpoint: str = Field(default="", description="FLUX or AI generation endpoint URL")
+    image_generation_provider: Literal["flux", "gemini", "local", "fallback"] = Field(
+        default="flux",
+        description="Image generation provider backend",
+    )
+    tts_provider: Literal["gemini", "edge_tts", "auto"] = Field(
+        default="gemini",
+        description="TTS voice synthesis provider priority: gemini, edge_tts, or auto",
+    )
+    google_cse_api_key: str | None = Field(default=None, description="Google Custom Search JSON API key")
+    google_cse_cx: str | None = Field(default=None, description="Google Custom Search Engine CX ID")
+    serpapi_api_key: str | None = Field(default=None, description="SerpApi key for Google Images")
 
     # Media and Visual Assets
     media_cache_dir: Path = Field(
         default=Path("artifacts/media"),
         description="Local directory for cached visual media",
+    )
+    media_router_rules_file: str = Field(
+        default="prompts/media_routing_rules.yaml",
+        description="Path to media routing instructions and rules YAML",
     )
     default_media_type_ratio: float = Field(
         default=0.5,
@@ -327,15 +375,15 @@ class Settings(BaseSettings):
 
     # Media Inspector
     media_inspector_mode: Literal["off", "multimodal", "hil"] = Field(
-        default="off",
+        default="multimodal",
         description="Media inspector mode: 'off', 'multimodal', or 'hil'",
     )
     media_inspector_model: str = Field(
-        default="gemini-2.0-flash",
+        default="gemini-3.5-flash-lite",
         description="VLM model for multimodal media inspection",
     )
     media_inspector_min_score: float = Field(
-        default=7.0,
+        default=6.0,
         description="Minimum relevance score (1-10) for candidate approval in multimodal mode",
     )
 
@@ -370,6 +418,10 @@ class Settings(BaseSettings):
         default=3.0,
         description="Ending card display after speech ends",
     )
+    cluster_review_timeout_seconds: float = Field(
+        default=300.0,
+        description="Timeout in seconds for interactive cluster selection review gate",
+    )
 
     # Prompt and System Prompt Configuration
     prompts_planning_file: str = Field(
@@ -395,6 +447,10 @@ class Settings(BaseSettings):
     prompts_media_inspector_system_prompt: str | None = Field(
         default=None,
         description="Optional inline system prompt override for media inspection",
+    )
+    prompts_roundup_file: str = Field(
+        default="prompts/roundup_script.yaml",
+        description="Prompt YAML template file for multi-story news roundup scripts",
     )
 
     # Storage Settings
@@ -444,6 +500,20 @@ class Settings(BaseSettings):
     rss_feeds: list[dict[str, str]] = Field(
         default_factory=lambda: list(DEFAULT_RSS_FEEDS),
         description="Configured RSS feeds for news ingestion",
+    )
+
+    # Webhooks & Housekeeping
+    webhook_url: str | None = Field(
+        default=None,
+        description="Optional webhook notification endpoint URL",
+    )
+    webhook_secret: str | None = Field(
+        default=None,
+        description="Secret token for HMAC webhook signature verification",
+    )
+    cache_retention_hours: int = Field(
+        default=48,
+        description="Retention window in hours for unindexed temporary media files",
     )
 
     @classmethod

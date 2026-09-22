@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from src.core.database import Base
 from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
+from src.repositories.asset_repository import AssetRepository
 from src.repositories.cost_repository import CostRepository
 from src.repositories.render_repository import RenderRepository
 from src.repositories.script_repository import ScriptRepository
@@ -71,3 +72,9 @@ def temp_storage(tmp_path: Path) -> LocalStorageService:
 @pytest.fixture
 def action_repo(db_session: Session) -> ActionLogRepository:
     return ActionLogRepository(db_session)
+
+
+@pytest.fixture
+def asset_repo(db_session: Session) -> AssetRepository:
+    return AssetRepository(db_session)
+

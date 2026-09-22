@@ -2,7 +2,6 @@
 
 import re
 import urllib.parse
-from typing import Any
 
 import httpx
 
@@ -31,7 +30,9 @@ class ImageSearchService:
             )
         }
 
-    def search_image(self, query: str, excluded_urls: set[str] | None = None) -> tuple[str, str] | None:
+    def search_image(
+        self, query: str, excluded_urls: set[str] | None = None
+    ) -> tuple[str, str] | None:
         """Search available image providers in prioritized order and return (url, extension)."""
         clean_query = query.strip()
         if not clean_query:
@@ -151,16 +152,20 @@ class ImageSearchService:
         """Search web image index for direct high-resolution image URLs."""
         try:
             url = f"https://www.bing.com/images/search?q={urllib.parse.quote(query)}&first=1"
-            with httpx.Client(timeout=self.timeout, headers=self.headers, follow_redirects=True) as client:
+            with httpx.Client(
+                timeout=self.timeout, headers=self.headers, follow_redirects=True
+            ) as client:
                 resp = client.get(url)
                 if resp.status_code == 200:
-                    matches = re.findall(r'murl&quot;:&quot;(https?://[^&]+)&quot;', resp.text)
+                    matches = re.findall(r"murl&quot;:&quot;(https?://[^&]+)&quot;", resp.text)
                     if not matches:
-                        matches = re.findall(r'\"murl\":\"(https?://[^\"]+)\"', resp.text)
+                        matches = re.findall(r"\"murl\":\"(https?://[^\"]+)\"", resp.text)
                     for link in matches:
                         if excluded_urls and link in excluded_urls:
                             continue
-                        if any(bad in link.lower() for bad in [".svg", "logo", "icon", "avatar", "1x1"]):
+                        if any(
+                            bad in link.lower() for bad in [".svg", "logo", "icon", "avatar", "1x1"]
+                        ):
                             continue
                         ext = self._infer_extension(link)
                         return link, ext

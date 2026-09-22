@@ -252,4 +252,3 @@ class PruneResult(BaseModel):
     files_scanned: int
     files_deleted: int
     bytes_freed: int
-

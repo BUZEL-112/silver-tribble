@@ -103,9 +103,7 @@ class ClusterReviewService:
             return [fallback]
 
         effective_default = default_id if default_id is not None else clusters[0].id
-        effective_timeout = (
-            timeout_seconds if timeout_seconds is not None else self.timeout_seconds
-        )
+        effective_timeout = timeout_seconds if timeout_seconds is not None else self.timeout_seconds
 
         valid_ids = {c.id for c in clusters}
 

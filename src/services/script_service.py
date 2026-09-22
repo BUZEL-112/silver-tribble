@@ -316,9 +316,7 @@ class ScriptService:
         """Stage 2: Expand beat sheet into comedic dialogue using writing model."""
         cluster = self.article_repo.get_cluster_by_id(cluster_id)
         cluster_title = cluster.title if cluster else beat_sheet.title
-        raw_articles = (
-            self.article_repo.get_articles_by_ids(cluster.article_ids) if cluster else []
-        )
+        raw_articles = self.article_repo.get_articles_by_ids(cluster.article_ids) if cluster else []
         sanitized_articles = [
             {
                 "id": a.id,
@@ -521,20 +519,22 @@ class ScriptService:
         stories_data = []
         for idx, c in enumerate(valid_clusters):
             raw_articles = self.article_repo.get_articles_by_ids(c.article_ids)
-            stories_data.append({
-                "story_index": idx + 1,
-                "cluster_id": c.id,
-                "title": c.title,
-                "summary": sanitize_news_text(c.summary or ""),
-                "articles": [
-                    {
-                        "source": a.source,
-                        "title": a.title,
-                        "summary": sanitize_news_text(a.summary),
-                    }
-                    for a in raw_articles
-                ],
-            })
+            stories_data.append(
+                {
+                    "story_index": idx + 1,
+                    "cluster_id": c.id,
+                    "title": c.title,
+                    "summary": sanitize_news_text(c.summary or ""),
+                    "articles": [
+                        {
+                            "source": a.source,
+                            "title": a.title,
+                            "summary": sanitize_news_text(a.summary),
+                        }
+                        for a in raw_articles
+                    ],
+                }
+            )
 
         prompt_file = settings.prompts_roundup_file or "roundup_script.yaml"
         prompt_data = self._load_prompt(prompt_file)
@@ -571,20 +571,24 @@ class ScriptService:
             for idx, b in enumerate(raw_beats):
                 default_dur = b.get("estimated_duration_seconds", story_duration_each)
                 dur = float(b.get("target_duration_seconds", default_dur))
-                beats_data.append({
-                    "beat_number": b.get("beat_number", idx + 1),
-                    "beat_type": b.get("beat_type", "context"),
-                    "emotion": b.get("emotion", "neutral"),
-                    "shot_type": b.get("shot_type", "medium"),
-                    "core_point": b.get("core_point", ""),
-                    "visual_direction": b.get("visual_direction", "modern datacenter server room"),
-                    "on_screen_text": b.get("on_screen_text", f"AI STORY {idx + 1}"),
-                    "target_duration_seconds": dur,
-                    "estimated_duration_seconds": dur,
-                    "narration_text": clean_narration_for_tts(
-                        b.get("narration_text", b.get("core_point", ""))
-                    ),
-                })
+                beats_data.append(
+                    {
+                        "beat_number": b.get("beat_number", idx + 1),
+                        "beat_type": b.get("beat_type", "context"),
+                        "emotion": b.get("emotion", "neutral"),
+                        "shot_type": b.get("shot_type", "medium"),
+                        "core_point": b.get("core_point", ""),
+                        "visual_direction": b.get(
+                            "visual_direction", "modern datacenter server room"
+                        ),
+                        "on_screen_text": b.get("on_screen_text", f"AI STORY {idx + 1}"),
+                        "target_duration_seconds": dur,
+                        "estimated_duration_seconds": dur,
+                        "narration_text": clean_narration_for_tts(
+                            b.get("narration_text", b.get("core_point", ""))
+                        ),
+                    }
+                )
             full_narration = parsed.get("full_narration_script") or " ".join(
                 [b["narration_text"] for b in beats_data]
             )
@@ -618,35 +622,41 @@ class ScriptService:
                     c.summary
                     or "Engineers and researchers are actively evaluating the real world impact."
                 )
-                fallback_beats.append({
-                    "beat_number": idx + 2,
-                    "beat_type": "context" if idx % 2 == 0 else "breakthrough",
-                    "emotion": "technical_focus",
-                    "shot_type": "medium",
-                    "core_point": f"Cluster #{c.id}: {c.title}",
-                    "visual_direction": f"Technical visualization depicting {clean_t}",
-                    "on_screen_text": f"STORY {idx + 1} [ID #{c.id}]",
-                    "target_duration_seconds": story_duration_each,
-                    "estimated_duration_seconds": story_duration_each,
-                    "narration_text": (
-                        f"Story number {idx + 1}, Cluster ID {c.id}: {c.title}. {c_summary}"
+                fallback_beats.append(
+                    {
+                        "beat_number": idx + 2,
+                        "beat_type": "context" if idx % 2 == 0 else "breakthrough",
+                        "emotion": "technical_focus",
+                        "shot_type": "medium",
+                        "core_point": f"Cluster #{c.id}: {c.title}",
+                        "visual_direction": f"Technical visualization depicting {clean_t}",
+                        "on_screen_text": f"STORY {idx + 1} [ID #{c.id}]",
+                        "target_duration_seconds": story_duration_each,
+                        "estimated_duration_seconds": story_duration_each,
+                        "narration_text": (
+                            f"Story number {idx + 1}, Cluster ID {c.id}: {c.title}. {c_summary}"
+                        ),
+                    }
+                )
+            fallback_beats.append(
+                {
+                    "beat_number": len(fallback_beats) + 1,
+                    "beat_type": "outro",
+                    "emotion": "humor",
+                    "shot_type": "graphic",
+                    "core_point": "Hit subscribe for daily AI reality checks.",
+                    "visual_direction": (
+                        "Outro card with pulsating subscribe button and channel logo"
                     ),
-                })
-            fallback_beats.append({
-                "beat_number": len(fallback_beats) + 1,
-                "beat_type": "outro",
-                "emotion": "humor",
-                "shot_type": "graphic",
-                "core_point": "Hit subscribe for daily AI reality checks.",
-                "visual_direction": "Outro card with pulsating subscribe button and channel logo",
-                "on_screen_text": "STAY TUNED",
-                "target_duration_seconds": outro_duration,
-                "estimated_duration_seconds": outro_duration,
-                "narration_text": (
-                    "That wraps up today's sequential news roundup. "
-                    "Hit subscribe to stay ahead of the curve."
-                ),
-            })
+                    "on_screen_text": "STAY TUNED",
+                    "target_duration_seconds": outro_duration,
+                    "estimated_duration_seconds": outro_duration,
+                    "narration_text": (
+                        "That wraps up today's sequential news roundup. "
+                        "Hit subscribe to stay ahead of the curve."
+                    ),
+                }
+            )
             beats_data = fallback_beats
             full_narration = " ".join([b["narration_text"] for b in beats_data])
 
@@ -664,4 +674,3 @@ class ScriptService:
             self.article_repo.update_cluster_status(c.id, "scripted")
 
         return script_record
-

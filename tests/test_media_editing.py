@@ -12,7 +12,7 @@ from typer.testing import CliRunner
 from src.cli import app as cli_app
 from src.core.config import settings
 from src.core.database import get_session, init_db
-from src.models.entities import RenderJob, ScriptRecord, StoryCluster
+from src.models.entities import ScriptRecord, StoryCluster
 from src.models.schemas import SentenceMediaPlacement, WordCaption
 from src.repositories.cost_repository import CostRepository
 from src.repositories.render_repository import RenderRepository
@@ -45,7 +45,9 @@ def test_generate_visual_query_concrete_keywords(
     service = MediaService(storage_service=mock_storage, cost_repo=mock_cost_repo)
 
     # Technical sentence with server and compute
-    tech_sentence = "Anthropic deployed thousands of clusters inside their high security data center."
+    tech_sentence = (
+        "Anthropic deployed thousands of clusters inside their high security data center."
+    )
     query, keywords, media_type = service.generate_visual_query(
         sentence_text=tech_sentence,
         beat_info={
@@ -186,9 +188,12 @@ def test_search_and_replace_placement(
     mock_downloaded = tmp_path / "downloaded_new.mp4"
     mock_downloaded.write_bytes(b"mp4_content")
 
-    with patch.object(
-        service, "search_pexels", return_value=("https://pexels.com/new_video.mp4", "mp4")
-    ), patch.object(service, "download_asset", return_value=(True, mock_downloaded)):
+    with (
+        patch.object(
+            service, "search_pexels", return_value=("https://pexels.com/new_video.mp4", "mp4")
+        ),
+        patch.object(service, "download_asset", return_value=(True, mock_downloaded)),
+    ):
         updated = service.search_and_replace_placement(
             job_id=job_id,
             sentence_index=0,

@@ -135,4 +135,3 @@ def test_generate_roundup_script(
     # Beats should have emotion and shot_type
     assert "emotion" in roundup_script.beats[0]
     assert "shot_type" in roundup_script.beats[0]
-

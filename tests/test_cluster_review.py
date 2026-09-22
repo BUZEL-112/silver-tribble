@@ -232,4 +232,3 @@ def test_run_video_pipeline_multi_cluster_dry_run():
     assert int(result["script_id"]) > 0
     assert int(result["job_id"]) > 0
     assert "video_job_" in result["video_path"]
-

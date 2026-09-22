@@ -322,4 +322,3 @@ def test_clusters_and_articles_endpoints() -> None:
     count_data = res_count.json()
     assert "count" in count_data
     assert count_data["count"] >= 1
-

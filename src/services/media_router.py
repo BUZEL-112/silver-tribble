@@ -1,6 +1,7 @@
-"""Visual media router evaluating sentence context to route to Asset Library, Google Search, Pexels, Pixabay, Giphy, FLUX, or Brand Cards."""
+"""Visual media router evaluating sentence context to route to Asset Library,
+Google Search, Pexels, Pixabay, Giphy, FLUX, or Brand Cards.
+"""
 
-import json
 import re
 from pathlib import Path
 from typing import Any, Literal
@@ -19,7 +20,7 @@ from src.services.storage_service import StorageService, get_storage_service
 
 
 class MediaRouter:
-    """Intelligently routes sentence visual requirements across providers and the visual asset library."""
+    """Intelligently routes sentence visual requirements across providers and the asset library."""
 
     # Concrete visual keywords prioritized for stock footage searches
     CONCRETE_VISUAL_MAP: dict[str, str] = {
@@ -87,7 +88,7 @@ class MediaRouter:
         return {}
 
     def extract_core_visual_noun(self, text: str, beat_visual: str = "") -> str:
-        """Derive the single most concrete physical visual noun to avoid 0-result multi-word failures."""
+        """Derive concrete physical visual noun to avoid 0-result multi-word failures."""
         combined = f"{text} {beat_visual}".lower()
         for key, query in self.CONCRETE_VISUAL_MAP.items():
             if re.search(rf"\b{re.escape(key)}\b", combined):
@@ -98,7 +99,12 @@ class MediaRouter:
         self,
         sentence_text: str,
         beat_info: dict[str, Any] | None = None,
-    ) -> tuple[Literal["google_search", "giphy", "pexels_video", "pexels_photo", "brand_card", "ai_generated"], str]:
+    ) -> tuple[
+        Literal[
+            "google_search", "giphy", "pexels_video", "pexels_photo", "brand_card", "ai_generated"
+        ],
+        str,
+    ]:
         """Determine primary visual provider and search query based on routing instructions."""
         lower_sent = sentence_text.lower()
         beat_type = (beat_info or {}).get("beat_type", "context")
@@ -125,10 +131,14 @@ class MediaRouter:
             "llama",
             "tsmc",
         ]
-        has_named_entity = detected_brand is not None or any(e in lower_sent for e in named_entities)
+        has_named_entity = detected_brand is not None or any(
+            e in lower_sent for e in named_entities
+        )
 
         if has_named_entity:
-            query = detected_brand or next((e for e in named_entities if e in lower_sent), sentence_text[:30])
+            query = detected_brand or next(
+                (e for e in named_entities if e in lower_sent), sentence_text[:30]
+            )
             return "google_search", query
 
         # Instruction 2: Skepticism, humor, or dramatic reactions
@@ -150,7 +160,11 @@ class MediaRouter:
             )
         )
         if is_reaction:
-            query = "skeptical eye roll" if "rolling" in lower_sent or "eyes" in lower_sent else "confused reaction"
+            query = (
+                "skeptical eye roll"
+                if "rolling" in lower_sent or "eyes" in lower_sent
+                else "confused reaction"
+            )
             return "giphy", query
 
         # Instruction 3: Abstract, futuristic, or hypothetical concepts for FLUX / AI generation
@@ -197,9 +211,11 @@ class MediaRouter:
         aspect_ratio: str = "9:16",
         media_service_ref: Any = None,
     ) -> SentenceMediaPlacement:
-        """Route sentence through prioritized visual sources, asset library, and multimodal inspection gate."""
+        """Route sentence through prioritized visual sources and multimodal gate."""
         primary_source, initial_query = self.select_source(sentence_text, beat_info)
-        core_noun = self.extract_core_visual_noun(sentence_text, (beat_info or {}).get("visual_direction", ""))
+        core_noun = self.extract_core_visual_noun(
+            sentence_text, (beat_info or {}).get("visual_direction", "")
+        )
         beat_emotion = (beat_info or {}).get("emotion", "neutral")
         beat_shot_type = (beat_info or {}).get("shot_type", "medium")
 
@@ -280,7 +296,9 @@ class MediaRouter:
             brand_key = self.brand_cards.detect_brand(sentence_text)
             if brand_key:
                 dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_card.png"
-                self.brand_cards.generate_card(brand_key, dest, custom_subtitle="Official Tech Intelligence")
+                self.brand_cards.generate_card(
+                    brand_key, dest, custom_subtitle="Official Tech Intelligence"
+                )
                 self._index_asset(
                     source_url="",
                     local_path=str(dest.resolve()),
@@ -359,7 +377,9 @@ class MediaRouter:
         if primary_source == "ai_generated":
             dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_flux.png"
             gen_prompt = initial_query or sentence_text
-            ok, final_path = self.image_gen.generate_image(gen_prompt, dest, aspect_ratio=aspect_ratio)
+            ok, final_path = self.image_gen.generate_image(
+                gen_prompt, dest, aspect_ratio=aspect_ratio
+            )
             if ok:
                 approved, _ = self.inspector.inspect_candidate(
                     sentence_text=sentence_text,
@@ -555,7 +575,8 @@ class MediaRouter:
             self.brand_cards.generate_card(
                 detected_brand,
                 dest,
-                custom_subtitle=(beat_info or {}).get("visual_direction") or "Artificial Intelligence",
+                custom_subtitle=(beat_info or {}).get("visual_direction")
+                or "Artificial Intelligence",
             )
             self._index_asset(
                 source_url="",

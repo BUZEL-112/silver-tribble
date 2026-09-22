@@ -9,8 +9,7 @@ from src.repositories.asset_repository import AssetRepository
 
 
 class CachePruningService:
-    """Safely cleans unindexed temporary media downloads while protecting the visual asset library.
-    """
+    """Safely cleans unindexed temporary media downloads while protecting the asset library."""
 
     def __init__(self, asset_repo: AssetRepository | None = None) -> None:
         self.asset_repo = asset_repo

@@ -155,4 +155,3 @@ class VisualAsset(Base):
     usage_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
     last_used_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
-

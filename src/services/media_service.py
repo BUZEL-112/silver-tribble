@@ -1,6 +1,5 @@
 import json
 import re
-import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Literal
@@ -306,7 +305,11 @@ class MediaService:
             exceeds_word_count = len(current_words) >= 12
 
             # Enforce minimum 1.8s duration to avoid flash frames
-            if (has_terminal_punct and dur >= 1.8) or (has_long_pause and dur >= 1.5) or exceeds_word_count:
+            if (
+                (has_terminal_punct and dur >= 1.8)
+                or (has_long_pause and dur >= 1.5)
+                or exceeds_word_count
+            ):
                 sent_text = " ".join(w.word for w in current_words)
                 sentences.append(
                     {
@@ -344,9 +347,7 @@ class MediaService:
         orientation = "portrait" if aspect_ratio == "9:16" else "landscape"
 
         # Sanitize and condense query into clean keywords
-        clean_words = [
-            w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS
-        ]
+        clean_words = [w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS]
         effective_query = " ".join(clean_words[:4]) if len(clean_words) >= 2 else query
 
         try:
@@ -404,9 +405,7 @@ class MediaService:
         if not self.pixabay_api_key:
             return None
 
-        clean_words = [
-            w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS
-        ]
+        clean_words = [w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS]
         effective_query = "+".join(clean_words[:3]) if clean_words else query
         orientation = "vertical" if aspect_ratio == "9:16" else "horizontal"
 
@@ -483,7 +482,7 @@ class MediaService:
         return None
 
     def download_asset(self, url: str, destination_path: Path) -> tuple[bool, Path]:
-        """Download remote asset to local destination path, transcoding GIFs to MP4 to prevent looping."""
+        """Download remote asset to local path, transcoding GIFs to MP4 to prevent looping."""
         try:
             with httpx.Client(timeout=15.0) as client:
                 resp = client.get(url)
@@ -538,20 +537,17 @@ class MediaService:
         visual_dir = (beat_info or {}).get("visual_direction", "").lower()
 
         # Check if beat or sentence warrants a reaction GIF / meme
-        is_reaction = (
-            beat_type in ["skepticism", "reaction"]
-            or any(
-                p in lower_sent
-                for p in [
-                    "spoiler alert",
-                    "good luck",
-                    "terrible business",
-                    "nobody ever",
-                    "having none of it",
-                    "panicking",
-                    "roller coaster",
-                ]
-            )
+        is_reaction = beat_type in ["skepticism", "reaction"] or any(
+            p in lower_sent
+            for p in [
+                "spoiler alert",
+                "good luck",
+                "terrible business",
+                "nobody ever",
+                "having none of it",
+                "panicking",
+                "roller coaster",
+            ]
         )
 
         if is_reaction and self.giphy_api_key:
@@ -589,21 +585,40 @@ class MediaService:
             for k in ["dario", "amodei", "anthropic", "claude", "altman", "openai", "chatgpt"]
         ):
             return "artificial intelligence neural network data center", extracted_kw, "video"
-        if any(k in lower_sent for k in ["server", "hardware", "infrastructure", "compute", "cluster"]):
+        if any(
+            k in lower_sent for k in ["server", "hardware", "infrastructure", "compute", "cluster"]
+        ):
             return "data center glowing server room", extracted_kw, "video"
-        if any(k in lower_sent for k in ["chip", "semiconductor", "silicon", "transistor", "nanometer"]):
+        if any(
+            k in lower_sent for k in ["chip", "semiconductor", "silicon", "transistor", "nanometer"]
+        ):
             return "semiconductor silicon chip circuit board", extracted_kw, "video"
-        if any(k in lower_sent for k in ["evaluator", "evaluators", "safety", "inspect", "audit", "security"]):
+        if any(
+            k in lower_sent
+            for k in ["evaluator", "evaluators", "safety", "inspect", "audit", "security"]
+        ):
             return "cybersecurity digital security server room", extracted_kw, "video"
-        if any(k in lower_sent for k in ["regulat", "treaties", "agreements", "democratic", "global", "treaty"]):
+        if any(
+            k in lower_sent
+            for k in ["regulat", "treaties", "agreements", "democratic", "global", "treaty"]
+        ):
             return "global digital network connection technology", extracted_kw, "video"
-        if any(k in lower_sent for k in ["robot", "agent", "agents", "autonomous", "superintelligence", "gods"]):
+        if any(
+            k in lower_sent
+            for k in ["robot", "agent", "agents", "autonomous", "superintelligence", "gods"]
+        ):
             return "futuristic humanoid robot artificial intelligence", extracted_kw, "video"
         if any(k in lower_sent for k in ["code", "coding", "software", "developer", "engineer"]):
             return "software developer coding computer screen", extracted_kw, "video"
-        if any(k in lower_sent for k in ["slow", "brake", "brakes", "pause", "speed", "pace", "emergency"]):
+        if any(
+            k in lower_sent
+            for k in ["slow", "brake", "brakes", "pause", "speed", "pace", "emergency"]
+        ):
             return "cyber warning digital technology interface", extracted_kw, "video"
-        if any(k in lower_sent for k in ["money", "billion", "billions", "venture", "market", "gold rush", "trillion"]):
+        if any(
+            k in lower_sent
+            for k in ["money", "billion", "billions", "venture", "market", "gold rush", "trillion"]
+        ):
             return "silicon valley corporate tech meeting", extracted_kw, "video"
         if any(k in lower_sent for k in ["wifi", "wi-fi", "network", "internet", "cloud"]):
             return "digital cloud networking cyber tech", extracted_kw, "video"
@@ -689,28 +704,20 @@ class MediaService:
         except Exception:
             return []
 
-    def save_job_placements(
-        self, job_id: int, placements: list[SentenceMediaPlacement]
-    ) -> Path:
+    def save_job_placements(self, job_id: int, placements: list[SentenceMediaPlacement]) -> Path:
         """Persist placements to disk and sync with existing render_props.json if present."""
         self.media_cache_dir.mkdir(parents=True, exist_ok=True)
         placements_file = self.media_cache_dir / f"placements_job_{job_id}.json"
         placements_data = [p.model_dump() for p in placements]
-        placements_file.write_text(
-            json.dumps(placements_data, indent=2), encoding="utf-8"
-        )
+        placements_file.write_text(json.dumps(placements_data, indent=2), encoding="utf-8")
 
         # Also update render_props if props file exists
-        props_file = (
-            settings.storage_local_dir / "render_props" / f"props_job_{job_id}.json"
-        )
+        props_file = settings.storage_local_dir / "render_props" / f"props_job_{job_id}.json"
         if props_file.exists():
             try:
                 props_dict = json.loads(props_file.read_text(encoding="utf-8"))
                 props_dict["mediaPlacements"] = placements_data
-                props_file.write_text(
-                    json.dumps(props_dict, indent=2), encoding="utf-8"
-                )
+                props_file.write_text(json.dumps(props_dict, indent=2), encoding="utf-8")
             except Exception:
                 pass
 
@@ -766,8 +773,7 @@ class MediaService:
             if not local_p.exists():
                 raise FileNotFoundError(f"Local media file not found: {local_p}")
             dest = (
-                self.media_cache_dir
-                / f"job_{job_id}_sent_{sentence_index}_custom{local_p.suffix}"
+                self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_custom{local_p.suffix}"
             )
             if local_p.resolve() != dest.resolve():
                 import shutil
@@ -823,9 +829,7 @@ class MediaService:
             )
 
         if provider == "pexels":
-            res = self.search_pexels(
-                query=query, media_type=media_type, aspect_ratio=aspect_ratio
-            )
+            res = self.search_pexels(query=query, media_type=media_type, aspect_ratio=aspect_ratio)
             if not res:
                 raise ValueError(f"No Pexels {media_type} found for query '{query}'")
             source_url, ext = res

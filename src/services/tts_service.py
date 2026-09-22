@@ -38,6 +38,7 @@ class TtsService:
         import asyncio
         import concurrent.futures
         import subprocess
+
         import edge_tts
 
         temp_mp3 = output_path.with_suffix(".tmp.mp3")
@@ -140,9 +141,7 @@ class TtsService:
                         response_modalities=["AUDIO"],
                         speech_config=types.SpeechConfig(
                             voice_config=types.VoiceConfig(
-                                prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                                    voice_name=g_voice
-                                )
+                                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=g_voice)
                             )
                         ),
                     ),
@@ -170,12 +169,10 @@ class TtsService:
         # 2. Secondary fallback: edge-tts neural voice
         if not synthesized:
             try:
-                edge_voice = (
-                    voice_name
-                    if "Neural" in voice_name
-                    else "en-US-ChristopherNeural"
+                edge_voice = voice_name if "Neural" in voice_name else "en-US-ChristopherNeural"
+                duration_seconds = self._synthesize_edge_tts(
+                    spoken_text, local_temp_file, edge_voice
                 )
-                duration_seconds = self._synthesize_edge_tts(spoken_text, local_temp_file, edge_voice)
                 provider = "edge_tts"
                 model_name = edge_voice
                 synthesized = True

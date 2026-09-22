@@ -107,7 +107,7 @@ class MediaInspector:
             client = genai.Client(api_key=self.api_key)
             system_instruction = self._load_system_prompt()
             user_prompt = (
-                f"Narration sentence: \"{sentence_text}\"\n"
+                f'Narration sentence: "{sentence_text}"\n'
                 f"Keywords: {', '.join(keywords)}\n"
                 f"Threshold: Minimum score {self.min_score:.1f}/10 to approve.\n"
                 "Evaluate the visual frame against the narration context."
@@ -152,7 +152,7 @@ class MediaInspector:
         """Interactive Human-in-the-Loop review prompt."""
         print("\n" + "=" * 60)
         print(" [HUMAN-IN-THE-LOOP MEDIA INSPECTOR]")
-        print(f" Sentence: \"{sentence_text}\"")
+        print(f' Sentence: "{sentence_text}"')
         print(f" Keywords: {keywords}")
         print(f" Candidate File: {media_path.name} ({media_type})")
         print("=" * 60)

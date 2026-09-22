@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from src.models.schemas import SentenceMediaPlacement, VisualAssetCreate
+from src.models.schemas import VisualAssetCreate
 from src.repositories.asset_repository import AssetRepository
 from src.services.brand_card_service import BrandCardService
 from src.services.image_search_service import ImageSearchService
@@ -56,8 +56,14 @@ def test_core_visual_noun_extraction() -> None:
     router = MediaRouter()
 
     assert router.extract_core_visual_noun("The semiconductor chips are running hot") == "microchip"
-    assert router.extract_core_visual_noun("Deep inside the quantum datacenter building") == "datacenter"
-    assert router.extract_core_visual_noun("A new robotic arm was deployed on the assembly line") == "robot arm"
+    assert (
+        router.extract_core_visual_noun("Deep inside the quantum datacenter building")
+        == "datacenter"
+    )
+    assert (
+        router.extract_core_visual_noun("A new robotic arm was deployed on the assembly line")
+        == "robot arm"
+    )
 
 
 def test_brand_card_generation(tmp_path: Path) -> None:
@@ -124,8 +130,8 @@ def test_router_progressive_photo_fallback(tmp_path: Path) -> None:
     mock_media_svc.pexels_api_key = "fake_key"
     # Pexels Video returns None (0 portrait videos)
     mock_media_svc.search_pexels.side_effect = [
-        None,                                              # Video search fails
-        ("https://pexels.com/photo_datacenter.jpg", "jpg")  # Photo search succeeds
+        None,  # Video search fails
+        ("https://pexels.com/photo_datacenter.jpg", "jpg"),  # Photo search succeeds
     ]
 
     mock_inspector = MagicMock(spec=MediaInspector)
@@ -187,7 +193,11 @@ def test_asset_library_reuse(tmp_path: Path, asset_repo: AssetRepository) -> Non
         sentence_text="The server room is filled with rows of computing racks.",
         start_time=0.0,
         end_time=5.0,
-        beat_info={"beat_type": "technical_breakdown", "emotion": "technical_focus", "visual_direction": "server room"},
+        beat_info={
+            "beat_type": "technical_breakdown",
+            "emotion": "technical_focus",
+            "visual_direction": "server room",
+        },
         used_urls=set(),
     )
 
@@ -240,7 +250,11 @@ def test_flux_image_generation_routing(tmp_path: Path) -> None:
 
     source, query = router.select_source(
         "A superintelligence singularity emerges inside the futuristic quantum core.",
-        beat_info={"beat_type": "breakthrough", "emotion": "awe", "visual_direction": "futuristic quantum core"},
+        beat_info={
+            "beat_type": "breakthrough",
+            "emotion": "awe",
+            "visual_direction": "futuristic quantum core",
+        },
     )
     assert source == "ai_generated"
     assert "quantum" in query.lower() or "singularity" in query.lower()
@@ -252,9 +266,12 @@ def test_flux_image_generation_routing(tmp_path: Path) -> None:
         sentence_text="A superintelligence singularity emerges inside the futuristic quantum core.",
         start_time=0.0,
         end_time=4.5,
-        beat_info={"beat_type": "breakthrough", "emotion": "awe", "visual_direction": "futuristic quantum core"},
+        beat_info={
+            "beat_type": "breakthrough",
+            "emotion": "awe",
+            "visual_direction": "futuristic quantum core",
+        },
         used_urls=set(),
     )
     assert placement.provider == "flux_generation"
     assert Path(placement.local_path).exists()
-

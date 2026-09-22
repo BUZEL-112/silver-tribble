@@ -70,7 +70,7 @@ class CaptionService:
         local_audio_path = self.storage_service.get_local_path(audio_path_or_url)
         captions: list[WordCaption] = []
 
-        PROPER_NOUN_CORRECTIONS = {
+        proper_noun_corrections = {
             "amade": "Amodei",
             "amadei": "Amodei",
             "amadi": "Amodei",
@@ -83,6 +83,9 @@ class CaptionService:
             "wifi": "Wi-Fi",
             "passports": "passwords",
             "passport": "password",
+            "chatgpt": "ChatGPT",
+            "claude": "Claude",
+            "gemini": "Gemini",
         }
 
         allowed_compounds = {
@@ -125,7 +128,11 @@ class CaptionService:
                             ):
                                 punct = re.search(r"[.,!?:;]+$", clean_word)
                                 trailing = punct.group(0) if punct else ""
-                                captions[-1].word = f"{captions[-1].word.rstrip('.,!?:;')}-{next_base}{trailing}"
+                                captions[
+                                    -1
+                                ].word = (
+                                    f"{captions[-1].word.rstrip('.,!?:;')}-{next_base}{trailing}"
+                                )
                                 captions[-1].end = round(w.end, 2)
                                 continue
                             else:
@@ -133,8 +140,8 @@ class CaptionService:
 
                         # Correct acoustic misrecognitions and proper nouns
                         base_w = re.sub(r"[^\w]", "", clean_word.lower())
-                        if base_w in PROPER_NOUN_CORRECTIONS:
-                            correct = PROPER_NOUN_CORRECTIONS[base_w]
+                        if base_w in proper_noun_corrections:
+                            correct = proper_noun_corrections[base_w]
                             punct = re.search(r"[.,!?:;]+$", clean_word)
                             clean_word = f"{correct}{punct.group(0)}" if punct else correct
 

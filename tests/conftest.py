@@ -77,4 +77,3 @@ def action_repo(db_session: Session) -> ActionLogRepository:
 @pytest.fixture
 def asset_repo(db_session: Session) -> AssetRepository:
     return AssetRepository(db_session)
-

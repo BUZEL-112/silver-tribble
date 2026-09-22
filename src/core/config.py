@@ -222,7 +222,9 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
                 flat["prompts_writing_file"] = p["writing"]["file"]
         if "media_inspector" in p and isinstance(p["media_inspector"], dict):
             if "system_prompt" in p["media_inspector"]:
-                flat["prompts_media_inspector_system_prompt"] = p["media_inspector"]["system_prompt"]
+                flat["prompts_media_inspector_system_prompt"] = p["media_inspector"][
+                    "system_prompt"
+                ]
             if "file" in p["media_inspector"]:
                 flat["prompts_media_inspector_file"] = p["media_inspector"]["file"]
 
@@ -355,7 +357,9 @@ class Settings(BaseSettings):
         default="gemini",
         description="TTS voice synthesis provider priority: gemini, edge_tts, or auto",
     )
-    google_cse_api_key: str | None = Field(default=None, description="Google Custom Search JSON API key")
+    google_cse_api_key: str | None = Field(
+        default=None, description="Google Custom Search JSON API key"
+    )
     google_cse_cx: str | None = Field(default=None, description="Google Custom Search Engine CX ID")
     serpapi_api_key: str | None = Field(default=None, description="SerpApi key for Google Images")
 

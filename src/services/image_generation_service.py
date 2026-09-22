@@ -1,7 +1,5 @@
 """Image generation service supporting FLUX, Gemini Imagen, and local procedural rendering."""
 
-import io
-import json
 from pathlib import Path
 from typing import Literal
 

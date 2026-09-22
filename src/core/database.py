@@ -76,7 +76,9 @@ def init_db(target_engine=None) -> None:
                 if res:
                     col_names = [r[1] for r in res]
                     if "cluster_ids" not in col_names:
-                        conn.execute(text("ALTER TABLE scripts ADD COLUMN cluster_ids JSON DEFAULT '[]'"))
+                        conn.execute(
+                            text("ALTER TABLE scripts ADD COLUMN cluster_ids JSON DEFAULT '[]'")
+                        )
                         conn.commit()
             except Exception:
                 pass

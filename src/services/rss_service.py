@@ -45,13 +45,17 @@ class RssService:
         self.feeds = feeds or getattr(settings, "rss_feeds", DEFAULT_AI_FEEDS)
 
     def clean_html(self, raw_html: str) -> str:
-        """Strip HTML tags, unescape entities, remove marketing boilerplate, and condense whitespace."""
+        """Strip HTML tags, unescape entities, remove boilerplate, and condense whitespace."""
         if not raw_html:
             return ""
         text = html.unescape(raw_html)
         text = re.sub(r"<[^>]+>", " ", text)
+        newsletter_pat = (
+            r"This story appeared in [^.]*(?:newsletter|AI)[^.]*\."
+            r"(?:\s*To get stories like this in your inbox first,?\s*sign up here\.?)?"
+        )
         boilerplate_patterns = [
-            r"This story appeared in [^.]*(?:newsletter|AI)[^.]*\.(?:\s*To get stories like this in your inbox first,?\s*sign up here\.?)?",
+            newsletter_pat,
             r"Sign up (?:for|to) [^.]*\.",
             r"To get stories like this in your inbox[^.]*\.",
             r"Subscribe to [^.]*\.",
@@ -81,7 +85,17 @@ class RssService:
         from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
         parsed = urlparse(url.strip())
-        tracking_prefixes = {"utm_", "fbclid", "gclid", "ref", "source", "rss", "feed", "mc_cid", "mc_eid"}
+        tracking_prefixes = {
+            "utm_",
+            "fbclid",
+            "gclid",
+            "ref",
+            "source",
+            "rss",
+            "feed",
+            "mc_cid",
+            "mc_eid",
+        }
         filtered_queries = [
             (k, v)
             for k, v in parse_qsl(parsed.query, keep_blank_values=False)

@@ -17,6 +17,7 @@ def get_test_env() -> dict[str, str]:
     """Provide environment dictionary with SQLite DATABASE_URL and PYTHONPATH for subprocesses."""
     env = dict(os.environ)
     env["DATABASE_URL"] = env.get("DATABASE_URL", "sqlite:///test.db")
+    env["TTS_MOCK"] = "1"
     repo_root = str(Path(__file__).resolve().parent.parent)
     env["PYTHONPATH"] = f"{repo_root}:{env.get('PYTHONPATH', '')}".rstrip(":")
     return env

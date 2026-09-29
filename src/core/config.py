@@ -104,6 +104,10 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             "giphy_api_key",
             "flux_api_key",
             "flux_endpoint",
+            "local_tts_endpoint",
+            "local_tts_path",
+            "local_tts_model",
+            "local_tts_voice",
         ]:
             if k in p:
                 flat[k] = p[k]
@@ -111,6 +115,45 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             flat["image_generation_provider"] = p["image_generation_provider"]
         if "tts_provider" in p:
             flat["tts_provider"] = p["tts_provider"]
+        if "tts_endpoint" in p:
+            flat["local_tts_endpoint"] = p["tts_endpoint"]
+        if "tts_path" in p:
+            flat["local_tts_path"] = p["tts_path"]
+
+    # 5.1. Dedicated TTS section
+    if "tts" in data and isinstance(data["tts"], dict):
+        t = data["tts"]
+        if "provider" in t:
+            flat["tts_provider"] = t["provider"]
+        if "endpoint" in t:
+            flat["local_tts_endpoint"] = t["endpoint"]
+        if "local_endpoint" in t:
+            flat["local_tts_endpoint"] = t["local_endpoint"]
+        if "path" in t:
+            flat["local_tts_path"] = t["path"]
+        if "local_path" in t:
+            flat["local_tts_path"] = t["local_path"]
+        if "model_path" in t:
+            flat["local_tts_path"] = t["model_path"]
+        if "model" in t:
+            flat["local_tts_model"] = t["model"]
+        if "voice" in t:
+            flat["local_tts_voice"] = t["voice"]
+        if "timeout" in t:
+            flat["local_tts_timeout"] = float(t["timeout"])
+
+    if "local_tts" in data and isinstance(data["local_tts"], dict):
+        lt = data["local_tts"]
+        if "endpoint" in lt:
+            flat["local_tts_endpoint"] = lt["endpoint"]
+        if "path" in lt:
+            flat["local_tts_path"] = lt["path"]
+        if "model" in lt:
+            flat["local_tts_model"] = lt["model"]
+        if "voice" in lt:
+            flat["local_tts_voice"] = lt["voice"]
+        if "timeout" in lt:
+            flat["local_tts_timeout"] = float(lt["timeout"])
 
     # 6. Storage section
     if "storage" in data and isinstance(data["storage"], dict):
@@ -405,9 +448,29 @@ class Settings(BaseSettings):
         default="flux",
         description="Image generation provider backend",
     )
-    tts_provider: Literal["gemini", "edge_tts", "auto"] = Field(
+    tts_provider: Literal["gemini", "edge_tts", "local", "auto"] = Field(
         default="gemini",
-        description="TTS voice synthesis provider priority: gemini, edge_tts, or auto",
+        description="TTS voice synthesis provider priority: gemini, edge_tts, local, or auto",
+    )
+    local_tts_endpoint: str = Field(
+        default="http://localhost:8880/v1/audio/speech",
+        description="Endpoint URL for local HTTP TTS server (e.g. Kokoro, Piper, or OpenAI-compatible server)",
+    )
+    local_tts_path: str = Field(
+        default="",
+        description="Filesystem path to local TTS model weights, ONNX file, or binary (e.g. Piper model)",
+    )
+    local_tts_model: str = Field(
+        default="kokoro",
+        description="Model name or architecture for local TTS provider (e.g. kokoro, piper)",
+    )
+    local_tts_voice: str = Field(
+        default="af_heart",
+        description="Default voice identifier for local TTS provider",
+    )
+    local_tts_timeout: float = Field(
+        default=60.0,
+        description="Timeout in seconds for local TTS synthesis requests",
     )
     google_cse_api_key: str | None = Field(
         default=None, description="Google Custom Search JSON API key"

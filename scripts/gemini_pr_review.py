@@ -159,7 +159,7 @@ def build_review_prompt(
 def call_gemini_api(
     prompt: str,
     api_key: str,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-3.8-flash",
 ) -> str:
     """Call Google Gemini API using google-genai SDK.
 
@@ -173,15 +173,33 @@ def call_gemini_api(
     """
     try:
         from google import genai
+        from google.genai import types
 
         client = genai.Client(api_key=api_key)
+        config = types.GenerateContentConfig(
+            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True)
+        )
         response = client.models.generate_content(
             model=model_name,
             contents=prompt,
+            config=config,
         )
         return response.text or ""
     except Exception as err:
-        logger.error("Gemini API call failed: %s", err)
+        logger.error("Gemini API call failed for model %s: %s", model_name, err)
+        fallback_models = ["gemini-3.8-flash", "gemini-2.0-flash"]
+        for fallback in fallback_models:
+            if fallback != model_name:
+                logger.info("Attempting fallback to model %s...", fallback)
+                try:
+                    response = client.models.generate_content(
+                        model=fallback,
+                        contents=prompt,
+                        config=config,
+                    )
+                    return response.text or ""
+                except Exception as fallback_err:
+                    logger.warning("Fallback model %s failed: %s", fallback, fallback_err)
         raise
 
 
@@ -250,7 +268,7 @@ def run_pr_review(
     head_ref: str = "HEAD",
     pr_number: int | None = None,
     repo: str | None = None,
-    model_name: str = "gemini-2.5-flash",
+    model_name: str = "gemini-3.8-flash",
     styleguide_path: Path | None = None,
     pr_title: str = "",
     pr_body: str = "",
@@ -357,7 +375,7 @@ def parse_args(args: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("GEMINI_MODEL", "gemini-2.5-flash"),
+        default=os.environ.get("GEMINI_MODEL", "gemini-3.8-flash"),
         help="Gemini model to use for review.",
     )
     parser.add_argument(

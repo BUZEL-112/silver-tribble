@@ -84,7 +84,9 @@ def get_git_diff(base_ref: str, head_ref: str = "HEAD", max_chars: int = 50000) 
             diff_text = fallback.stdout.strip()
         except (subprocess.CalledProcessError, FileNotFoundError) as fallback_err:
             logger.error("Failed to extract git diff: %s", fallback_err)
-            return ""
+            raise RuntimeError(
+                f"Failed to extract git diff between {base_ref} and {head_ref}: {fallback_err}"
+            ) from fallback_err
 
     if len(diff_text) > max_chars:
         logger.info("Diff truncated from %d to %d characters.", len(diff_text), max_chars)
@@ -297,7 +299,12 @@ def run_pr_review(
         )
         return 0
 
-    diff = get_git_diff(base_ref, head_ref)
+    try:
+        diff = get_git_diff(base_ref, head_ref)
+    except Exception as err:
+        logger.error("Failed to extract diff for review: %s", err)
+        return 1
+
     if not diff:
         logger.info("No code diff found between %s and %s. Skipping review.", base_ref, head_ref)
         return 0

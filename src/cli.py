@@ -318,7 +318,11 @@ def config_llm(
 def config_tts(
     provider: Annotated[
         str | None,
-        typer.Option("--provider", "-p", help="Set default TTS provider (gemini, edge_tts, local, auto)"),
+        typer.Option(
+            "--provider",
+            "-p",
+            help="Set default TTS provider (gemini, edge_tts, local, auto)",
+        ),
     ] = None,
     endpoint: Annotated[
         str | None,
@@ -340,6 +344,14 @@ def config_tts(
     """View or configure local TTS model provider endpoint and path."""
     updates: dict[str, str] = {}
     if provider:
+        allowed_providers = {"gemini", "edge_tts", "local", "auto"}
+        if provider not in allowed_providers:
+            allowed_list = ", ".join(sorted(allowed_providers))
+            console.print(
+                f"[bold red]Invalid provider '{provider}'. "
+                f"Must be one of: {allowed_list}[/bold red]"
+            )
+            raise typer.BadParameter(f"Must be one of: {allowed_list}")
         updates["TTS_PROVIDER"] = provider
         settings.tts_provider = provider  # type: ignore[assignment]
     if endpoint:
@@ -357,7 +369,8 @@ def config_tts(
 
     if updates:
         update_env_file(updates)
-        console.print(f"[bold green]Updated {len(updates)} TTS setting(s) in .env file.[/bold green]")
+        count = len(updates)
+        console.print(f"[bold green]Updated {count} TTS setting(s) in .env file.[/bold green]")
 
     table = Table(title="Active TTS Configuration")
     table.add_column("Parameter", style="cyan")
@@ -995,7 +1008,11 @@ def voice(
     ] = "9:16",
     tts_provider: Annotated[
         str | None,
-        typer.Option("--tts-provider", "-p", help="TTS provider override (gemini, edge_tts, local, auto)"),
+        typer.Option(
+            "--tts-provider",
+            "-p",
+            help="TTS provider override (gemini, edge_tts, local, auto)",
+        ),
     ] = None,
     local_endpoint: Annotated[
         str | None,

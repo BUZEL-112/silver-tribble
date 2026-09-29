@@ -6,6 +6,8 @@ import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from scripts.gemini_pr_review import (
     build_review_prompt,
     get_git_diff,
@@ -53,10 +55,20 @@ def test_get_git_diff_truncation() -> None:
 
 
 def test_get_git_diff_failure() -> None:
-    """Command failure in git diff should fall back and return empty string if both fail."""
-    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])):
-        diff = get_git_diff("origin/main", "HEAD")
-        assert diff == ""
+    """Command failure in git diff should raise RuntimeError when diff fails."""
+    with (
+        patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, ["git"])),
+        pytest.raises(RuntimeError),
+    ):
+        get_git_diff("origin/main", "HEAD")
+
+
+def test_run_pr_review_diff_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Workflow should return 1 when git diff extraction raises an error."""
+    monkeypatch.setenv("GEMINI_API_KEY", "test_key")
+    with patch("scripts.gemini_pr_review.get_git_diff", side_effect=RuntimeError("git failed")):
+        status = run_pr_review(base_ref="origin/main")
+        assert status == 1
 
 
 def test_build_review_prompt() -> None:

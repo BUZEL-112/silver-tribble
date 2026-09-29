@@ -136,11 +136,11 @@ sequenceDiagram
 - **Provider Architecture**:
   - **Primary Provider**: Google Gemini 2.0 Flash Audio (`gemini-2.0-flash` with prebuilt voices such as `Puck`).
   - **Secondary Fallback**: Edge TTS (`edge-tts` neural voices such as `en-US-ChristopherNeural`, standardized to 24kHz mono WAV via `ffmpeg`).
-  - **Current Tertiary Fallback**: Calibrated synthetic silent `.wav` placeholder generation for offline testing.
+  - **Configurable Local Provider**: Local endpoint / binary TTS provider (`src/services/local_tts_provider.py` supporting Kokoro, Piper, or local HTTP audio servers).
+  - **Fail-Fast Policy**: Silent synthetic placeholder generation has been removed. If synthesis fails across all configured providers, the service raises an explicit exception.
 - **Caption Synchronization**:
   - Integrates with the speech-to-text caption service using Faster-Whisper to extract word-level timestamps (`start`, `end`, `confidence`) for kinetic subtitle rendering.
 - **Planned Refinements and Roadmap**:
-  - Replace the silent synthetic audio fallback with a configurable endpoint-level local TTS model provider (e.g. Kokoro, Piper, or a local audio endpoint).
   - Add host voice cloning support using provided audio sample recordings of the host persona.
 
 ## Visual Artifact Gathering
@@ -268,7 +268,8 @@ silver-tribble/
 │   │   ├── script_service.py        # Two-stage beat sheet and dialogue expansion
 │   │   ├── script_auditor_service.py # Pacing and hook quality retention auditing
 │   │   ├── cluster_review_service.py # Interactive cluster selection gate
-│   │   ├── tts_service.py           # Voice synthesis (Gemini, Edge TTS, synthetic)
+│   │   ├── tts_service.py           # Voice synthesis (Gemini, Edge TTS, local)
+│   │   ├── local_tts_provider.py    # Local endpoint and binary TTS adapter (Kokoro, Piper)
 │   │   ├── caption_service.py       # Whisper speech-to-text word alignment
 │   │   ├── subtitle_service.py      # SRT and WebVTT subtitle formatting
 │   │   ├── media_service.py         # Visual asset placement and cache manager

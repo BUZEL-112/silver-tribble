@@ -189,7 +189,7 @@ This repository includes automated PR reviews using both CodeRabbit and Google G
 
 CodeRabbit provides AI-powered pull request reviews with inline suggestions, architectural checks, and Ruff integration.
 
-- Configuration File: [`.coderabbit.yaml`](file:///teamspace/studios/this_studio/silver-tribble/.coderabbit.yaml)
+- Configuration File: [`.coderabbit.yaml`](.coderabbit.yaml)
 - Setup:
   1. Install the [CodeRabbit GitHub App](https://github.com/marketplace/coderabbitai) on the repository.
   2. CodeRabbit reads `.coderabbit.yaml` automatically on every pull request.
@@ -201,12 +201,12 @@ CodeRabbit provides AI-powered pull request reviews with inline suggestions, arc
 Gemini Code Assist evaluates PRs against the project architecture standards and styleguide.
 
 - Native Configuration:
-  - [`.gemini/config.yaml`](file:///teamspace/studios/this_studio/silver-tribble/.gemini/config.yaml): Review ignore patterns and settings.
-  - [`.gemini/styleguide.md`](file:///teamspace/studios/this_studio/silver-tribble/.gemini/styleguide.md): Architectural rules, SOLID principles, and review guidelines.
-  - [`GEMINI.md`](file:///teamspace/studios/this_studio/silver-tribble/GEMINI.md): High-level context and repository overview.
+  - [`.gemini/config.yaml`](.gemini/config.yaml): Review ignore patterns and settings.
+  - [`.gemini/styleguide.md`](.gemini/styleguide.md): Architectural rules, SOLID principles, and review guidelines.
+  - [`GEMINI.md`](GEMINI.md): High-level context and repository overview.
 - GitHub Actions Workflow:
-  - Workflow file: [`.github/workflows/gemini-code-review.yml`](file:///teamspace/studios/this_studio/silver-tribble/.github/workflows/gemini-code-review.yml)
-  - Runner script: [`scripts/gemini_pr_review.py`](file:///teamspace/studios/this_studio/silver-tribble/scripts/gemini_pr_review.py)
+  - Workflow file: [`.github/workflows/gemini-code-review.yml`](.github/workflows/gemini-code-review.yml)
+  - Runner script: [`scripts/gemini_pr_review.py`](scripts/gemini_pr_review.py)
   - Setup:
     1. Obtain a Gemini API key from [Google AI Studio](https://aistudio.google.com/).
     2. Add `GEMINI_API_KEY` to repository secrets under Settings > Secrets and variables > Actions > New repository secret.

@@ -314,6 +314,64 @@ def config_llm(
                 console.print(f"[bold red][FAIL] Failed:[/bold red] {role} ('{model}'): {e}")
 
 
+@app.command(name="config-tts")
+def config_tts(
+    provider: Annotated[
+        str | None,
+        typer.Option("--provider", "-p", help="Set default TTS provider (gemini, edge_tts, local, auto)"),
+    ] = None,
+    endpoint: Annotated[
+        str | None,
+        typer.Option("--endpoint", "-e", help="Set local TTS endpoint URL"),
+    ] = None,
+    path: Annotated[
+        str | None,
+        typer.Option("--path", help="Set local TTS model or binary path"),
+    ] = None,
+    model: Annotated[
+        str | None,
+        typer.Option("--model", "-m", help="Set local TTS model name"),
+    ] = None,
+    voice: Annotated[
+        str | None,
+        typer.Option("--voice", "-v", help="Set local TTS voice name"),
+    ] = None,
+) -> None:
+    """View or configure local TTS model provider endpoint and path."""
+    updates: dict[str, str] = {}
+    if provider:
+        updates["TTS_PROVIDER"] = provider
+        settings.tts_provider = provider  # type: ignore[assignment]
+    if endpoint:
+        updates["LOCAL_TTS_ENDPOINT"] = endpoint
+        settings.local_tts_endpoint = endpoint
+    if path:
+        updates["LOCAL_TTS_PATH"] = path
+        settings.local_tts_path = path
+    if model:
+        updates["LOCAL_TTS_MODEL"] = model
+        settings.local_tts_model = model
+    if voice:
+        updates["LOCAL_TTS_VOICE"] = voice
+        settings.local_tts_voice = voice
+
+    if updates:
+        update_env_file(updates)
+        console.print(f"[bold green]Updated {len(updates)} TTS setting(s) in .env file.[/bold green]")
+
+    table = Table(title="Active TTS Configuration")
+    table.add_column("Parameter", style="cyan")
+    table.add_column("Current Value", style="white")
+    table.add_column("Environment Variable", style="dim")
+
+    table.add_row("TTS Provider", settings.tts_provider, "TTS_PROVIDER")
+    table.add_row("Local Endpoint URL", settings.local_tts_endpoint, "LOCAL_TTS_ENDPOINT")
+    table.add_row("Local Model/Binary Path", settings.local_tts_path or "(none)", "LOCAL_TTS_PATH")
+    table.add_row("Local Model Name", settings.local_tts_model, "LOCAL_TTS_MODEL")
+    table.add_row("Local Voice", settings.local_tts_voice, "LOCAL_TTS_VOICE")
+    console.print(table)
+
+
 @app.command()
 def setup_db() -> None:
     """Initialize database tables and extensions."""
@@ -935,6 +993,22 @@ def voice(
     aspect_ratio: Annotated[
         str, typer.Option("--aspect-ratio", "-a", help="9:16 or 16:9")
     ] = "9:16",
+    tts_provider: Annotated[
+        str | None,
+        typer.Option("--tts-provider", "-p", help="TTS provider override (gemini, edge_tts, local, auto)"),
+    ] = None,
+    local_endpoint: Annotated[
+        str | None,
+        typer.Option("--local-endpoint", "-e", help="Local TTS endpoint URL override"),
+    ] = None,
+    local_path: Annotated[
+        str | None,
+        typer.Option("--local-path", help="Local TTS model or binary path override"),
+    ] = None,
+    voice_name: Annotated[
+        str | None,
+        typer.Option("--voice-name", "-v", help="TTS voice name override"),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
     actor: Annotated[
         str, typer.Option("--actor", help="Actor identifier for action logging")
@@ -971,8 +1045,22 @@ def voice(
         ):
             if not as_json:
                 console.print(f"[cyan]Synthesizing TTS audio for script #{script_id}...[/cyan]")
-            tts = TtsService(storage, cost_repo)
-            audio_path, duration = tts.synthesize_speech(script_record.full_narration, job.id)
+            tts = TtsService(
+                storage,
+                cost_repo,
+                tts_provider=tts_provider,
+                local_endpoint=local_endpoint,
+                local_path=local_path,
+                local_voice=voice_name,
+            )
+            eff_voice = voice_name or (
+                settings.local_tts_voice if tts.tts_provider == "local" else "Puck"
+            )
+            audio_path, duration = tts.synthesize_speech(
+                script_record.full_narration,
+                job.id,
+                voice_name=eff_voice,
+            )
             render_repo.update_job_audio(job.id, audio_path, duration)
 
             if not as_json:

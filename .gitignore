@@ -26,8 +26,9 @@ venv/
 .venv/
 env/
 .env
-config.yaml
+/config.yaml
 config/config.yaml
+!/.gemini/config.yaml
 
 # Database and Storage
 *.db

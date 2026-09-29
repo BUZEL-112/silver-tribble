@@ -1,0 +1,52 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "en-US"
+tone_instructions: >-
+  Maintain a professional, objective, and constructive tone.
+  Focus on architectural integrity, single responsibility principle (SRP),
+  separation of concerns, explicit typing, and maintainability.
+  Do not use emojis or em-dashes in reviews or comments.
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  auto_review:
+    enabled: true
+    drafts: false
+    auto_incremental_review: true
+  path_filters:
+    - "!poetry.lock"
+    - "!uv.lock"
+    - "!*.egg-info/**"
+    - "!remotion/node_modules/**"
+    - "!remotion/out/**"
+    - "!remotion/dist/**"
+    - "!data/**"
+    - "!output/**"
+    - "!artifacts/**"
+    - "!scratch/**"
+    - "!*.db*"
+    - "!**/*.pyc"
+  path_instructions:
+    - path: "src/**"
+      instructions: >-
+        Ensure adherence to the following project standards:
+        1. Single Responsibility Principle (SRP): Each function, class, and module must have one clear responsibility.
+        2. Separation of Concerns: Strict layering must be respected (API/Routes -> Services -> Repositories -> Models).
+           Business logic must live in services, not in API handlers or database models.
+        3. Explicit is better than implicit: Add type hints to all public functions, methods, and classes.
+        4. DRY, KISS, and YAGNI: Avoid duplicated logic and premature abstractions. Keep functions small and focused.
+        5. Fail fast: Validate inputs early and raise specific, descriptive exceptions.
+        6. Conventions: Adhere to Ruff linting and formatting rules. Avoid emojis and em-dashes in messages and docstrings.
+    - path: "tests/**"
+      instructions: >-
+        Ensure tests focus on behavior rather than implementation details.
+        Use pytest conventions and pytest-asyncio for asynchronous functions.
+        Ensure mocks isolate external APIs without over-mocking core logic.
+  tools:
+    ruff:
+      enabled: true
+    github-checks:
+      enabled: true
+chat:
+  auto_reply: true

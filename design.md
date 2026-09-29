@@ -1,10 +1,88 @@
 # System Explanation and Design
 
-## Ingestion
+## Overview
+
+The AI News to Video Pipeline automatically transforms trending AI research papers, industry announcements, and tech news into high-retention short-form videos (9:16 vertical shorts or 16:9 widescreen). The system ingests RSS feeds, normalizes articles, computes semantic vector embeddings, clusters related news stories, plans structured narrative beat sheets, synthesizes conversational host narration, retrieves context-aligned visual assets (b-roll videos, GIFs, entity photos, SVG brand cards), and renders final motion graphics via Remotion.
+
+## System Flow
+
+### Component Flowchart
+
+```mermaid
+flowchart TD
+    RSS["RSS Feed Sources (ArXiv, TechCrunch, OpenAI, Google)"] --> IngestionSvc["Ingestion Service (RssService)"]
+    IngestionSvc --> DB[("PostgreSQL / SQLite Database")]
+    
+    DB --> ClusterSvc["Clustering Service (ClusteringService)"]
+    ClusterSvc --> EmbeddingModel["Embedding Model (FastEmbed / Gemini / OpenAI)"]
+    EmbeddingModel --> ClusterSvc
+    ClusterSvc --> StoryClusters[("Story Clusters")]
+    
+    StoryClusters --> ReviewGate["Interactive Review Gate (ClusterReviewService)"]
+    ReviewGate --> ScriptSvc["Script Service (ScriptService)"]
+    
+    ScriptSvc --> Stage1["Stage 1: Beat Sheet Planning (LLM)"]
+    Stage1 --> Stage2["Stage 2: Host Persona Dialogue Expansion (LLM)"]
+    Stage2 --> ScriptRecord[("Script Record")]
+    
+    ScriptRecord --> TTSSvc["Voice Generation (TtsService)"]
+    TTSSvc --> AudioWAV["Audio WAV File"]
+    
+    AudioWAV --> CaptionSvc["Caption Alignment (CaptionService / Whisper)"]
+    CaptionSvc --> TimestampsJSON["Word Timestamps JSON"]
+    
+    ScriptRecord --> MediaSvc["Visual Asset Gathering (MediaService & MediaRouter)"]
+    MediaSvc --> Providers["Media Providers (Pexels, Giphy, Google Images, FLUX.1)"]
+    Providers --> MediaCache["Cached Visual Assets"]
+    
+    AudioWAV --> RenderSvc["Render Engine (RenderService & Remotion)"]
+    TimestampsJSON --> RenderSvc
+    MediaCache --> RenderSvc
+    RenderSvc --> FinalMP4["Final Exported Video (.mp4)"]
+```
+
+### Execution Sequence Diagram
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User / Operator
+    participant CLI as CLI / Web Dashboard
+    participant Flow as Pipeline Workflow
+    participant Ingest as RssService
+    participant Cluster as ClusteringService
+    participant Script as ScriptService
+    participant TTS as TtsService
+    participant Caption as CaptionService
+    participant Media as MediaService
+    participant Render as RenderService
+    participant Storage as DB & Storage
+    
+    User->>CLI: Trigger pipeline run
+    CLI->>Flow: Initiate pipeline flow
+    Flow->>Ingest: Fetch & parse RSS feeds
+    Ingest->>Storage: Save deduplicated raw articles
+    Flow->>Cluster: Compute embeddings & cosine clustering
+    Cluster->>Storage: Save StoryClusters
+    Flow->>Script: Generate beat sheet & dialogue
+    Script->>Storage: Save ScriptRecord
+    Flow->>TTS: Synthesize voice narration
+    TTS->>Storage: Save narration audio (.wav)
+    Flow->>Caption: Transcribe & align word timestamps
+    Caption->>Storage: Save word captions (.json)
+    Flow->>Media: Retrieve b-roll & visual assets
+    Media->>Storage: Cache media assets
+    Flow->>Render: Compile props & execute Remotion render
+    Render->>Storage: Export final video (.mp4)
+    Render-->>CLI: Return exported video path
+    CLI-->>User: Present finished video artifact
+```
+
+### Ingestion
 
 - **Feed Parsing**: Ingest a configured list of RSS feeds across major AI news sources (such as ArXiv, TechCrunch, OpenAI, Google, Anthropic), using dedicated parsers to convert each feed into a unified structured format.
 - **Time Window Filtering**: Support a configurable time limit to extract articles published only within a specific timeframe.
-- **Deduplication and Storage**: Deduplicate records by URL link and persist articles in PostgreSQL via `ArticleRepository`.
+- **Deduplication and Storage**: Deduplicate records by URL link and persist articles in PostgreSQL via the article database repository.
 - **Database Schema**:
   - `title`: Article title
   - `info`: Summary or content details
@@ -21,7 +99,7 @@
 - **Pairwise Cosine Similarity**: Normalizes vectors and calculates an all-pairs cosine similarity matrix (`S = V . V^T`) to evaluate semantic relationships among ingested articles.
 - **Connected Component Clustering**: Iterates through the similarity matrix with a configurable threshold (`similarity_threshold: 0.82`) to group related articles covering the same news topic into cohesive story clusters.
 - **Downstream Cluster Handoff**: Each identified cluster is assigned a unique `cluster_id` and an ordered list of member article IDs. The `cluster_id` is passed downstream to subsequent stages (such as script generation and roundups).
-- **Database Schema and Tracking (`StoryCluster`)**:
+- **Database Schema and Tracking (Story Cluster)**:
   - `id`: Cluster index identifier (primary key passed downstream)
   - `cluster_hash`: Deterministic SHA-256 hash of sorted member article IDs
   - `title`: Primary headline representing the story
@@ -35,13 +113,13 @@
 
 ## Script Creation
 
-- **Overview**: Driven by configurable YAML prompt templates (`prompts/beat_sheet.yaml` and `prompts/eswar_host_persona.yaml`), this stage uses LLM prompt instructions to plan both the visual framing (b-roll directions and lower-third text) and the narration text for the video.
+- **Overview**: Driven by configurable YAML prompt templates, this stage uses LLM prompt instructions to plan both the visual framing (b-roll directions and lower-third text) and the narration text for the video.
 - **Two-Stage Architecture**:
   - **Stage 1: Narrative Beat Sheet Planning**: Takes the `cluster_id` and article data to construct a 5-beat story outline using a structured narrative framework: *Hook*, *Context*, *Technical Breakdown*, *Skepticism/Reaction*, and *Outro*. Editorial focus or story framing can be customized via the Stage 1 prompt configuration.
   - **Stage 2: Host Dialogue and Narration Writing**: Expands the beat sheet into polished, conversational host dialogue formatted specifically for TTS audio generation. Host persona, tone, and commentary style are configured via the Stage 2 persona configuration.
-- **Database Persistence (`ScriptRecord`)**:
+- **Database Persistence (Script Record)**:
   - `id`: Unique script record identifier
-  - `cluster_id`: Foreign key linking to the source `StoryCluster`
+  - `cluster_id`: Foreign key linking to the source story cluster
   - `title`: Video title
   - `aspect_ratio`: Target video format (`9:16` vertical or `16:9` widescreen)
   - `beats`: JSON array storing beat data (visual directions, lower-third text, target duration)
@@ -54,29 +132,51 @@
 
 ## Voice Generation
 
-- **Overview**: Receives the `script_id` and synthesized narration text from the script creation phase, phonetically sanitizes speech text via [`TtsService`](file:///teamspace/studios/this_studio/silver-tribble/src/services/tts_service.py#L16), and outputs a 24kHz mono `.wav` audio artifact.
+- **Overview**: Receives the `script_id` and synthesized narration text from the script creation phase, phonetically sanitizes speech text via the voice synthesis service, and outputs a 24kHz mono `.wav` audio artifact.
 - **Provider Architecture**:
   - **Primary Provider**: Google Gemini 2.0 Flash Audio (`gemini-2.0-flash` with prebuilt voices such as `Puck`).
   - **Secondary Fallback**: Edge TTS (`edge-tts` neural voices such as `en-US-ChristopherNeural`, standardized to 24kHz mono WAV via `ffmpeg`).
   - **Current Tertiary Fallback**: Calibrated synthetic silent `.wav` placeholder generation for offline testing.
 - **Caption Synchronization**:
-  - Integrates with [`CaptionService`](file:///teamspace/studios/this_studio/silver-tribble/src/services/caption_service.py#L12) using `faster-whisper` to extract word-level timestamps (`start`, `end`, `confidence`) for kinetic subtitle rendering.
+  - Integrates with the speech-to-text caption service using Faster-Whisper to extract word-level timestamps (`start`, `end`, `confidence`) for kinetic subtitle rendering.
 - **Planned Refinements and Roadmap**:
   - Replace the silent synthetic audio fallback with a configurable endpoint-level local TTS model provider (e.g. Kokoro, Piper, or a local audio endpoint).
   - Add host voice cloning support using provided audio sample recordings of the host persona.
 
-arifact gathering 
+## Visual Artifact Gathering
 
-video stitching 
+- **Overview**: Driven by the visual media management service, this stage parses visual directions and keyword cues from each script beat to retrieve and cache visual assets.
+- **Visual Provider Routing**: The media routing module directs queries across multiple specialized providers:
+  - **Pexels**: HD stock videos for general tech and data center imagery.
+  - **Giphy**: Animated reaction GIFs for comedic beats.
+  - **Google Images & Wikimedia**: Entity photos via the image search service for specific tech figures and companies.
+  - **AI Image Generation**: Custom visuals via the AI image generation service (FLUX.1 / Imagen 3).
+  - **Brand Cards**: SVG tech company cards generated via the brand card service.
+- **Quality Inspection Modes**:
+  - **Automated**: Deduplication and keyword matching.
+  - **Multimodal VLM**: The visual quality inspector evaluates visual relevance against narration using Gemini VLM.
+  - **Human-in-the-Loop (HIL)**: Interactive review and asset replacement interface.
 
-config files
+## Video Rendering and Composition
 
-lite llm mapping 
+- **Engine Architecture**: Uses Remotion (a React 18 programmatic video motion graphics framework in `remotion/`).
+- **Composition Layering**: The rendering service compiles pipeline properties into JSON for `MainVideo.tsx`, which layers:
+  - **Visual Media & Transitions**: Video clips, images, and brand cards.
+  - **Procedural Background**: `AnimatedBackground.tsx` cyber grid reacting to beat emotions.
+  - **Kinetic Typography**: `Captions.tsx` displaying word-level synchronized subtitles.
+  - **Overlays**: `TitleCard.tsx` (lower-third headline), `Watermark.tsx` (channel badge), and `OutroCard.tsx` (call-to-action).
+- **Output**: Executes `npx remotion render` to export final MP4 videos to `./output/videos/`.
 
-interfaces 
- -cli
- -web 
- -api
+## Configuration and Model Gateway Mapping
+
+- **Unified Configuration**: Configured via `config.yaml` and validated at startup via central settings. Precedence order: CLI flags > Environment variables > `config.yaml` > `.env` > Defaults.
+- **LiteLLM Gateway Mapping**: Optional proxy gateway configuration (`config/litellm_config.yaml`) routes abstract pipeline roles (`planning`, `writing`, `embedding`) across Google AI Studio (Gemini), OpenAI, DeepSeek, or local models. Supports direct BYOK provider connections.
+
+## Pipeline Execution Interfaces
+
+- **Command-Line Interface (CLI)**: Command-line interface built with Typer and Rich. Supports modular stage subcommands (`ingest`, `cluster`, `script`, `voice`, `media`, `render`, `roundup`) and automated end-to-end pipeline execution.
+- **Web Dashboard & REST API**: Web control panel (`/dashboard`) and REST API built with FastAPI. Provides pipeline controls, API endpoints (`/api/pipeline/*`), and interactive story/media review gates.
+
 ## Model Usage
 
 ### Pipeline Applications
@@ -88,15 +188,12 @@ interfaces
 - **Audio Generation**: Generating voiceovers for the script.
 - **Configurable Execution Modes**: Each stage supports configurable execution modes, allowing users to choose between cloud API calls and local model execution via configuration.
 
-
 ### Configuration and Provider Architecture
 - **Unified API Gateway (LiteLLM)**: API-based models are routed through a unified LiteLLM configuration, supporting:
   - Google Gemini API (Google AI Studio)
   - OpenAI API models
 - **Flexible Execution Modes**: Each layer supports both cloud API calls and local model execution via configuration.
 - **Local Fallbacks**: Local models (such as downloaded sentence transformer embeddings) serve as configurable fallbacks if cloud APIs become unavailable.
-
-config iguraion files 
 
 ## Project Folder Structure
 

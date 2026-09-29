@@ -1,4 +1,4 @@
-"""Local endpoint Text-to-Speech provider adapter supporting Kokoro, Piper, and HTTP audio servers."""
+"""Local endpoint Text-to-Speech provider adapter supporting Kokoro, Piper, and HTTP servers."""
 
 import logging
 import os
@@ -75,7 +75,9 @@ class LocalEndpointTtsProvider:
 
             if self.model_path and self.model_path.is_file() and self.model_path.suffix == ".onnx":
                 model_arg = str(self.model_path)
-            elif self.model_path and self.model_path.is_file() and shutil.which(str(self.model_path)):
+            elif (
+                self.model_path and self.model_path.is_file() and shutil.which(str(self.model_path))
+            ):
                 piper_binary = str(self.model_path)
 
             if piper_binary:
@@ -91,7 +93,11 @@ class LocalEndpointTtsProvider:
                     capture_output=True,
                     timeout=self.timeout,
                 )
-                return self._read_wav_duration(output_path)
+                if not output_path.exists() or output_path.stat().st_size == 0:
+                    raise RuntimeError(
+                        f"Local binary {piper_binary} produced empty or missing file."
+                    )
+                return self._normalize_wav_file(output_path)
         except Exception as exc:
             logger.warning("Local binary synthesis failed: %s. Falling back to HTTP.", exc)
         return None
@@ -137,20 +143,24 @@ class LocalEndpointTtsProvider:
 
         return self._write_audio_to_wav(audio_bytes, output_path)
 
+    def _normalize_wav_file(self, wav_path: Path) -> float:
+        """Verify and transcode WAV to standardized 24kHz mono 16-bit WAV if needed."""
+        try:
+            with wave.open(str(wav_path), "rb") as w:
+                framerate = w.getframerate()
+                channels = w.getnchannels()
+                sampwidth = w.getsampwidth()
+            if framerate == 24000 and channels == 1 and sampwidth == 2:
+                return self._read_wav_duration(wav_path)
+        except Exception as exc:
+            logger.warning("Could not inspect WAV %s: %s", wav_path, exc)
+        return self._resample_via_ffmpeg(wav_path, wav_path)
+
     def _write_audio_to_wav(self, audio_bytes: bytes, output_path: Path) -> float:
         """Persist audio bytes to disk, normalizing non-standard audio to 24kHz mono WAV."""
         if audio_bytes.startswith(b"RIFF"):
             output_path.write_bytes(audio_bytes)
-            try:
-                with wave.open(str(output_path), "rb") as w:
-                    framerate = w.getframerate()
-                    channels = w.getnchannels()
-                if framerate == 24000 and channels == 1:
-                    return self._read_wav_duration(output_path)
-            except Exception:
-                pass
-            # Re-sample non-24kHz or stereo WAV via ffmpeg
-            return self._resample_via_ffmpeg(output_path, output_path)
+            return self._normalize_wav_file(output_path)
 
         temp_audio = output_path.with_suffix(".tmp.audio")
         try:
@@ -191,7 +201,8 @@ class LocalEndpointTtsProvider:
             rate = wav_file.getframerate()
             if rate == 0 or frames == 0:
                 raise RuntimeError(
-                    f"Generated WAV file is empty or invalid (frames={frames}, rate={rate}): {wav_path}"
+                    f"Generated WAV file is empty or invalid (frames={frames}, rate={rate}): "
+                    f"{wav_path}"
                 )
             return frames / float(rate)
 

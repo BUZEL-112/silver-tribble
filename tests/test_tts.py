@@ -1,5 +1,6 @@
 """Unit tests for local endpoint TTS provider and TtsService."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -96,7 +97,10 @@ def test_local_tts_provider_plain_text_retry(tmp_path: Path, monkeypatch: pytest
     assert output_wav.exists()
 
 
-def test_local_tts_provider_empty_audio_raises_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def test_local_tts_provider_empty_audio_raises_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
     monkeypatch.delenv("TTS_MOCK", raising=False)
     output_wav = tmp_path / "empty.wav"
 
@@ -183,3 +187,70 @@ def test_tts_service_fails_fast_without_silent_fallback(
         service.synthesize_speech("Failed speech prompt", job_id=99)
 
     assert "Silent synthetic fallback has been removed" in str(exc_info.value)
+
+
+def test_tts_service_s3_staging_avoids_early_download(cost_repo: CostRepository):
+    """S3 storage should not have get_local_path called before file generation."""
+    mock_storage = MagicMock()
+    mock_storage.get_local_path.side_effect = AssertionError(
+        "get_local_path must not be called before audio file is saved"
+    )
+    mock_storage.save_file.return_value = "s3://bucket/audio/narration_job_101.wav"
+
+    mock_local_provider = MagicMock(spec=LocalEndpointTtsProvider)
+
+    def fake_synthesize(text: str, output_path: Path, voice_name: str | None = None) -> float:
+        output_path.write_bytes(_create_mock_wav_bytes(duration_seconds=2.0))
+        return 2.0
+
+    mock_local_provider.synthesize.side_effect = fake_synthesize
+
+    service = TtsService(
+        storage_service=mock_storage,
+        cost_repo=cost_repo,
+        tts_provider="local",
+        local_provider=mock_local_provider,
+    )
+
+    stored_path, duration = service.synthesize_speech("Testing S3 staging", job_id=101)
+    assert stored_path == "s3://bucket/audio/narration_job_101.wav"
+    assert duration == 2.0
+    mock_storage.save_file.assert_called_once()
+
+
+def test_local_tts_provider_binary_normalizes_non_standard_wav(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Local binary output at 22.05kHz should be normalized to 24kHz mono."""
+    monkeypatch.delenv("TTS_MOCK", raising=False)
+    output_wav = tmp_path / "piper_output.wav"
+    piper_bytes = _create_mock_wav_bytes(duration_seconds=1.2, sample_rate=22050, channels=1)
+
+    provider = LocalEndpointTtsProvider(
+        endpoint_url="http://localhost:5000",
+        model_name="piper",
+    )
+
+    orig_run = subprocess.run
+
+    def fake_subprocess_run(cmd, *args, **kwargs):
+        if "piper" in cmd[0]:
+            output_wav.write_bytes(piper_bytes)
+            return MagicMock(returncode=0)
+        return orig_run(cmd, *args, **kwargs)
+
+    with (
+        patch("shutil.which", return_value="/usr/local/bin/piper"),
+        patch("subprocess.run", side_effect=fake_subprocess_run),
+    ):
+        duration = provider._synthesize_via_local_binary("Piper test", output_wav, "default")
+
+    assert duration is not None
+    assert duration > 1.0
+    # Verify resulting file is now 24000Hz mono
+    import wave
+
+    with wave.open(str(output_wav), "rb") as w:
+        assert w.getframerate() == 24000
+        assert w.getnchannels() == 1

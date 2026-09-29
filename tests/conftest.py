@@ -6,6 +6,7 @@ from pathlib import Path
 
 # Ensure tests default to SQLite if no PostgreSQL server is running
 os.environ.setdefault("DATABASE_URL", "sqlite:///test.db")
+os.environ.setdefault("TTS_MOCK", "1")
 
 import pytest
 from sqlalchemy import create_engine

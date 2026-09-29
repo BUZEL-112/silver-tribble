@@ -17,6 +17,7 @@ def get_test_env() -> dict[str, str]:
     """Provide environment dictionary with SQLite DATABASE_URL and PYTHONPATH for subprocesses."""
     env = dict(os.environ)
     env["DATABASE_URL"] = env.get("DATABASE_URL", "sqlite:///test.db")
+    env["TTS_MOCK"] = "1"
     repo_root = str(Path(__file__).resolve().parent.parent)
     env["PYTHONPATH"] = f"{repo_root}:{env.get('PYTHONPATH', '')}".rstrip(":")
     return env
@@ -200,3 +201,15 @@ def test_run_voice_media_render_json_contract() -> None:
     render_data = json.loads(proc_render.stdout)
     assert render_data["status"] == "success"
     assert "output_video_path" in render_data
+
+
+def test_cli_config_tts_invalid_provider_rejected() -> None:
+    """CLI config-tts should reject invalid provider literals."""
+    from typer.testing import CliRunner
+
+    from src.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["config-tts", "--provider", "invalid_provider"])
+    assert result.exit_code != 0
+    assert "Invalid provider" in result.output

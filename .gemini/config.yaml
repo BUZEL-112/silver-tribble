@@ -1,0 +1,16 @@
+code_review:
+  ignore_patterns:
+    - "*.lock"
+    - "poetry.lock"
+    - "uv.lock"
+    - "*.egg-info/**"
+    - "remotion/node_modules/**"
+    - "remotion/out/**"
+    - "remotion/dist/**"
+    - "data/**"
+    - "output/**"
+    - "artifacts/**"
+    - "scratch/**"
+    - "*.db*"
+    - ".venv/**"
+    - "**/__pycache__/**"

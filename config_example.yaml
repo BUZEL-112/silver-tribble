@@ -77,7 +77,28 @@ providers:
   giphy_api_key: null       # "..."
 
 # ------------------------------------------------------------------------------
-# 5. Asset & Media Storage
+# 5. Text-to-Speech (TTS) Voice Synthesis
+# ------------------------------------------------------------------------------
+# Voice synthesis provider options:
+#   - "local"    : Local endpoint TTS provider (Kokoro, Piper, or local HTTP server)
+#   - "gemini"   : Google Gemini 2.0 Flash Audio synthesis
+#   - "edge_tts" : Microsoft Edge neural TTS (free cloud service)
+#   - "auto"     : Priority routing (gemini -> edge_tts -> local)
+tts:
+  provider: "auto"
+  # Endpoint URL for local HTTP audio server (e.g. Kokoro-FastAPI, Piper HTTP, Speaches)
+  endpoint: "http://localhost:8880/v1/audio/speech"
+  # Local filesystem path to TTS model weights, ONNX file, or binary (e.g. Piper model)
+  path: ""
+  # Local model name (e.g. "kokoro", "piper")
+  model: "kokoro"
+  # Default voice identifier (e.g. "af_heart", "en_US-lessac-medium")
+  voice: "af_heart"
+  # Request timeout in seconds
+  timeout: 60.0
+
+# ------------------------------------------------------------------------------
+# 6. Asset & Media Storage
 # ------------------------------------------------------------------------------
 storage:
   # Storage backend: "local" or "s3" (Cloudflare R2 / AWS S3)

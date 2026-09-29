@@ -189,7 +189,7 @@ def call_gemini_api(
         return response.text or ""
     except Exception as err:
         logger.error("Gemini API call failed for model %s: %s", model_name, err)
-        fallback_models = ["gemini-3.8-flash", "gemini-2.0-flash"]
+        fallback_models = ["gemini-3.8-flash", "gemini-2.5-flash"]
         for fallback in fallback_models:
             if fallback != model_name:
                 logger.info("Attempting fallback to model %s...", fallback)

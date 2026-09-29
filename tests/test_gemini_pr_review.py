@@ -10,6 +10,7 @@ import pytest
 
 from scripts.gemini_pr_review import (
     build_review_prompt,
+    call_gemini_api,
     get_git_diff,
     load_styleguide,
     post_github_comment,
@@ -173,8 +174,6 @@ def test_call_gemini_api_model_fallback() -> None:
     ]
 
     with patch("google.genai.Client", return_value=mock_client):
-        from scripts.gemini_pr_review import call_gemini_api
-
         result = call_gemini_api(
             prompt="Review this diff",
             api_key="test_key",
@@ -182,3 +181,27 @@ def test_call_gemini_api_model_fallback() -> None:
         )
         assert result == "Fallback review output"
         assert mock_client.models.generate_content.call_count == 2
+
+
+def test_call_gemini_api_falls_back_to_supported_flash_model() -> None:
+    """Default model fallback should use the currently supported flash model."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "Fallback review output"
+    mock_client.models.generate_content.side_effect = [
+        RuntimeError("503 UNAVAILABLE"),
+        mock_response,
+    ]
+
+    with patch("google.genai.Client", return_value=mock_client):
+        result = call_gemini_api(
+            prompt="Review this diff",
+            api_key="test_key",
+            model_name="gemini-3.8-flash",
+        )
+
+    assert result == "Fallback review output"
+    called_models = [
+        call.kwargs["model"] for call in mock_client.models.generate_content.call_args_list
+    ]
+    assert called_models == ["gemini-3.8-flash", "gemini-2.5-flash"]

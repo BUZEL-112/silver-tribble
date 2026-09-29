@@ -148,3 +148,25 @@ def test_run_pr_review_success(monkeypatch, tmp_path: Path) -> None:
         )
         assert status == 0
         mock_post.assert_called_once()
+
+
+def test_call_gemini_api_model_fallback() -> None:
+    """When the initial model fails, call_gemini_api should try fallback models."""
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.text = "Fallback review output"
+    mock_client.models.generate_content.side_effect = [
+        RuntimeError("404 Model Not Found"),
+        mock_response,
+    ]
+
+    with patch("google.genai.Client", return_value=mock_client):
+        from scripts.gemini_pr_review import call_gemini_api
+
+        result = call_gemini_api(
+            prompt="Review this diff",
+            api_key="test_key",
+            model_name="deprecated-model",
+        )
+        assert result == "Fallback review output"
+        assert mock_client.models.generate_content.call_count == 2

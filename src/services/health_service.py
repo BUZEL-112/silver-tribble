@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+from typing import Literal
 
 from sqlalchemy import text
 
@@ -166,6 +167,7 @@ class HealthService:
         any_unhealthy = any(c.status == "unhealthy" for c in components)
         any_degraded = any(c.status == "degraded" for c in components)
 
+        overall_status: Literal["healthy", "degraded", "unhealthy"]
         if any_unhealthy:
             overall_status = "unhealthy"
         elif any_degraded:

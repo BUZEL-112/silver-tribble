@@ -454,11 +454,16 @@ class Settings(BaseSettings):
     )
     local_tts_endpoint: str = Field(
         default="http://localhost:8880/v1/audio/speech",
-        description="Endpoint URL for local HTTP TTS server (e.g. Kokoro, Piper, or OpenAI-compatible server)",
+        description=(
+            "Endpoint URL for local HTTP TTS server "
+            "(e.g. Kokoro, Piper, or OpenAI-compatible server)"
+        ),
     )
     local_tts_path: str = Field(
         default="",
-        description="Filesystem path to local TTS model weights, ONNX file, or binary (e.g. Piper model)",
+        description=(
+            "Filesystem path to local TTS model weights, ONNX file, or binary (e.g. Piper model)"
+        ),
     )
     local_tts_model: str = Field(
         default="kokoro",

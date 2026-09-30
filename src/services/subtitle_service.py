@@ -1,6 +1,7 @@
 """Subtitle generation service converting word-level captions to SRT and WebVTT formats."""
 
 from pathlib import Path
+from typing import Any
 
 from src.core.config import settings
 from src.models.schemas import WordCaption
@@ -34,12 +35,12 @@ class SubtitleService:
         captions: list[WordCaption],
         max_words_per_cue: int = 6,
         pause_threshold_seconds: float = 0.4,
-    ) -> list[dict[str, object]]:
+    ) -> list[dict[str, Any]]:
         """Group sequential words into readable subtitle cues based on length and pauses."""
         if not captions:
             return []
 
-        cues: list[dict[str, object]] = []
+        cues: list[dict[str, Any]] = []
         current_words: list[str] = []
         cue_start = captions[0].start
         last_end = captions[0].start

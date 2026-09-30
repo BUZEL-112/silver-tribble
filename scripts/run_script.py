@@ -78,7 +78,9 @@ def main() -> None:
                             raise ValueError("No story clusters found to generate script for.")
                         target_id = pending[0].id
                     else:
-                        raise ValueError("Must provide either --cluster-id, --cluster-ids, or --auto-top")
+                        raise ValueError(
+                            "Must provide either --cluster-id, --cluster-ids, or --auto-top"
+                        )
 
                 with action_repo.track_operation(
                     stage="script",

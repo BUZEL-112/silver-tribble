@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -100,7 +100,21 @@ class MediaPlacementUpdateRequest(BaseModel):
     query: str | None = None
     file_path: str | None = None
     url: str | None = None
-    provider: str | None = "pexels"
+    provider: (
+        Literal[
+            "pexels",
+            "pixabay",
+            "giphy",
+            "google_search",
+            "brand_card",
+            "flux_generation",
+            "ai_generated",
+            "asset_library",
+            "fallback",
+            "custom",
+        ]
+        | None
+    ) = None
 
 
 class JobReRenderRequest(BaseModel):
@@ -148,7 +162,9 @@ class SettingsUpdateRequest(BaseModel):
     outro_duration_seconds: float | None = Field(default=None, ge=0.0)
     cluster_review_timeout_seconds: float | None = Field(default=None, ge=1.0)
     channel_badge_text: str | None = None
-    caption_style: str | None = None
+    caption_style: Literal["hormozi", "minimal", "karaoke", "news_ticker", "cinematic"] | None = (
+        None
+    )
     caption_level: float | None = Field(default=None, ge=5.0, le=90.0)
     caption_font_size: int | None = Field(default=None, ge=20, le=96)
     caption_uppercase: bool | None = None
@@ -156,7 +172,7 @@ class SettingsUpdateRequest(BaseModel):
     subscribe_subtitle: str | None = None
     subscribe_button_text: str | None = None
     subscribe_duration_seconds: float | None = Field(default=None, ge=0.0)
-    subscribe_style: str | None = None
+    subscribe_style: Literal["card", "lower_third", "minimal_badge"] | None = None
     subscribe_enabled: bool | None = None
     horizontal_watermark_position: WatermarkPosition | None = None
     horizontal_caption_level: float | None = Field(default=None, ge=5.0, le=90.0)
@@ -644,13 +660,13 @@ def get_logs(
 
 @app.get("/api/clusters")
 def get_clusters(
+    response: Response,
     page: int | None = Query(None, ge=1, description="Page number for pagination"),
     page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     limit: int | None = Query(None, ge=1, le=200, description="Legacy limit parameter"),
     status: str | None = Query(None, description="Filter by status (pending, completed)"),
     search: str | None = Query(None, description="Search keyword in title or summary"),
     include_articles: bool = Query(True, description="Whether to include member articles"),
-    response: Response = None,
 ) -> Any:
     """List story clusters with support for pagination, search, and constituent articles."""
     with get_session() as session:
@@ -1020,7 +1036,7 @@ def update_job_media_placement(
             details={"sentence_index": sentence_index},
         ):
             if req.query:
-                prov = req.provider or "pexels"
+                prov: Literal["pexels", "giphy"] = "giphy" if req.provider == "giphy" else "pexels"
                 updated = media_svc.search_and_replace_placement(
                     job_id=job.id,
                     sentence_index=sentence_index,
@@ -1034,15 +1050,110 @@ def update_job_media_placement(
                     job_id=job.id,
                     sentence_index=sentence_index,
                     new_media_path_or_url=req.file_path,
-                    provider="custom",
+                    provider=req.provider or "custom",
                 )
             else:
                 updated = media_svc.update_placement_media(
                     job_id=job.id,
                     sentence_index=sentence_index,
                     new_media_path_or_url=req.url or "",
-                    provider="custom",
+                    provider=req.provider or "custom",
                 )
+
+        return {
+            "status": "success",
+            "job_id": job.id,
+            "placement": updated.model_dump(),
+        }
+
+
+@app.get("/api/media/search")
+def search_media_candidates(
+    query: str = Query(..., min_length=1, description="Search keywords"),
+    provider: Literal["giphy", "pexels"] = Query("giphy", description="Media search provider"),
+    media_type: Literal["video", "image"] = Query("video", description="Desired media type"),
+    limit: int = Query(12, ge=1, le=50, description="Max candidate results"),
+    aspect_ratio: str = Query("9:16", description="Target aspect ratio"),
+) -> list[dict[str, Any]]:
+    """Search provider for media candidates to preview and select in the key materials inspector."""
+    storage = get_storage_service()
+    with get_session() as session:
+        cost_repo = CostRepository(session)
+        asset_repo = AssetRepository(session)
+        media_svc = MediaService(
+            storage_service=storage,
+            cost_repo=cost_repo,
+            asset_repo=asset_repo,
+        )
+
+        if provider == "giphy":
+            return media_svc.search_giphy_candidates(query=query, limit=limit)
+        elif provider == "pexels":
+            return media_svc.search_pexels_candidates(
+                query=query,
+                media_type=media_type,
+                limit=limit,
+                aspect_ratio=aspect_ratio,
+            )
+        return []
+
+
+@app.post("/api/jobs/{job_id}/media/{sentence_index}/upload")
+async def upload_job_media_file(
+    job_id: int,
+    sentence_index: int,
+    file: UploadFile = File(...),
+) -> dict[str, Any]:
+    """Upload custom media file (GIF, image, video) for a specific sentence frame."""
+    storage = get_storage_service()
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        cost_repo = CostRepository(session)
+        asset_repo = AssetRepository(session)
+        action_repo = ActionLogRepository(session)
+
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+
+        media_svc = MediaService(
+            storage_service=storage,
+            cost_repo=cost_repo,
+            asset_repo=asset_repo,
+        )
+
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Uploaded file missing filename")
+
+        ext = Path(file.filename).suffix.lower()
+        allowed_extensions = {".mp4", ".gif", ".jpg", ".jpeg", ".png", ".webp"}
+        if ext not in allowed_extensions:
+            formats = ", ".join(sorted(allowed_extensions))
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file format '{ext}'. Allowed: {formats}",
+            )
+
+        media_svc.media_cache_dir.mkdir(parents=True, exist_ok=True)
+        dest_filename = f"job_{job.id}_sent_{sentence_index}_upload_{Path(file.filename).stem}{ext}"
+        dest_path = media_svc.media_cache_dir / dest_filename
+
+        content = await file.read()
+        dest_path.write_bytes(content)
+
+        with action_repo.track_operation(
+            stage="media",
+            action="upload_frame_material",
+            actor="web",
+            job_id=job.id,
+            details={"sentence_index": sentence_index, "filename": file.filename},
+        ):
+            updated = media_svc.update_placement_media(
+                job_id=job.id,
+                sentence_index=sentence_index,
+                new_media_path_or_url=str(dest_path.resolve()),
+                provider="custom",
+            )
 
         return {
             "status": "success",

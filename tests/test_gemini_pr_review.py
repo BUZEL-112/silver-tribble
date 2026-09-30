@@ -184,7 +184,7 @@ def test_call_gemini_api_model_fallback() -> None:
 
 
 def test_call_gemini_api_falls_back_to_supported_flash_model() -> None:
-    """Default model fallback should use the currently supported flash model."""
+    """Default model failure should retry using the supported flash model."""
     mock_client = MagicMock()
     mock_response = MagicMock()
     mock_response.text = "Fallback review output"
@@ -204,4 +204,4 @@ def test_call_gemini_api_falls_back_to_supported_flash_model() -> None:
     called_models = [
         call.kwargs["model"] for call in mock_client.models.generate_content.call_args_list
     ]
-    assert called_models == ["gemini-3.8-flash", "gemini-2.5-flash"]
+    assert called_models == ["gemini-3.8-flash", "gemini-3.8-flash"]

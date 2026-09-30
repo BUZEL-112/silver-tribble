@@ -85,18 +85,21 @@ class SentenceMediaPlacement(BaseModel):
     media_type: Literal["image", "video", "gif"]
     local_path: str
     source_url: str
-    provider: Literal[
-        "pexels",
-        "pixabay",
-        "giphy",
-        "google_search",
-        "brand_card",
-        "flux_generation",
-        "ai_generated",
-        "asset_library",
-        "fallback",
-        "custom",
-    ]
+    provider: (
+        Literal[
+            "pexels",
+            "pixabay",
+            "giphy",
+            "google_search",
+            "brand_card",
+            "flux_generation",
+            "ai_generated",
+            "asset_library",
+            "fallback",
+            "custom",
+        ]
+        | str
+    )
     text: str = ""
     query: str = ""
     emotion: str = "neutral"
@@ -265,3 +268,137 @@ class PruneResult(BaseModel):
     files_scanned: int
     files_deleted: int
     bytes_freed: int
+
+
+class CustomProviderConfig(BaseModel):
+    """Configuration for an externally registered image, GIF, or video provider."""
+
+    id: str = Field(..., min_length=1, pattern=r"^[a-zA-Z0-9_\-]+$")
+    name: str = Field(..., min_length=1)
+    media_type: Literal["image", "gif", "video"] = "image"
+    mode: Literal["rest_query", "openai_compatible"] = "rest_query"
+    endpoint_url: str = Field(..., min_length=5)
+    http_method: Literal["GET", "POST"] = "GET"
+    auth_header_name: str = "Authorization"
+    auth_token: str = ""
+    query_param_name: str = "q"
+    response_url_path: str = "url"
+    enabled: bool = True
+    priority: int = 10
+
+
+class ProviderInfo(BaseModel):
+    """Metadata, priority rank, and configuration status for a media provider."""
+
+    id: str
+    name: str
+    category: Literal[
+        "stock_video",
+        "stock_photo",
+        "reaction_gif",
+        "ai_generation",
+        "custom",
+        "brand_card",
+        "web_search",
+    ]
+    media_types: list[Literal["image", "gif", "video"]]
+    is_custom: bool = False
+    is_configured: bool = False
+    is_enabled: bool = True
+    priority_rank: int = 1
+    api_key_masked: str | None = None
+    endpoint_url: str | None = None
+    custom_config: CustomProviderConfig | None = None
+
+
+class ProviderTestRequest(BaseModel):
+    """Payload to test connectivity of a built-in or custom provider."""
+
+    provider_id: str
+    api_key: str | None = None
+    custom_config: CustomProviderConfig | None = None
+
+
+class ProviderTestResponse(BaseModel):
+    """Connectivity test result for a provider."""
+
+    provider_id: str
+    status: Literal["success", "error"]
+    latency_ms: float
+    message: str
+    sample_preview_url: str | None = None
+
+
+class ProviderPriorityRequest(BaseModel):
+    """Payload to update priority ordering of providers."""
+
+    priority_order: list[str] = Field(..., min_length=1)
+
+
+class ProviderToggleRequest(BaseModel):
+    """Payload to toggle provider enabled state."""
+
+    enabled: bool
+
+
+class ProviderCredentialsRequest(BaseModel):
+    """Payload to update credentials for a provider."""
+
+    provider_id: str
+    api_key: str = Field(..., min_length=1)
+
+
+class VisualPresetInfo(BaseModel):
+    """Preset metadata for one-click visual configuration buttons."""
+
+    id: str
+    name: str
+    badge: str
+    description: str
+
+
+class VisualConfigSchema(BaseModel):
+    """Visual pipeline configuration state presented in dashboard UI."""
+
+    aspect_ratio: Literal["9:16", "16:9"] = "9:16"
+    target_beats: int = Field(default=5, ge=3, le=9)
+    max_clusters: int = Field(default=5, ge=1, le=20)
+    time_limit_hours: int = Field(default=24, ge=1, le=168)
+    tts_provider: Literal["gemini", "edge_tts", "local", "auto"] = "gemini"
+    tts_voice: str = "Puck"
+    caption_style: Literal["hormozi", "minimal", "karaoke", "news_ticker", "cinematic"] = "hormozi"
+    caption_level: float = 30.0
+    caption_font_size: int = 48
+    caption_uppercase: bool = True
+    default_media_type_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
+    media_inspector_mode: Literal["off", "multimodal", "hil"] = "multimodal"
+    media_inspector_min_score: float = Field(default=6.0, ge=1.0, le=10.0)
+    llm_planning_model: str = "gpt-4o-mini"
+    llm_writing_model: str = "deepseek-chat"
+    similarity_threshold: float = Field(default=0.82, ge=0.5, le=0.98)
+    active_preset: str | None = None
+
+
+class VisualConfigUpdateRequest(BaseModel):
+    """Payload to update visual configuration parameters from dashboard buttons."""
+
+    aspect_ratio: Literal["9:16", "16:9"] | None = None
+    target_beats: int | None = Field(default=None, ge=3, le=9)
+    max_clusters: int | None = Field(default=None, ge=1, le=20)
+    time_limit_hours: int | None = Field(default=None, ge=1, le=168)
+    tts_provider: Literal["gemini", "edge_tts", "local", "auto"] | None = None
+    tts_voice: str | None = None
+    caption_style: (
+        Literal["hormozi", "minimal", "karaoke", "news_ticker", "cinematic"] | None
+    ) = None
+    caption_level: float | None = Field(default=None, ge=5.0, le=90.0)
+    caption_font_size: int | None = Field(default=None, ge=20, le=96)
+    caption_uppercase: bool | None = None
+    default_media_type_ratio: float | None = Field(default=None, ge=0.0, le=1.0)
+    media_inspector_mode: Literal["off", "multimodal", "hil"] | None = None
+    media_inspector_min_score: float | None = Field(default=None, ge=1.0, le=10.0)
+    llm_planning_model: str | None = None
+    llm_writing_model: str | None = None
+    similarity_threshold: float | None = Field(default=None, ge=0.5, le=0.98)
+    active_preset: str | None = None
+

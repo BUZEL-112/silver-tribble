@@ -373,3 +373,78 @@ def test_platform_stats_and_costs_api() -> None:
     assert "per_video_costs" in costs
     assert isinstance(costs["spend_by_stage"], list)
     assert isinstance(costs["per_video_costs"], list)
+
+
+def test_providers_api_endpoints() -> None:
+    """Verify provider catalog listing, priority shifting, toggling, and removal endpoints."""
+    # 1. List providers
+    res = client.get("/api/providers")
+    assert res.status_code == 200
+    providers = res.json()
+    assert isinstance(providers, list)
+    assert len(providers) >= 4
+
+    # 2. Shift priority
+    res_move = client.post("/api/providers/giphy/move?direction=up")
+    assert res_move.status_code == 200
+    move_data = res_move.json()
+    assert move_data["status"] == "success"
+    assert "priority_order" in move_data
+
+    # 3. Toggle provider
+    res_toggle = client.post("/api/providers/pexels/toggle", json={"enabled": False})
+    assert res_toggle.status_code == 200
+    assert res_toggle.json()["is_enabled"] is False
+
+    # Restore toggle
+    client.post("/api/providers/pexels/toggle", json={"enabled": True})
+
+    # 4. Test provider connection
+    res_test = client.post("/api/providers/test", json={"provider_id": "local"})
+    assert res_test.status_code == 200
+    assert res_test.json()["status"] == "success"
+
+    # 5. Batch test all providers
+    res_all = client.post("/api/providers/test-all")
+    assert res_all.status_code == 200
+    assert isinstance(res_all.json(), list)
+
+
+def test_visual_config_api_endpoints() -> None:
+    """Verify visual configuration endpoints, presets listing, and hot-reload application."""
+    # 1. Get presets
+    res_presets = client.get("/api/config/visual/presets")
+    assert res_presets.status_code == 200
+    presets = res_presets.json()
+    assert len(presets) >= 4
+
+    # 2. Get current visual config
+    res_config = client.get("/api/config/visual")
+    assert res_config.status_code == 200
+    cfg = res_config.json()
+    assert "aspect_ratio" in cfg
+    assert "target_beats" in cfg
+
+    # 3. Apply preset
+    res_apply = client.post("/api/config/visual/preset/viral_shorts_9_16")
+    assert res_apply.status_code == 200
+    applied = res_apply.json()
+    assert applied["aspect_ratio"] == "9:16"
+    assert applied["target_beats"] == 5
+
+    # 4. Update visual config
+    res_update = client.post(
+        "/api/config/visual",
+        json={
+            "aspect_ratio": "16:9",
+            "target_beats": 7,
+            "max_clusters": 4,
+            "tts_voice": "Charon",
+        },
+    )
+    assert res_update.status_code == 200
+    updated = res_update.json()
+    assert updated["aspect_ratio"] == "16:9"
+    assert updated["target_beats"] == 7
+    assert updated["max_clusters"] == 4
+    assert updated["tts_voice"] == "Charon"

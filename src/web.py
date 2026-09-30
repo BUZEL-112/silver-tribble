@@ -16,11 +16,21 @@ from src.core.config import find_yaml_config_path, reload_settings, settings
 from src.core.database import get_session, init_db
 from src.flows.video_pipeline_flow import run_roundup_pipeline, run_video_pipeline
 from src.models.schemas import (
+    CustomProviderConfig,
     HealthStatus,
+    ProviderCredentialsRequest,
+    ProviderInfo,
+    ProviderPriorityRequest,
+    ProviderTestRequest,
+    ProviderTestResponse,
+    ProviderToggleRequest,
     PruneResult,
     ScriptAuditReport,
     SentenceMediaPlacement,
     VisualAssetResponse,
+    VisualConfigSchema,
+    VisualConfigUpdateRequest,
+    VisualPresetInfo,
     WordCaption,
     YouTubeMetadata,
 )
@@ -35,6 +45,8 @@ from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
 from src.services.health_service import HealthService
 from src.services.media_service import MediaService
+from src.services.provider_service import ProviderService
+from src.services.visual_config_service import VisualConfigService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
 from src.services.script_auditor_service import ScriptAuditorService
@@ -1070,7 +1082,7 @@ def update_job_media_placement(
 @app.get("/api/media/search")
 def search_media_candidates(
     query: str = Query(..., min_length=1, description="Search keywords"),
-    provider: Literal["giphy", "pexels"] = Query("giphy", description="Media search provider"),
+    provider: str = Query("giphy", description="Media search provider"),
     media_type: Literal["video", "image"] = Query("video", description="Desired media type"),
     limit: int = Query(12, ge=1, le=50, description="Max candidate results"),
     aspect_ratio: str = Query("9:16", description="Target aspect ratio"),
@@ -1095,7 +1107,19 @@ def search_media_candidates(
                 limit=limit,
                 aspect_ratio=aspect_ratio,
             )
-        return []
+        elif provider == "pixabay":
+            return media_svc.search_pixabay_candidates(
+                query=query,
+                media_type=media_type,
+                limit=limit,
+                aspect_ratio=aspect_ratio,
+            )
+        else:
+            return media_svc.search_custom_candidates(
+                provider_id=provider,
+                query=query,
+                limit=limit,
+            )
 
 
 @app.post("/api/jobs/{job_id}/media/{sentence_index}/upload")
@@ -1559,6 +1583,179 @@ def save_config_yaml(req: ConfigSaveRequest) -> dict[str, Any]:
         "config_source": settings.config_source_label,
         "settings": get_settings(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Visual Provider Hub and Diagnostics Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/providers", response_model=list[ProviderInfo])
+def get_providers_list() -> list[ProviderInfo]:
+    """Retrieve full catalog of built-in and custom providers with live status and priority."""
+    provider_svc = ProviderService()
+    return provider_svc.list_providers()
+
+
+@app.post("/api/providers/test", response_model=ProviderTestResponse)
+def test_provider_connection(req: ProviderTestRequest) -> ProviderTestResponse:
+    """Execute live latency and authentication test against a specific media provider."""
+    provider_svc = ProviderService()
+    return provider_svc.test_provider(
+        provider_id=req.provider_id,
+        api_key=req.api_key,
+        custom_config=req.custom_config,
+    )
+
+
+@app.post("/api/providers/custom", response_model=CustomProviderConfig)
+def add_or_update_custom_provider(config: CustomProviderConfig) -> CustomProviderConfig:
+    """Register or update a custom HTTP image, GIF, or video provider."""
+    provider_svc = ProviderService()
+    return provider_svc.add_custom_provider(config)
+
+
+@app.delete("/api/providers/custom/{provider_id}")
+def delete_custom_provider(provider_id: str) -> dict[str, Any]:
+    """Delete a custom provider by identifier and remove from active pipeline cascade."""
+    provider_svc = ProviderService()
+    success = provider_svc.delete_custom_provider(provider_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Custom provider '{provider_id}' not found")
+    return {"status": "success", "message": f"Deleted custom provider {provider_id}"}
+
+
+@app.post("/api/providers/priority")
+def update_provider_priority(req: ProviderPriorityRequest) -> dict[str, Any]:
+    """Update priority cascade order for visual media selection."""
+    provider_svc = ProviderService()
+    updated_order = provider_svc.update_priority(req.priority_order)
+    return {
+        "status": "success",
+        "priority_order": updated_order,
+    }
+
+
+@app.post("/api/providers/{provider_id}/toggle")
+def toggle_provider_state(provider_id: str, req: ProviderToggleRequest) -> dict[str, Any]:
+    """Enable or disable a specific provider in the cascade."""
+    provider_svc = ProviderService()
+    new_state = provider_svc.toggle_provider(provider_id, req.enabled)
+    return {
+        "status": "success",
+        "provider_id": provider_id,
+        "is_enabled": new_state,
+    }
+
+
+@app.post("/api/providers/credentials")
+def update_provider_credentials(req: ProviderCredentialsRequest) -> dict[str, Any]:
+    """Update and persist API credentials for a built-in or custom provider."""
+    provider_svc = ProviderService()
+    provider_svc.update_credentials(req.provider_id, req.api_key)
+    return {
+        "status": "success",
+        "provider_id": req.provider_id,
+        "message": f"Credentials updated for {req.provider_id}",
+    }
+
+
+@app.post("/api/providers/{provider_id}/move")
+def move_provider_priority(
+    provider_id: str,
+    direction: Literal["up", "down"] = Query(..., description="Direction to shift priority"),
+) -> dict[str, Any]:
+    """Move a provider up or down in the fallback cascade order."""
+    provider_svc = ProviderService()
+    new_order = provider_svc.move_priority(provider_id, direction)
+    return {"status": "success", "provider_id": provider_id, "priority_order": new_order}
+
+
+@app.post("/api/providers/{provider_id}/remove")
+def remove_provider_from_cascade(provider_id: str) -> dict[str, Any]:
+    """Remove a provider from active cascade or delete if custom."""
+    provider_svc = ProviderService()
+    if any(c.get("id") == provider_id for c in settings.custom_providers):
+        provider_svc.delete_custom_provider(provider_id)
+        action_type = "deleted_custom"
+    else:
+        provider_svc.remove_from_cascade(provider_id)
+        action_type = "removed_from_cascade"
+    return {
+        "status": "success",
+        "provider_id": provider_id,
+        "action": action_type,
+        "priority_order": settings.provider_priority,
+    }
+
+
+@app.post("/api/providers/test-all", response_model=list[ProviderTestResponse])
+def test_all_providers_connection() -> list[ProviderTestResponse]:
+    """Execute live latency and authentication test across all registered providers."""
+    provider_svc = ProviderService()
+    return provider_svc.test_all_providers()
+
+
+# ---------------------------------------------------------------------------
+# Visual Configuration and Presets Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/config/visual", response_model=VisualConfigSchema)
+def get_visual_pipeline_config() -> VisualConfigSchema:
+    """Retrieve current visual pipeline configuration state."""
+    visual_svc = VisualConfigService()
+    return visual_svc.get_visual_config()
+
+
+@app.get("/api/config/visual/presets", response_model=list[VisualPresetInfo])
+def list_visual_presets() -> list[VisualPresetInfo]:
+    """Retrieve catalog of one-click pipeline configuration presets."""
+    visual_svc = VisualConfigService()
+    return visual_svc.list_presets()
+
+
+@app.post("/api/config/visual", response_model=VisualConfigSchema)
+def update_visual_pipeline_config(req: VisualConfigUpdateRequest) -> VisualConfigSchema:
+    """Save visual pipeline parameters into config.yaml and hot-reload runtime."""
+    visual_svc = VisualConfigService()
+    updated = visual_svc.save_visual_config(req)
+
+    with get_session() as session:
+        action_repo = ActionLogRepository(session)
+        action_repo.record_action(
+            stage="pipeline",
+            action="update_visual_config",
+            actor="web",
+            status="success",
+            message="Updated visual pipeline parameters and hot-reloaded configuration",
+            details=req.model_dump(exclude_none=True),
+        )
+
+    return updated
+
+
+@app.post("/api/config/visual/preset/{preset_id}", response_model=VisualConfigSchema)
+def apply_visual_pipeline_preset(preset_id: str) -> VisualConfigSchema:
+    """Apply a preset configuration profile and hot-reload pipeline settings."""
+    visual_svc = VisualConfigService()
+    try:
+        updated = visual_svc.apply_preset(preset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    with get_session() as session:
+        action_repo = ActionLogRepository(session)
+        action_repo.record_action(
+            stage="pipeline",
+            action="apply_visual_preset",
+            actor="web",
+            status="success",
+            message=f"Applied visual configuration preset {preset_id}",
+            details={"preset_id": preset_id},
+        )
+
+    return updated
 
 
 @app.get("/api/health", response_model=HealthStatus)

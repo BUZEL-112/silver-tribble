@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 import yaml
 
 from src.core.config import settings
@@ -218,11 +219,12 @@ class MediaRouter:
         )
         beat_emotion = (beat_info or {}).get("emotion", "neutral")
         beat_shot_type = (beat_info or {}).get("shot_type", "medium")
+        enabled_set = set(settings.enabled_providers)
 
         # ----------------------------------------------------------------------
         # Strategy 0: Reusable Visual Asset Library Lookup
         # ----------------------------------------------------------------------
-        if self.asset_repo:
+        if "asset_library" in enabled_set and self.asset_repo:
             existing_asset = self.asset_repo.find_matching_asset(
                 query=core_noun,
                 emotion=beat_emotion,
@@ -415,156 +417,228 @@ class MediaRouter:
                     )
 
         # ----------------------------------------------------------------------
-        # Strategy 4: Pexels Portrait Video
+        # Dynamic Provider Priority Cascade
         # ----------------------------------------------------------------------
-        if media_service_ref and getattr(media_service_ref, "pexels_api_key", None):
-            vid_res = media_service_ref.search_pexels(
-                query=core_noun,
-                media_type="video",
-                excluded_urls=used_urls,
-                aspect_ratio=aspect_ratio,
-            )
-            if vid_res and isinstance(vid_res, (tuple, list)) and len(vid_res) == 2:
-                src_url, ext = vid_res
-                dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
-                ok, final_path = self._download(src_url, dest, media_service_ref)
-                if ok:
-                    approved, _ = self.inspector.inspect_candidate(
-                        sentence_text=sentence_text,
-                        keywords=[core_noun],
-                        media_path=final_path,
-                        media_type="video",
-                    )
-                    if approved:
-                        used_urls.add(src_url)
-                        self._index_asset(
-                            source_url=src_url,
-                            local_path=str(final_path.resolve()),
-                            media_type="video",
-                            provider="pexels",
-                            query=core_noun,
-                            tags=[core_noun],
-                            emotion=beat_emotion,
-                            shot_type=beat_shot_type,
-                            aspect_ratio=aspect_ratio,
-                        )
-                        return SentenceMediaPlacement(
-                            sentence_index=sentence_index,
-                            start_time=start_time,
-                            end_time=end_time,
-                            keywords=[core_noun],
-                            media_type="video",
-                            local_path=str(final_path.resolve()),
-                            source_url=src_url,
-                            provider="pexels",
-                            text=sentence_text,
-                            query=core_noun,
-                            emotion=beat_emotion,
-                            shot_type=beat_shot_type,
-                        )
+        for p_id in settings.provider_priority:
+            if p_id not in enabled_set:
+                continue
 
-        # ----------------------------------------------------------------------
-        # Strategy 5: Pexels High-Res Photo Fallback
-        # ----------------------------------------------------------------------
-        if media_service_ref and getattr(media_service_ref, "pexels_api_key", None):
-            photo_res = media_service_ref.search_pexels(
-                query=core_noun,
-                media_type="image",
-                excluded_urls=used_urls,
-                aspect_ratio=aspect_ratio,
-            )
-            if photo_res and isinstance(photo_res, (tuple, list)) and len(photo_res) == 2:
-                src_url, ext = photo_res
-                dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
-                ok, final_path = self._download(src_url, dest, media_service_ref)
-                if ok:
-                    approved, _ = self.inspector.inspect_candidate(
-                        sentence_text=sentence_text,
-                        keywords=[core_noun],
-                        media_path=final_path,
-                        media_type="image",
-                    )
-                    if approved:
-                        used_urls.add(src_url)
-                        self._index_asset(
-                            source_url=src_url,
-                            local_path=str(final_path.resolve()),
-                            media_type="image",
-                            provider="pexels",
-                            query=core_noun,
-                            tags=[core_noun],
-                            emotion=beat_emotion,
-                            shot_type=beat_shot_type,
-                            aspect_ratio=aspect_ratio,
-                        )
-                        return SentenceMediaPlacement(
-                            sentence_index=sentence_index,
-                            start_time=start_time,
-                            end_time=end_time,
+            # Pexels Video & Photo
+            if (
+                p_id == "pexels"
+                and media_service_ref
+                and getattr(media_service_ref, "pexels_api_key", None)
+            ):
+                vid_res = media_service_ref.search_pexels(
+                    query=core_noun,
+                    media_type="video",
+                    excluded_urls=used_urls,
+                    aspect_ratio=aspect_ratio,
+                )
+                if vid_res and isinstance(vid_res, (tuple, list)) and len(vid_res) == 2:
+                    src_url, ext = vid_res
+                    dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
+                    ok, final_path = self._download(src_url, dest, media_service_ref)
+                    if ok:
+                        approved, _ = self.inspector.inspect_candidate(
+                            sentence_text=sentence_text,
                             keywords=[core_noun],
-                            media_type="image",
-                            local_path=str(final_path.resolve()),
-                            source_url=src_url,
-                            provider="pexels",
-                            text=sentence_text,
-                            query=core_noun,
-                            emotion=beat_emotion,
-                            shot_type=beat_shot_type,
+                            media_path=final_path,
+                            media_type="video",
                         )
+                        if approved:
+                            used_urls.add(src_url)
+                            self._index_asset(
+                                source_url=src_url,
+                                local_path=str(final_path.resolve()),
+                                media_type="video",
+                                provider="pexels",
+                                query=core_noun,
+                                tags=[core_noun],
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                                aspect_ratio=aspect_ratio,
+                            )
+                            return SentenceMediaPlacement(
+                                sentence_index=sentence_index,
+                                start_time=start_time,
+                                end_time=end_time,
+                                keywords=[core_noun],
+                                media_type="video",
+                                local_path=str(final_path.resolve()),
+                                source_url=src_url,
+                                provider="pexels",
+                                text=sentence_text,
+                                query=core_noun,
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                            )
 
-        # ----------------------------------------------------------------------
-        # Strategy 6: Pixabay Portrait Video & Photo Fallback
-        # ----------------------------------------------------------------------
-        if (
-            media_service_ref
-            and hasattr(media_service_ref, "search_pixabay")
-            and isinstance(getattr(media_service_ref, "pixabay_api_key", None), str)
-            and media_service_ref.pixabay_api_key
-        ):
-            pix_vid = media_service_ref.search_pixabay(
-                query=core_noun,
-                media_type="video",
-                excluded_urls=used_urls,
-                aspect_ratio=aspect_ratio,
-            )
-            if pix_vid and isinstance(pix_vid, (tuple, list)) and len(pix_vid) == 2:
-                src_url, ext = pix_vid
-                dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_pixabay.{ext}"
-                ok, final_path = self._download(src_url, dest, media_service_ref)
-                if ok:
-                    approved, _ = self.inspector.inspect_candidate(
-                        sentence_text=sentence_text,
-                        keywords=[core_noun],
-                        media_path=final_path,
-                        media_type="video",
-                    )
-                    if approved:
-                        used_urls.add(src_url)
-                        self._index_asset(
-                            source_url=src_url,
-                            local_path=str(final_path.resolve()),
-                            media_type="video",
-                            provider="pixabay",
-                            query=core_noun,
-                            tags=[core_noun],
-                            emotion=beat_emotion,
-                            shot_type=beat_shot_type,
-                            aspect_ratio=aspect_ratio,
-                        )
-                        return SentenceMediaPlacement(
-                            sentence_index=sentence_index,
-                            start_time=start_time,
-                            end_time=end_time,
+                photo_res = media_service_ref.search_pexels(
+                    query=core_noun,
+                    media_type="image",
+                    excluded_urls=used_urls,
+                    aspect_ratio=aspect_ratio,
+                )
+                if photo_res and isinstance(photo_res, (tuple, list)) and len(photo_res) == 2:
+                    src_url, ext = photo_res
+                    dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
+                    ok, final_path = self._download(src_url, dest, media_service_ref)
+                    if ok:
+                        approved, _ = self.inspector.inspect_candidate(
+                            sentence_text=sentence_text,
                             keywords=[core_noun],
-                            media_type="video",
-                            local_path=str(final_path.resolve()),
-                            source_url=src_url,
-                            provider="pixabay",
-                            text=sentence_text,
-                            query=core_noun,
-                            emotion=beat_emotion,
-                            shot_type=beat_shot_type,
+                            media_path=final_path,
+                            media_type="image",
                         )
+                        if approved:
+                            used_urls.add(src_url)
+                            self._index_asset(
+                                source_url=src_url,
+                                local_path=str(final_path.resolve()),
+                                media_type="image",
+                                provider="pexels",
+                                query=core_noun,
+                                tags=[core_noun],
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                                aspect_ratio=aspect_ratio,
+                            )
+                            return SentenceMediaPlacement(
+                                sentence_index=sentence_index,
+                                start_time=start_time,
+                                end_time=end_time,
+                                keywords=[core_noun],
+                                media_type="image",
+                                local_path=str(final_path.resolve()),
+                                source_url=src_url,
+                                provider="pexels",
+                                text=sentence_text,
+                                query=core_noun,
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                            )
+
+            # Pixabay Video & Photo
+            elif (
+                p_id == "pixabay"
+                and media_service_ref
+                and hasattr(media_service_ref, "search_pixabay")
+                and isinstance(getattr(media_service_ref, "pixabay_api_key", None), str)
+                and media_service_ref.pixabay_api_key
+            ):
+                pix_vid = media_service_ref.search_pixabay(
+                    query=core_noun,
+                    media_type="video",
+                    excluded_urls=used_urls,
+                    aspect_ratio=aspect_ratio,
+                )
+                if pix_vid and isinstance(pix_vid, (tuple, list)) and len(pix_vid) == 2:
+                    src_url, ext = pix_vid
+                    dest = (
+                        self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_pixabay.{ext}"
+                    )
+                    ok, final_path = self._download(src_url, dest, media_service_ref)
+                    if ok:
+                        approved, _ = self.inspector.inspect_candidate(
+                            sentence_text=sentence_text,
+                            keywords=[core_noun],
+                            media_path=final_path,
+                            media_type="video",
+                        )
+                        if approved:
+                            used_urls.add(src_url)
+                            self._index_asset(
+                                source_url=src_url,
+                                local_path=str(final_path.resolve()),
+                                media_type="video",
+                                provider="pixabay",
+                                query=core_noun,
+                                tags=[core_noun],
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                                aspect_ratio=aspect_ratio,
+                            )
+                            return SentenceMediaPlacement(
+                                sentence_index=sentence_index,
+                                start_time=start_time,
+                                end_time=end_time,
+                                keywords=[core_noun],
+                                media_type="video",
+                                local_path=str(final_path.resolve()),
+                                source_url=src_url,
+                                provider="pixabay",
+                                text=sentence_text,
+                                query=core_noun,
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                            )
+
+            # Giphy Fallback
+            elif (
+                p_id == "giphy"
+                and media_service_ref
+                and getattr(media_service_ref, "giphy_api_key", None)
+            ):
+                gif_res = media_service_ref.search_giphy(core_noun)
+                if gif_res and isinstance(gif_res, (tuple, list)) and len(gif_res) == 2:
+                    src_url, ext = gif_res
+                    dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
+                    ok, final_path = self._download(src_url, dest, media_service_ref)
+                    if ok:
+                        approved, _ = self.inspector.inspect_candidate(
+                            sentence_text=sentence_text,
+                            keywords=[core_noun],
+                            media_path=final_path,
+                            media_type="image",
+                        )
+                        if approved:
+                            used_urls.add(src_url)
+                            self._index_asset(
+                                source_url=src_url,
+                                local_path=str(final_path.resolve()),
+                                media_type="image",
+                                provider="giphy",
+                                query=core_noun,
+                                tags=[core_noun],
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                                aspect_ratio=aspect_ratio,
+                            )
+                            return SentenceMediaPlacement(
+                                sentence_index=sentence_index,
+                                start_time=start_time,
+                                end_time=end_time,
+                                keywords=[core_noun],
+                                media_type="image",
+                                local_path=str(final_path.resolve()),
+                                source_url=src_url,
+                                provider="giphy",
+                                text=sentence_text,
+                                query=core_noun,
+                                emotion=beat_emotion,
+                                shot_type=beat_shot_type,
+                            )
+
+            # Custom HTTP Provider
+            elif any(c.get("id") == p_id for c in settings.custom_providers):
+                c_cfg = next(c for c in settings.custom_providers if c.get("id") == p_id)
+                custom_placement = self._try_custom_provider(
+                    cfg=c_cfg,
+                    job_id=job_id,
+                    sentence_index=sentence_index,
+                    sentence_text=sentence_text,
+                    query=core_noun,
+                    beat_emotion=beat_emotion,
+                    beat_shot_type=beat_shot_type,
+                    aspect_ratio=aspect_ratio,
+                    used_urls=used_urls,
+                    start_time=start_time,
+                    end_time=end_time,
+                    media_service_ref=media_service_ref,
+                )
+                if custom_placement:
+                    return custom_placement
 
         # ----------------------------------------------------------------------
         # Strategy 7: Brand Card if Brand Detected
@@ -639,6 +713,114 @@ class MediaRouter:
             emotion=beat_emotion,
             shot_type=beat_shot_type,
         )
+
+    def _try_custom_provider(
+        self,
+        cfg: dict[str, Any],
+        job_id: int,
+        sentence_index: int,
+        sentence_text: str,
+        query: str,
+        beat_emotion: str,
+        beat_shot_type: str,
+        aspect_ratio: str,
+        used_urls: set[str],
+        start_time: float,
+        end_time: float,
+        media_service_ref: Any,
+    ) -> SentenceMediaPlacement | None:
+        """Query custom registered HTTP image, GIF, or video provider."""
+        try:
+            from src.models.schemas import CustomProviderConfig
+
+            c = CustomProviderConfig.model_validate(cfg)
+            headers: dict[str, str] = {}
+            if c.auth_token:
+                headers[c.auth_header_name] = c.auth_token
+
+            with httpx.Client(timeout=12.0) as client:
+                if c.mode == "openai_compatible":
+                    resp = client.post(
+                        c.endpoint_url,
+                        json={"prompt": query or sentence_text[:80], "n": 1, "size": "1024x1024"},
+                        headers=headers,
+                    )
+                else:
+                    if "{query}" in c.endpoint_url:
+                        target_url = c.endpoint_url.replace("{query}", query or "technology")
+                    else:
+                        sep = "&" if "?" in c.endpoint_url else "?"
+                        target_url = (
+                            f"{c.endpoint_url}{sep}{c.query_param_name}={query or 'technology'}"
+                        )
+                    if c.http_method == "POST":
+                        resp = client.post(target_url, json={"query": query}, headers=headers)
+                    else:
+                        resp = client.get(target_url, headers=headers)
+
+                if resp.status_code in (200, 201):
+                    data = resp.json()
+                    parts = re.split(r"\.|\b", c.response_url_path.strip())
+                    curr = data
+                    for p in parts:
+                        if not p:
+                            continue
+                        if isinstance(curr, dict) and p in curr:
+                            curr = curr[p]
+                        elif isinstance(curr, list):
+                            try:
+                                curr = curr[int(p)]
+                            except Exception:
+                                curr = None
+                                break
+                    if isinstance(curr, str) and curr.startswith(("http://", "https://")):
+                        ext = (
+                            "mp4"
+                            if c.media_type == "video"
+                            else ("gif" if c.media_type == "gif" else "jpg")
+                        )
+                        dest = (
+                            self.media_cache_dir
+                            / f"job_{job_id}_sent_{sentence_index}_{c.id}.{ext}"
+                        )
+                        ok, final_path = self._download(curr, dest, media_service_ref)
+                        if ok:
+                            approved, _ = self.inspector.inspect_candidate(
+                                sentence_text=sentence_text,
+                                keywords=[query],
+                                media_path=final_path,
+                                media_type=c.media_type,
+                            )
+                            if approved:
+                                used_urls.add(curr)
+                                self._index_asset(
+                                    source_url=curr,
+                                    local_path=str(final_path.resolve()),
+                                    media_type=c.media_type,
+                                    provider=c.id,
+                                    query=query,
+                                    tags=[query, c.id],
+                                    emotion=beat_emotion,
+                                    shot_type=beat_shot_type,
+                                    aspect_ratio=aspect_ratio,
+                                )
+                                return SentenceMediaPlacement(
+                                    sentence_index=sentence_index,
+                                    start_time=start_time,
+                                    end_time=end_time,
+                                    keywords=[query],
+                                    media_type=c.media_type,
+                                    local_path=str(final_path.resolve()),
+                                    source_url=curr,
+                                    provider=c.id,
+                                    text=sentence_text,
+                                    query=query,
+                                    emotion=beat_emotion,
+                                    shot_type=beat_shot_type,
+                                )
+        except Exception:
+            return None
+        return None
 
     def _index_asset(
         self,

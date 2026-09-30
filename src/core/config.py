@@ -138,7 +138,8 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "model" in t:
             flat["local_tts_model"] = t["model"]
         if "voice" in t:
-            flat["local_tts_voice"] = t["voice"]
+            flat["tts_voice"] = str(t["voice"])
+            flat["local_tts_voice"] = str(t["voice"])
         if "timeout" in t:
             flat["local_tts_timeout"] = float(t["timeout"])
 
@@ -193,7 +194,19 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
     if "clustering" in data and isinstance(data["clustering"], dict):
         c = data["clustering"]
         if "similarity_threshold" in c:
-            flat["similarity_threshold"] = c["similarity_threshold"]
+            flat["similarity_threshold"] = float(c["similarity_threshold"])
+        if "time_limit_hours" in c:
+            flat["time_limit_hours"] = int(c["time_limit_hours"])
+        if "max_clusters" in c:
+            flat["max_clusters"] = int(c["max_clusters"])
+
+    # 9.1 Video and Timeline section
+    if "video" in data and isinstance(data["video"], dict):
+        v = data["video"]
+        if "aspect_ratio" in v:
+            flat["aspect_ratio"] = v["aspect_ratio"]
+        if "target_beats" in v:
+            flat["target_beats"] = int(v["target_beats"])
 
     # 10. Media, Inspector, and Branding sections
     if "media" in data and isinstance(data["media"], dict):
@@ -208,6 +221,20 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
             flat["media_inspector_model"] = med["multimodal_model"]
         if "min_relevance_score" in med:
             flat["media_inspector_min_score"] = float(med["min_relevance_score"])
+        if "provider_priority" in med and isinstance(med["provider_priority"], list):
+            flat["provider_priority"] = med["provider_priority"]
+        if "enabled_providers" in med and isinstance(med["enabled_providers"], list):
+            flat["enabled_providers"] = med["enabled_providers"]
+        if "custom_providers" in med and isinstance(med["custom_providers"], list):
+            flat["custom_providers"] = med["custom_providers"]
+    elif "providers" in data and isinstance(data["providers"], dict):
+        p_block = data["providers"]
+        if "priority" in p_block and isinstance(p_block["priority"], list):
+            flat["provider_priority"] = p_block["priority"]
+        if "enabled" in p_block and isinstance(p_block["enabled"], list):
+            flat["enabled_providers"] = p_block["enabled"]
+        if "custom" in p_block and isinstance(p_block["custom"], list):
+            flat["custom_providers"] = p_block["custom"]
 
     if "watermark" in data and isinstance(data["watermark"], dict):
         wm = data["watermark"]
@@ -452,6 +479,10 @@ class Settings(BaseSettings):
         default="gemini",
         description="TTS voice synthesis provider priority: gemini, edge_tts, local, or auto",
     )
+    tts_voice: str = Field(
+        default="Puck",
+        description="Default voice persona or identifier for speech synthesis",
+    )
     local_tts_endpoint: str = Field(
         default="http://localhost:8880/v1/audio/speech",
         description=(
@@ -495,6 +526,34 @@ class Settings(BaseSettings):
     default_media_type_ratio: float = Field(
         default=0.5,
         description="Ratio of stock clips to comedic GIFs",
+    )
+    provider_priority: list[str] = Field(
+        default_factory=lambda: [
+            "asset_library",
+            "pexels",
+            "giphy",
+            "google_search",
+            "pixabay",
+            "flux",
+            "brand_card",
+        ],
+        description="Priority order for visual asset providers in the fallback cascade",
+    )
+    enabled_providers: list[str] = Field(
+        default_factory=lambda: [
+            "asset_library",
+            "pexels",
+            "giphy",
+            "google_search",
+            "pixabay",
+            "flux",
+            "brand_card",
+        ],
+        description="List of enabled provider identifiers",
+    )
+    custom_providers: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="List of dynamically registered custom image, video, or GIF provider configurations",
     )
 
     # Media Inspector
@@ -678,10 +737,28 @@ class Settings(BaseSettings):
         description="Directory for rendered video exports",
     )
 
+    # Video and Timeline Defaults
+    aspect_ratio: Literal["9:16", "16:9"] = Field(
+        default="9:16",
+        description="Target aspect ratio for video generation: 9:16 vertical or 16:9 widescreen",
+    )
+    target_beats: int = Field(
+        default=5,
+        description="Target number of story beats for script structuring",
+    )
+
     # Clustering Hyperparameters
     similarity_threshold: float = Field(
         default=0.82,
         description="Cosine similarity cutoff for grouping news articles",
+    )
+    time_limit_hours: int = Field(
+        default=24,
+        description="Ingestion filter time window in hours",
+    )
+    max_clusters: int = Field(
+        default=5,
+        description="Maximum number of story clusters to process per pipeline run",
     )
 
     # RSS Feeds List

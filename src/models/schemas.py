@@ -388,9 +388,9 @@ class VisualConfigUpdateRequest(BaseModel):
     time_limit_hours: int | None = Field(default=None, ge=1, le=168)
     tts_provider: Literal["gemini", "edge_tts", "local", "auto"] | None = None
     tts_voice: str | None = None
-    caption_style: (
-        Literal["hormozi", "minimal", "karaoke", "news_ticker", "cinematic"] | None
-    ) = None
+    caption_style: Literal["hormozi", "minimal", "karaoke", "news_ticker", "cinematic"] | None = (
+        None
+    )
     caption_level: float | None = Field(default=None, ge=5.0, le=90.0)
     caption_font_size: int | None = Field(default=None, ge=20, le=96)
     caption_uppercase: bool | None = None
@@ -402,3 +402,22 @@ class VisualConfigUpdateRequest(BaseModel):
     similarity_threshold: float | None = Field(default=None, ge=0.5, le=0.98)
     active_preset: str | None = None
 
+
+class YouTubeUploadRequest(BaseModel):
+    """Payload to trigger video publishing to YouTube."""
+
+    job_id: int
+    title: str | None = None
+    description: str | None = None
+    tags: list[str] | None = None
+    privacy_status: Literal["private", "unlisted", "public"] = "unlisted"
+
+
+class YouTubeUploadResult(BaseModel):
+    """Result data from YouTube video publishing."""
+
+    video_id: str
+    video_url: str
+    title: str
+    privacy_status: str
+    uploaded_at: str

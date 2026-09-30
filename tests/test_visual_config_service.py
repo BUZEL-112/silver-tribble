@@ -1,7 +1,9 @@
-"""Tests for VisualConfigService: preset definitions, visual configuration reading, preset application, and persistence."""
+"""Tests for VisualConfigService: presets, visual config reading, and persistence."""
 
 from pathlib import Path
+
 import pytest
+
 from src.core.config import settings
 from src.models.schemas import VisualConfigUpdateRequest
 from src.services.visual_config_service import VisualConfigService
@@ -120,6 +122,7 @@ def test_save_visual_config_updates_yaml_and_settings() -> None:
 
     # Check persistence in backing YAML
     from src.core.config import find_yaml_config_path
+
     cfg_file = find_yaml_config_path() or Path("config.yaml")
     backing_yaml = cfg_file.read_text(encoding="utf-8")
     assert "16:9" in backing_yaml

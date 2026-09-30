@@ -609,7 +609,9 @@ class ProviderService:
             for item in settings.custom_providers:
                 if item.get("id") == provider_id:
                     item["auth_token"] = api_key
-                    data.setdefault("media", {})["custom_providers"] = list(settings.custom_providers)
+                    data.setdefault("media", {})["custom_providers"] = list(
+                        settings.custom_providers
+                    )
                     break
 
         config_path.write_text(yaml.dump(data, sort_keys=False), encoding="utf-8")

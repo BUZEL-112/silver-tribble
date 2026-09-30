@@ -1,6 +1,7 @@
-"""Tests for ProviderService: provider listing, priority movement, removal, and custom provider lifecycle."""
+"""Tests for ProviderService: provider listing, priority movement, and custom providers."""
 
 import pytest
+
 from src.core.config import settings
 from src.models.schemas import CustomProviderConfig
 from src.services.provider_service import ProviderService
@@ -30,7 +31,6 @@ def test_list_providers() -> None:
 
     # Enabled providers should come before disabled providers
     enabled_providers = [p for p in providers if p.is_enabled]
-    disabled_providers = [p for p in providers if not p.is_enabled]
     assert len(enabled_providers) > 0
 
     for p in enabled_providers:

@@ -16,7 +16,10 @@ class VisualConfigService:
         "viral_shorts_9_16": {
             "name": "Viral Shorts (9:16)",
             "badge": "Mobile Vertical",
-            "description": "9:16 vertical format with kinetic Hormozi captions, 5 beats, balanced stock footage and reaction GIFs.",
+            "description": (
+                "9:16 vertical format with kinetic Hormozi captions, 5 beats, "
+                "balanced stock footage and reaction GIFs."
+            ),
             "values": {
                 "aspect_ratio": "9:16",
                 "target_beats": 5,
@@ -39,7 +42,10 @@ class VisualConfigService:
         "widescreen_documentary_16_9": {
             "name": "Widescreen Documentary (16:9)",
             "badge": "Desktop Horizontal",
-            "description": "16:9 widescreen format with deep authoritative narrator, 7 beats, and 85% stock footage.",
+            "description": (
+                "16:9 widescreen format with deep authoritative narrator, 7 beats, "
+                "and 85% stock footage."
+            ),
             "values": {
                 "aspect_ratio": "16:9",
                 "target_beats": 7,
@@ -62,7 +68,9 @@ class VisualConfigService:
         "high_retention_meme": {
             "name": "High-Retention Meme (9:16)",
             "badge": "Reaction Meme Focus",
-            "description": "9:16 vertical shorts powered by 80% reaction GIFs and punchy kinetic subtitles.",
+            "description": (
+                "9:16 vertical shorts powered by 80% reaction GIFs and punchy kinetic subtitles."
+            ),
             "values": {
                 "aspect_ratio": "9:16",
                 "target_beats": 5,
@@ -85,7 +93,10 @@ class VisualConfigService:
         "fast_draft_low_cost": {
             "name": "Fast Draft / Low-Cost",
             "badge": "Minimal Latency",
-            "description": "Rapid 3-beat outline with offline or edge speech synthesis and local asset prioritization.",
+            "description": (
+                "Rapid 3-beat outline with offline or edge speech synthesis "
+                "and local asset prioritization."
+            ),
             "values": {
                 "aspect_ratio": "9:16",
                 "target_beats": 3,
@@ -103,6 +114,32 @@ class VisualConfigService:
                 "llm_planning_model": "gpt-4o-mini",
                 "llm_writing_model": "gpt-4o-mini",
                 "similarity_threshold": 0.82,
+            },
+        },
+        "tech_journalist": {
+            "name": "Tech Journalist & Analyst",
+            "badge": "Serious Editorial",
+            "description": (
+                "Authoritative, analytical tech breakdown with rigorous skepticism "
+                "and deep industry context."
+            ),
+            "values": {
+                "aspect_ratio": "16:9",
+                "target_beats": 6,
+                "time_limit_hours": 48,
+                "max_clusters": 4,
+                "tts_provider": "gemini",
+                "tts_voice": "Charon",
+                "caption_style": "cinematic",
+                "caption_level": 15.0,
+                "caption_font_size": 36,
+                "caption_uppercase": False,
+                "default_media_type_ratio": 0.8,
+                "media_inspector_mode": "multimodal",
+                "media_inspector_min_score": 7.0,
+                "llm_planning_model": "gemini-2.0-flash",
+                "llm_writing_model": "gemini-2.0-flash",
+                "similarity_threshold": 0.85,
             },
         },
     }

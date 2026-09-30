@@ -1,8 +1,10 @@
 import json
+import os
 import re
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
+import httpx
 import typer
 from rich.console import Console
 from rich.panel import Panel
@@ -11,7 +13,7 @@ from rich.table import Table
 from src.core.config import settings
 from src.core.database import get_session, init_db
 from src.flows.video_pipeline_flow import run_roundup_pipeline, run_video_pipeline
-from src.models.schemas import SentenceMediaPlacement, WordCaption
+from src.models.schemas import SentenceMediaPlacement, WordCaption, YouTubeUploadRequest
 from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.asset_repository import AssetRepository
@@ -23,6 +25,7 @@ from src.services.caption_service import CaptionService
 from src.services.cluster_review_service import ClusterReviewService
 from src.services.clustering_service import ClusteringService
 from src.services.health_service import HealthService
+from src.services.job_queue_service import JobQueueService
 from src.services.media_service import MediaService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
@@ -32,6 +35,7 @@ from src.services.storage_service import get_storage_service
 from src.services.subtitle_service import SubtitleService
 from src.services.tts_service import TtsService
 from src.services.youtube_metadata_service import YouTubeMetadataService
+from src.services.youtube_upload_service import YouTubeUploadService
 
 app = typer.Typer(
     name="ai-video",
@@ -40,6 +44,19 @@ app = typer.Typer(
     no_args_is_help=True,
 )
 console = Console()
+
+
+def _resolve_remote_server(server: str | None = None) -> str | None:
+    """Resolve target remote server from option or environment variable."""
+    return server or os.environ.get("AI_VIDEO_SERVER")
+
+
+def _get_remote_auth_headers() -> dict[str, str]:
+    """Build Authorization header if bearer token configured."""
+    token = os.environ.get("AI_VIDEO_API_KEY") or settings.api_auth_token
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
 
 
 def print_studio_banner() -> None:
@@ -1448,13 +1465,62 @@ def render(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Mock Remotion render without executing node")
     ] = False,
+    async_mode: Annotated[
+        bool, typer.Option("--async", help="Queue render asynchronously")
+    ] = False,
     as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
     actor: Annotated[
         str, typer.Option("--actor", help="Actor identifier for action logging")
     ] = "cli",
+    server: Annotated[str | None, typer.Option("--server", help="Remote server URL")] = None,
 ) -> None:
     """Render the finalized video through the Remotion engine."""
+    remote_server = _resolve_remote_server(server)
+    if remote_server:
+        url = f"{remote_server.rstrip('/')}/api/jobs/{job_id}/render"
+        params = {"dry_run": str(dry_run).lower(), "async_mode": str(async_mode).lower()}
+        headers = _get_remote_auth_headers()
+        try:
+            with httpx.Client(timeout=300.0) as client:
+                resp = client.post(url, params=params, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                if as_json:
+                    print(json.dumps(data, indent=2))
+                else:
+                    console.print(f"[bold green]Remote render response:[/bold green] {data}")
+                return
+        except Exception as exc:
+            if as_json:
+                print(json.dumps({"status": "failed", "error": str(exc)}))
+            else:
+                console.print(f"[bold red]Remote render error:[/bold red] {exc}")
+            raise typer.Exit(code=1)
+
     init_db()
+    if async_mode:
+        queue = JobQueueService()
+        queue.submit_render_job(job_id=job_id, dry_run=dry_run)
+        if as_json:
+            print(
+                json.dumps(
+                    {
+                        "status": "queued",
+                        "job_id": job_id,
+                        "message": "Render job dispatched to queue",
+                    }
+                )
+            )
+        else:
+            console.print(
+                Panel(
+                    f"[bold green]Render job #{job_id} dispatched to queue[/bold green]\n"
+                    f"Check progress: python -m src.cli status --job-id {job_id}",
+                    style="cyan",
+                )
+            )
+        return
+
     storage = get_storage_service()
 
     with get_session() as session:
@@ -1627,11 +1693,83 @@ def run(
         typer.Option("--gemini-key", help="Direct Google Gemini / AI Studio API key"),
     ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    async_mode: Annotated[
+        bool, typer.Option("--async", help="Queue pipeline execution asynchronously")
+    ] = False,
     actor: Annotated[
         str, typer.Option("--actor", help="Actor identifier for action logging")
     ] = "cli",
+    server: Annotated[str | None, typer.Option("--server", help="Remote server URL")] = None,
 ) -> None:
     """Execute end-to-end pipeline from news ingestion to final video render."""
+    remote_server = _resolve_remote_server(server)
+    if remote_server:
+        url = f"{remote_server.rstrip('/')}/api/pipeline/run-all"
+        params = {
+            "aspect_ratio": aspect_ratio,
+            "dry_run": str(dry_run).lower(),
+            "async_mode": str(async_mode).lower(),
+        }
+        headers = _get_remote_auth_headers()
+        try:
+            with httpx.Client(timeout=300.0) as client:
+                resp = client.post(url, params=params, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                if as_json:
+                    print(json.dumps(data, indent=2))
+                else:
+                    console.print(f"[bold green]Remote pipeline response:[/bold green] {data}")
+                return
+        except Exception as exc:
+            if as_json:
+                print(json.dumps({"status": "failed", "error": str(exc)}))
+            else:
+                console.print(f"[bold red]Remote pipeline error:[/bold red] {exc}")
+            raise typer.Exit(code=1)
+
+    if async_mode:
+        init_db()
+        queue = JobQueueService()
+        try:
+            target_ids = None
+            if cluster_ids:
+                target_ids = [int(x.strip()) for x in cluster_ids.split(",") if x.strip()]
+            elif cluster_id is not None:
+                target_ids = [cluster_id]
+
+            submitted_id = queue.submit_pipeline_job(
+                cluster_id=target_ids[0] if target_ids and len(target_ids) == 1 else None,
+                cluster_ids=target_ids if target_ids and len(target_ids) > 1 else None,
+                aspect_ratio=aspect_ratio,
+                dry_run=dry_run,
+            )
+            if as_json:
+                print(
+                    json.dumps(
+                        {
+                            "status": "queued",
+                            "job_id": submitted_id,
+                            "message": "Pipeline run dispatched to background queue",
+                        }
+                    )
+                )
+            else:
+                console.print(
+                    Panel(
+                        f"[bold green]Pipeline run queued with ID #{submitted_id}[/bold green]\n"
+                        f"Check progress: python -m src.cli status --job-id {submitted_id}",
+                        style="cyan",
+                    )
+                )
+            return
+        except Exception as exc:
+            if as_json:
+                print(json.dumps({"status": "failed", "error": str(exc)}))
+            else:
+                console.print(f"[bold red]Failed to queue pipeline run:[/bold red] {exc}")
+            raise typer.Exit(code=1)
+
     if not as_json:
         console.print("[bold cyan]Starting AI News to YouTube Video Pipeline[/bold cyan]")
     init_db()
@@ -2302,6 +2440,200 @@ def trending_clusters(
         )
 
     console.print(table)
+
+
+@app.command(name="status")
+def job_status(
+    job_id: Annotated[int, typer.Option("--job-id", "-j", help="Render job ID")],
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    server: Annotated[str | None, typer.Option("--server", help="Remote server URL")] = None,
+) -> None:
+    """Check execution and rendering progress for a pipeline job."""
+    remote_server = _resolve_remote_server(server)
+    if remote_server:
+        url = f"{remote_server.rstrip('/')}/api/jobs/{job_id}/progress"
+        headers = _get_remote_auth_headers()
+        try:
+            with httpx.Client(timeout=15.0) as client:
+                resp = client.get(url, headers=headers)
+                if resp.status_code == 404:
+                    if as_json:
+                        typer.echo(
+                            json.dumps(
+                                {"status": "not_found", "error": f"Job #{job_id} not found."}
+                            )
+                        )
+                    else:
+                        console.print(f"[bold red]Error:[/bold red] Job #{job_id} not found.")
+                    raise typer.Exit(code=1)
+                resp.raise_for_status()
+                data = resp.json()
+        except typer.Exit:
+            raise
+        except Exception as exc:
+            if as_json:
+                typer.echo(json.dumps({"status": "failed", "error": str(exc)}))
+            else:
+                console.print(f"[bold red]Remote status query failed:[/bold red] {exc}")
+            raise typer.Exit(code=1)
+    else:
+        init_db()
+        data = JobQueueService.get_progress(job_id)
+        if not data:
+            if as_json:
+                typer.echo(
+                    json.dumps({"status": "not_found", "error": f"Job #{job_id} not found."})
+                )
+            else:
+                console.print(f"[bold red]Error:[/bold red] Render job #{job_id} not found.")
+            raise typer.Exit(code=1)
+
+    if as_json:
+        typer.echo(json.dumps(data, indent=2))
+        return
+
+    table = Table(title=f"Pipeline Execution Status: Job #{job_id}")
+    table.add_column("Field", style="cyan")
+    table.add_column("Value", style="white")
+
+    status_color = (
+        "green"
+        if data.get("status") == "completed"
+        else ("red" if data.get("status") == "failed" else "yellow")
+    )
+    table.add_row("Status", f"[{status_color}]{data.get('status')}[/{status_color}]")
+    table.add_row("Stage", str(data.get("stage", "-")))
+    table.add_row("Progress", f"{data.get('percent', 0)}%")
+    table.add_row("Message", str(data.get("message", "-")))
+    if data.get("output_video_path"):
+        table.add_row("Output Video", f"[bold green]{data.get('output_video_path')}[/bold green]")
+    if data.get("error"):
+        table.add_row("Error", f"[bold red]{data.get('error')}[/bold red]")
+    if data.get("updated_at"):
+        table.add_row("Last Updated", str(data.get("updated_at")))
+
+    console.print(table)
+
+
+@app.command(name="publish-youtube")
+def publish_to_youtube(
+    job_id: Annotated[int, typer.Option("--job-id", "-j", help="Render job ID")],
+    privacy: Annotated[
+        str,
+        typer.Option(
+            "--privacy",
+            "-p",
+            help="YouTube privacy status: unlisted, private, public",
+        ),
+    ] = "unlisted",
+    title: Annotated[
+        str | None, typer.Option("--title", help="Override YouTube video title")
+    ] = None,
+    description: Annotated[
+        str | None, typer.Option("--description", help="Override YouTube video description")
+    ] = None,
+    tags: Annotated[str | None, typer.Option("--tags", help="Comma-separated YouTube tags")] = None,
+    as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
+    server: Annotated[str | None, typer.Option("--server", help="Remote server URL")] = None,
+) -> None:
+    """Publish a completed video render job directly to YouTube."""
+    if privacy not in ("unlisted", "private", "public"):
+        err = f"Invalid privacy status '{privacy}'. Must be unlisted, private, or public."
+        if as_json:
+            typer.echo(json.dumps({"status": "failed", "error": err}))
+        else:
+            console.print(f"[bold red]Error:[/bold red] {err}")
+        raise typer.Exit(code=1)
+
+    tag_list = [t.strip() for t in tags.split(",") if t.strip()] if tags else None
+    remote_server = _resolve_remote_server(server)
+
+    if remote_server:
+        url = f"{remote_server.rstrip('/')}/api/jobs/{job_id}/publish-youtube"
+        headers = _get_remote_auth_headers()
+        payload = {
+            "job_id": job_id,
+            "privacy_status": privacy,
+            "title": title,
+            "description": description,
+            "tags": tag_list,
+        }
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                resp = client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                if as_json:
+                    typer.echo(json.dumps(data, indent=2))
+                else:
+                    console.print(
+                        Panel(
+                            f"[bold green]YouTube Video Published Successfully[/bold green]\n"
+                            f"Video ID: {data.get('video_id')}\n"
+                            f"URL: {data.get('video_url')}\n"
+                            f"Privacy: {data.get('privacy_status')}",
+                            style="green",
+                        )
+                    )
+                return
+        except Exception as exc:
+            if as_json:
+                typer.echo(json.dumps({"status": "failed", "error": str(exc)}))
+            else:
+                console.print(f"[bold red]YouTube upload failed:[/bold red] {exc}")
+            raise typer.Exit(code=1)
+
+    init_db()
+    uploader = YouTubeUploadService()
+    if not uploader.is_configured():
+        err = (
+            "YouTube OAuth is not configured. Please set YOUTUBE_CLIENT_ID, "
+            "YOUTUBE_CLIENT_SECRET, and YOUTUBE_REFRESH_TOKEN in settings or .env"
+        )
+        if as_json:
+            typer.echo(json.dumps({"status": "failed", "error": err}))
+        else:
+            console.print(f"[bold red]Error:[/bold red] {err}")
+        raise typer.Exit(code=1)
+
+    req = YouTubeUploadRequest(
+        job_id=job_id,
+        privacy_status=privacy,  # type: ignore[arg-type]
+        title=title,
+        description=description,
+        tags=tag_list,
+    )
+
+    try:
+        result = uploader.upload_video_for_job(req)
+        res_data = {
+            "status": "success",
+            "video_id": result.video_id,
+            "video_url": result.video_url,
+            "title": result.title,
+            "privacy_status": result.privacy_status,
+            "uploaded_at": result.uploaded_at,
+        }
+        if as_json:
+            typer.echo(json.dumps(res_data, indent=2))
+            return
+
+        console.print(
+            Panel(
+                f"[bold green]YouTube Video Published Successfully[/bold green]\n"
+                f"Title: {result.title}\n"
+                f"Video ID: {result.video_id}\n"
+                f"URL: {result.video_url}\n"
+                f"Privacy: {result.privacy_status}",
+                style="green",
+            )
+        )
+    except Exception as exc:
+        if as_json:
+            typer.echo(json.dumps({"status": "failed", "error": str(exc)}))
+        else:
+            console.print(f"[bold red]YouTube upload failed:[/bold red] {exc}")
+        raise typer.Exit(code=1)
 
 
 if __name__ == "__main__":

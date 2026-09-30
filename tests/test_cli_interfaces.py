@@ -2,13 +2,14 @@
 
 import json
 import uuid
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
 from src.cli import app
 from src.core.database import get_session, init_db
 from src.models.entities import Article, ScriptRecord, StoryCluster
-from src.models.schemas import WordCaption
+from src.models.schemas import WordCaption, YouTubeUploadResult
 from src.repositories.render_repository import RenderRepository
 
 runner = CliRunner()
@@ -166,3 +167,117 @@ def test_cli_publish_command(tmp_path) -> None:
     assert "metadata" in data
     assert "srt_subtitles" in data
     assert "vtt_subtitles" in data
+
+
+def test_cli_status_command() -> None:
+    """Verify status command retrieves job progress in text and json modes."""
+    init_db()
+    uid = uuid.uuid4().hex[:8]
+    with get_session() as session:
+        cluster = StoryCluster(
+            cluster_hash=f"hash_status_cli_test_{uid}",
+            title=f"Status CLI Test {uid}",
+            summary="Summary",
+            article_ids=[],
+            status="pending",
+        )
+        session.add(cluster)
+        session.flush()
+
+        script = ScriptRecord(
+            cluster_id=cluster.id,
+            title="Status Script",
+            aspect_ratio="9:16",
+            beats=[],
+            full_narration="Narration text",
+        )
+        session.add(script)
+        session.flush()
+
+        render_repo = RenderRepository(session)
+        job = render_repo.create_job(script_id=script.id, aspect_ratio="9:16")
+        job_id = job.id
+        session.commit()
+
+    # Text mode
+    res_text = runner.invoke(app, ["status", "--job-id", str(job_id)])
+    assert res_text.exit_code == 0
+    assert "Pipeline Execution Status" in res_text.stdout
+
+    # JSON mode
+    res_json = runner.invoke(app, ["status", "--job-id", str(job_id), "--json"])
+    assert res_json.exit_code == 0
+    data = json.loads(res_json.stdout)
+    assert data["job_id"] == job_id
+    assert "status" in data
+
+    # Not found case
+    res_err = runner.invoke(app, ["status", "--job-id", "99999", "--json"])
+    assert res_err.exit_code == 1
+    err_data = json.loads(res_err.stdout)
+    assert err_data["status"] == "not_found"
+
+
+def test_cli_publish_youtube_command() -> None:
+    """Verify publish-youtube command validation, config check, and upload execution."""
+    init_db()
+
+    # Invalid privacy
+    res_invalid = runner.invoke(
+        app,
+        ["publish-youtube", "--job-id", "1", "--privacy", "invalid_status", "--json"],
+    )
+    assert res_invalid.exit_code == 1
+    assert "Invalid privacy status" in res_invalid.stdout
+
+    # OAuth unconfigured
+    with patch(
+        "src.services.youtube_upload_service.YouTubeUploadService.is_configured",
+        return_value=False,
+    ):
+        res_unconf = runner.invoke(app, ["publish-youtube", "--job-id", "1", "--json"])
+        assert res_unconf.exit_code == 1
+        assert "YouTube OAuth is not configured" in res_unconf.stdout
+
+    # Successful upload mocked
+    mock_result = YouTubeUploadResult(
+        video_id="yt_test_vid_123",
+        video_url="https://youtu.be/yt_test_vid_123",
+        title="Test Published Video",
+        privacy_status="unlisted",
+        uploaded_at="2026-09-30T12:00:00Z",
+    )
+    with (
+        patch(
+            "src.services.youtube_upload_service.YouTubeUploadService.is_configured",
+            return_value=True,
+        ),
+        patch(
+            "src.services.youtube_upload_service.YouTubeUploadService.upload_video_for_job",
+            return_value=mock_result,
+        ),
+    ):
+        res_success = runner.invoke(
+            app,
+            ["publish-youtube", "--job-id", "1", "--privacy", "unlisted", "--json"],
+        )
+        assert res_success.exit_code == 0
+        data = json.loads(res_success.stdout)
+        assert data["status"] == "success"
+        assert data["video_id"] == "yt_test_vid_123"
+
+        # Text mode
+        res_text = runner.invoke(app, ["publish-youtube", "--job-id", "1", "--privacy", "unlisted"])
+        assert res_text.exit_code == 0
+        assert "YouTube Video Published Successfully" in res_text.stdout
+
+
+def test_cli_render_async_option() -> None:
+    """Verify render command supports --async flag for queued execution."""
+    with patch("src.services.job_queue_service.JobQueueService.submit_render_job") as mock_submit:
+        res = runner.invoke(app, ["render", "--job-id", "10", "--async", "--json"])
+        assert res.exit_code == 0
+        data = json.loads(res.stdout)
+        assert data["status"] == "queued"
+        assert data["job_id"] == 10
+        mock_submit.assert_called_once_with(job_id=10, dry_run=False)

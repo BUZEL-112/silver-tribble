@@ -1,6 +1,6 @@
 """Audits narration scripts for pacing, hook strength, and retention characteristics."""
 
-from typing import Any
+from typing import Any, Literal
 
 from src.models.entities import ScriptRecord
 from src.models.schemas import ScriptAuditReport
@@ -64,6 +64,7 @@ class ScriptAuditorService:
 
         wpm = (word_count / est_duration) * 60.0 if est_duration > 0 else 0.0
 
+        pacing_rating: Literal["optimal", "too_fast", "too_slow"]
         if wpm > 185.0:
             pacing_rating = "too_fast"
         elif wpm < 125.0:

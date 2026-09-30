@@ -440,3 +440,151 @@ def test_cli_edit_media_commands(tmp_path: Path) -> None:
     assert edit_parsed["status"] == "success"
     assert edit_parsed["updated_index"] == 0
     assert edit_parsed["updated_placement"]["provider"] == "custom"
+
+
+def test_media_search_candidates_mocked(tmp_path: Path, mock_cost_repo: CostRepository) -> None:
+    """Verify candidate search methods for Giphy and Pexels with mocked API responses."""
+    storage = LocalStorageService(base_dir=tmp_path / "storage")
+    svc = MediaService(storage_service=storage, cost_repo=mock_cost_repo)
+    svc.giphy_api_key = "test_giphy_key"
+    svc.pexels_api_key = "test_pexels_key"
+
+    # Test Giphy candidates
+    mock_giphy_payload = {
+        "data": [
+            {
+                "id": "gif_1",
+                "title": "Excited AI",
+                "images": {
+                    "fixed_height_small": {"url": "https://giphy.com/preview1.gif"},
+                    "original": {
+                        "url": "https://giphy.com/orig1.gif",
+                        "width": "200",
+                        "height": "200",
+                    },
+                },
+            }
+        ]
+    }
+    with patch("httpx.Client.get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: mock_giphy_payload)
+        candidates = svc.search_giphy_candidates(query="excited", limit=5)
+        assert len(candidates) == 1
+        assert candidates[0]["id"] == "gif_1"
+        assert candidates[0]["provider"] == "giphy"
+        assert candidates[0]["media_type"] == "gif"
+
+    # Test Pexels candidates
+    mock_pexels_payload = {
+        "videos": [
+            {
+                "id": 999,
+                "image": "https://pexels.com/thumb.jpg",
+                "width": 1080,
+                "height": 1920,
+                "duration": 5,
+                "video_files": [{"link": "https://pexels.com/video.mp4", "quality": "hd"}],
+            }
+        ]
+    }
+    with patch("httpx.Client.get") as mock_get:
+        mock_get.return_value = MagicMock(status_code=200, json=lambda: mock_pexels_payload)
+        p_candidates = svc.search_pexels_candidates(query="robot", media_type="video", limit=5)
+        assert len(p_candidates) == 1
+        assert p_candidates[0]["id"] == "999"
+        assert p_candidates[0]["provider"] == "pexels"
+        assert p_candidates[0]["media_type"] == "video"
+
+
+def test_api_media_search_endpoint() -> None:
+    """Verify GET /api/media/search endpoint delegates correctly to service."""
+    with patch("src.services.media_service.MediaService.search_giphy_candidates") as mock_giphy:
+        mock_giphy.return_value = [
+            {
+                "id": "123",
+                "title": "Mock GIF",
+                "preview_url": "https://test.com/preview.gif",
+                "source_url": "https://test.com/orig.gif",
+                "provider": "giphy",
+                "media_type": "gif",
+            }
+        ]
+        resp = client.get("/api/media/search?query=excited&provider=giphy&limit=5")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["provider"] == "giphy"
+        mock_giphy.assert_called_once_with(query="excited", limit=5)
+
+
+def test_api_upload_frame_material_endpoint(tmp_path: Path) -> None:
+    """Verify POST /api/jobs/{job_id}/media/{sentence_index}/upload saves and updates placement."""
+    init_db()
+    test_uid = uuid.uuid4().hex[:8]
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        cluster = StoryCluster(
+            cluster_hash=f"hash_upload_{test_uid}",
+            title="Upload Test Cluster",
+            summary="Upload Test Cluster",
+            article_ids=[],
+            article_count=1,
+            status="ready",
+        )
+        session.add(cluster)
+        session.flush()
+
+        script = ScriptRecord(
+            cluster_id=cluster.id,
+            title="Upload Test Video",
+            aspect_ratio="9:16",
+            beats=[{"beat_type": "hook", "visual_direction": "lab"}],
+            full_narration="Upload test line.",
+        )
+        session.add(script)
+        session.flush()
+
+        job = render_repo.create_job(script_id=script.id, aspect_ratio="9:16")
+        session.commit()
+        job_id = job.id
+
+    media_cache = settings.media_cache_dir
+    media_cache.mkdir(parents=True, exist_ok=True)
+    p_file = media_cache / f"placements_job_{job_id}.json"
+    p_data = [
+        {
+            "sentence_index": 0,
+            "start_time": 0.0,
+            "end_time": 3.0,
+            "keywords": ["upload"],
+            "media_type": "video",
+            "local_path": "/fake/old.mp4",
+            "source_url": "https://fake.url/old.mp4",
+            "provider": "pexels",
+            "text": "Initial sentence.",
+            "query": "initial",
+        }
+    ]
+    p_file.write_text(json.dumps(p_data), encoding="utf-8")
+
+    # Upload test image
+    file_bytes = b"fake-jpeg-binary-content"
+    resp = client.post(
+        f"/api/jobs/{job_id}/media/0/upload",
+        files={"file": ("custom_frame.jpg", file_bytes, "image/jpeg")},
+    )
+    assert resp.status_code == 200
+    res_data = resp.json()
+    assert res_data["status"] == "success"
+    assert res_data["placement"]["provider"] == "custom"
+    assert res_data["placement"]["media_type"] == "image"
+    assert res_data["placement"]["local_path"].endswith(".jpg")
+    assert f"job_{job_id}_sent_0_custom" in res_data["placement"]["local_path"]
+
+    # Test invalid extension rejected
+    bad_resp = client.post(
+        f"/api/jobs/{job_id}/media/0/upload",
+        files={"file": ("malicious.exe", b"binary", "application/octet-stream")},
+    )
+    assert bad_resp.status_code == 400
+    assert "Unsupported file format" in bad_resp.json()["detail"]

@@ -165,15 +165,18 @@ class ClusteringService:
 
                 effective_key = self.gemini_key or self.api_key
                 g_client = genai.Client(api_key=effective_key)
+                embeddings_list: list[list[float]] = []
                 try:
                     # google-genai expects a list of lists of strings (or Content objects)
                     # to embed multiple individual documents. Passing a flat list of strings
                     # treats all strings as parts of a single multimodal content object.
                     g_resp = g_client.models.embed_content(
                         model=target_model,
-                        contents=[[t] for t in texts],
+                        contents=[[t] for t in texts],  # type: ignore[arg-type]
                     )
-                    embeddings_list = [e.values for e in g_resp.embeddings]
+                    embeddings_list = [
+                        list(e.values) for e in (g_resp.embeddings or []) if e.values is not None
+                    ]
                 except Exception:
                     embeddings_list = []
                     for t in texts:
@@ -181,7 +184,8 @@ class ClusteringService:
                             model=target_model,
                             contents=t,
                         )
-                        embeddings_list.append(r.embeddings[0].values)
+                        if r.embeddings and r.embeddings[0].values:
+                            embeddings_list.append(list(r.embeddings[0].values))
 
                 saved_count = 0
                 for idx, emb_vals in enumerate(embeddings_list):
@@ -266,8 +270,8 @@ class ClusteringService:
             return []
 
         # Ensure consistent vector dimension across articles
-        target_dim = len(embedded[0].embedding)
-        valid_articles = [a for a in embedded if len(a.embedding) == target_dim]
+        target_dim = len(embedded[0].embedding or [])
+        valid_articles = [a for a in embedded if a.embedding and len(a.embedding) == target_dim]
         if not valid_articles:
             return []
 

@@ -394,6 +394,91 @@ class MediaService:
 
         return None
 
+    def search_pexels_candidates(
+        self,
+        query: str,
+        media_type: Literal["video", "image"] = "video",
+        limit: int = 12,
+        aspect_ratio: str = "9:16",
+    ) -> list[dict[str, Any]]:
+        """Search Pexels API and return multiple candidate items with preview URLs."""
+        if not self.pexels_api_key or not query.strip():
+            return []
+
+        headers = {"Authorization": self.pexels_api_key}
+        orientation = "portrait" if aspect_ratio == "9:16" else "landscape"
+        clean_words = [w for w in re.findall(r"[a-zA-Z0-9]+", query) if w.lower() not in STOP_WORDS]
+        effective_query = " ".join(clean_words[:4]) if len(clean_words) >= 2 else query
+
+        candidates: list[dict[str, Any]] = []
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                if media_type == "video":
+                    url = (
+                        f"https://api.pexels.com/videos/search?query={effective_query}"
+                        f"&per_page={limit}&orientation={orientation}"
+                    )
+                    resp = client.get(url, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        videos = data.get("videos", [])
+                        for v in videos:
+                            files = v.get("video_files", [])
+                            if not files:
+                                continue
+                            best_file = files[0]
+                            for f in files:
+                                if f.get("quality") in ["sd", "hd"]:
+                                    best_file = f
+                                    break
+                            link = best_file.get("link")
+                            if not link:
+                                continue
+                            candidates.append(
+                                {
+                                    "id": str(v.get("id", "")),
+                                    "title": f"Pexels Video {v.get('id', '')}",
+                                    "preview_url": v.get("image", ""),
+                                    "source_url": link,
+                                    "provider": "pexels",
+                                    "media_type": "video",
+                                    "width": v.get("width"),
+                                    "height": v.get("height"),
+                                    "duration": v.get("duration", 0),
+                                }
+                            )
+                else:
+                    photo_url = (
+                        f"https://api.pexels.com/v1/search?query={effective_query}"
+                        f"&per_page={limit}&orientation={orientation}"
+                    )
+                    resp = client.get(photo_url, headers=headers)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        photos = data.get("photos", [])
+                        for p in photos:
+                            src_dict = p.get("src", {})
+                            preview_url = src_dict.get("medium") or src_dict.get("tiny") or ""
+                            source_url = src_dict.get("large") or src_dict.get("original") or ""
+                            if not source_url:
+                                continue
+                            candidates.append(
+                                {
+                                    "id": str(p.get("id", "")),
+                                    "title": p.get("alt") or f"Pexels Photo {p.get('id', '')}",
+                                    "preview_url": preview_url,
+                                    "source_url": source_url,
+                                    "provider": "pexels",
+                                    "media_type": "image",
+                                    "width": p.get("width"),
+                                    "height": p.get("height"),
+                                    "duration": 0,
+                                }
+                            )
+        except Exception:
+            return []
+        return candidates
+
     def search_pixabay(
         self,
         query: str,
@@ -455,8 +540,8 @@ class MediaService:
         if not self.giphy_api_key:
             return None
 
-        params = {
-            "api_key": self.giphy_api_key,
+        params: dict[str, str | int] = {
+            "api_key": self.giphy_api_key or "",
             "q": query,
             "limit": 1,
             "rating": "pg-13",
@@ -480,6 +565,59 @@ class MediaService:
             return None
 
         return None
+
+    def search_giphy_candidates(
+        self,
+        query: str,
+        limit: int = 12,
+    ) -> list[dict[str, Any]]:
+        """Search Giphy API for reaction meme GIFs and return multiple candidate items."""
+        if not self.giphy_api_key or not query.strip():
+            return []
+
+        params: dict[str, str | int] = {
+            "api_key": self.giphy_api_key or "",
+            "q": query,
+            "limit": limit,
+            "rating": "pg-13",
+        }
+
+        candidates: list[dict[str, Any]] = []
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                url = "https://api.giphy.com/v1/gifs/search"
+                resp = client.get(url, params=params)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    gifs = data.get("data", [])
+                    for g in gifs:
+                        imgs = g.get("images", {})
+                        preview_url = (
+                            imgs.get("fixed_height_small", {}).get("url")
+                            or imgs.get("downsized_medium", {}).get("url")
+                            or imgs.get("original", {}).get("url")
+                        )
+                        source_url = imgs.get("original", {}).get("url") or imgs.get(
+                            "downsized_medium", {}
+                        ).get("url")
+                        if not preview_url or not source_url:
+                            continue
+                        candidates.append(
+                            {
+                                "id": str(g.get("id", "")),
+                                "title": g.get("title") or "Giphy GIF",
+                                "preview_url": preview_url,
+                                "source_url": source_url,
+                                "provider": "giphy",
+                                "media_type": "gif",
+                                "width": imgs.get("original", {}).get("width"),
+                                "height": imgs.get("original", {}).get("height"),
+                                "duration": 0,
+                            }
+                        )
+        except Exception:
+            return []
+        return candidates
 
     def download_asset(self, url: str, destination_path: Path) -> tuple[bool, Path]:
         """Download remote asset to local path, transcoding GIFs to MP4 to prevent looping."""
@@ -728,9 +866,20 @@ class MediaService:
         job_id: int,
         sentence_index: int,
         new_media_path_or_url: str,
-        new_media_type: Literal["video", "image", "gif"] | None = None,
         new_query: str | None = None,
-        provider: Literal["pexels", "giphy", "fallback", "custom"] = "custom",
+        new_media_type: Literal["video", "image", "gif"] | None = None,
+        provider: Literal[
+            "pexels",
+            "pixabay",
+            "giphy",
+            "google_search",
+            "brand_card",
+            "flux_generation",
+            "ai_generated",
+            "asset_library",
+            "fallback",
+            "custom",
+        ] = "custom",
     ) -> SentenceMediaPlacement:
         """Replace media asset for a specific sentence index by path or URL."""
         placements = self.get_job_placements(job_id)
@@ -861,7 +1010,9 @@ class MediaService:
         if not ok:
             raise RuntimeError(f"Failed to download asset from {source_url}")
 
-        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
+        actual_type: Literal["video", "image"] = (
+            "video" if final_path.suffix.lower() == ".mp4" else "image"
+        )
         placements[target_idx].local_path = str(final_path.resolve())
         placements[target_idx].source_url = source_url
         placements[target_idx].media_type = actual_type

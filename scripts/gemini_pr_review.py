@@ -189,19 +189,21 @@ def call_gemini_api(
         return response.text or ""
     except Exception as err:
         logger.error("Gemini API call failed for model %s: %s", model_name, err)
-        fallback_models = ["gemini-3.8-flash", "gemini-2.5-flash"]
+        fallback_models = ["gemini-3.8-flash"]
         for fallback in fallback_models:
-            if fallback != model_name:
+            if fallback == model_name:
+                logger.info("Retrying model %s after initial failure...", fallback)
+            else:
                 logger.info("Attempting fallback to model %s...", fallback)
-                try:
-                    response = client.models.generate_content(
-                        model=fallback,
-                        contents=prompt,
-                        config=config,
-                    )
-                    return response.text or ""
-                except Exception as fallback_err:
-                    logger.warning("Fallback model %s failed: %s", fallback, fallback_err)
+            try:
+                response = client.models.generate_content(
+                    model=fallback,
+                    contents=prompt,
+                    config=config,
+                )
+                return response.text or ""
+            except Exception as fallback_err:
+                logger.warning("Fallback model %s failed: %s", fallback, fallback_err)
         raise
 
 

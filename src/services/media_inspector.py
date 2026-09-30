@@ -3,7 +3,7 @@
 import json
 import subprocess
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from src.core.config import settings
 
@@ -114,12 +114,13 @@ class MediaInspector:
             )
 
             image_bytes = preview_frame.read_bytes()
+            prompt_parts: list[Any] = [
+                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                types.Part.from_text(text=user_prompt),
+            ]
             response = client.models.generate_content(
                 model=self.model_name,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                    user_prompt,
-                ],
+                contents=prompt_parts,
                 config=types.GenerateContentConfig(
                     system_instruction=system_instruction,
                     response_mime_type="application/json",

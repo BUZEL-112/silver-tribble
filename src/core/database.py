@@ -2,6 +2,7 @@
 
 from collections.abc import Generator
 from contextlib import contextmanager
+from typing import Any
 
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
@@ -22,7 +23,7 @@ def build_engine(database_url: str | None = None):
     PostgreSQL uses connection pooling with pre-ping validation.
     """
     url = database_url or settings.database_url
-    connect_args = {}
+    connect_args: dict[str, Any] = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False
         connect_args["timeout"] = 30

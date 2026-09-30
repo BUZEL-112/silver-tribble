@@ -35,7 +35,7 @@
         <button onclick="switchTab('pipeline')" id="tab-btn-pipeline" class="tab-btn active px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Operations & Jobs</button>
         <button onclick="switchTab('clusters')" id="tab-btn-clusters" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Story Intelligence</button>
         <button onclick="switchTab('script')" id="tab-btn-script" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Script Studio</button>
-        <button onclick="switchTab('media')" id="tab-btn-media" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Media & Assets</button>
+        <button onclick="switchTab('media')" id="tab-btn-media" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Video Editing & Media</button>
         <button onclick="switchTab('logs')" id="tab-btn-logs" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Action Logs</button>
         <button onclick="switchTab('branding')" id="tab-btn-branding" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">Branding</button>
         <button onclick="switchTab('system')" id="tab-btn-system" class="tab-btn px-3 py-1.5 rounded-none-none text-xs font-semibold border border-transparent transition">System & Diagnostics</button>
@@ -424,8 +424,11 @@
       <div class="bg-zinc-950 border border-zinc-800 rounded-none-none p-6 shadow-xl">
         <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
-            <h2 class="text-lg font-bold text-white tracking-tight">Job Scene Asset Review & Swapping</h2>
-            <p class="text-xs text-zinc-400 mt-0.5">Inspect scene timestamps, replace B-roll footage, and re-stitch video with optional index overlays.</p>
+            <div class="flex items-center gap-2">
+              <h2 class="text-lg font-bold text-white tracking-tight">Video Frame & Key Materials Studio</h2>
+              <span class="text-[10px] font-mono uppercase bg-blue-950/80 text-blue-400 border border-blue-800/50 px-2 py-0.5">Interactive Editor</span>
+            </div>
+            <p class="text-xs text-zinc-400 mt-0.5">Click any scene frame below to inspect its key materials (GIF, Image, Video clip), browse candidate alternatives, and swap assets.</p>
           </div>
           <div class="flex flex-wrap items-center gap-2">
             <input type="number" id="gallery-job-id" placeholder="Job ID" class="bg-black border border-zinc-800 rounded-none px-3 py-1.5 text-xs w-28 text-white focus:outline-none focus:border-blue-500">
@@ -452,7 +455,12 @@
         <div id="video-player-container" class="bg-black border border-zinc-800 rounded-none-none p-4 mb-6 hidden">
           <div class="flex items-center justify-between mb-2">
             <h3 class="text-xs font-semibold text-zinc-300 uppercase font-mono">Synchronized Video Playback</h3>
-            <span id="active-scene-indicator" class="text-xs font-mono text-blue-400 bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded-none">Active Scene: -</span>
+            <div class="flex items-center space-x-2">
+              <span id="active-scene-indicator" class="text-xs font-mono text-blue-400 bg-blue-950/50 border border-blue-800/50 px-2 py-0.5 rounded-none">Active Scene: -</span>
+              <button onclick="inspectActiveSceneFromPlayer()" class="text-xs font-mono text-blue-300 bg-blue-950/90 hover:bg-blue-900 border border-blue-700/80 px-2.5 py-0.5 rounded-none transition flex items-center gap-1.5 cursor-pointer" title="Inspect key materials (GIF, image, video) for the active playing frame">
+                Inspect Current Frame Material
+              </button>
+            </div>
           </div>
           <video id="html5-video-player" controls class="max-h-80 rounded-none mx-auto bg-black shadow-lg"></video>
         </div>
@@ -1132,6 +1140,196 @@
         <button onclick="closePipelineModal()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300">Cancel</button>
         <button onclick="executeModalPipeline()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-none text-white shadow">Launch Execution</button>
       </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: KEY MATERIALS INSPECTOR & FRAME SWAPPER -->
+  <div id="modal-material-inspector" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-zinc-950 border border-zinc-800 max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+      
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-black">
+        <div class="flex items-center space-x-3">
+          <div class="w-2.5 h-2.5 bg-blue-500"></div>
+          <div>
+            <h3 class="font-bold text-sm text-white font-mono flex items-center gap-2">
+              <span id="inspector-modal-title">Scene #0 Key Material Inspector</span>
+              <span id="inspector-modal-badge" class="text-[10px] font-mono px-2 py-0.5 bg-blue-950 border border-blue-800 text-blue-400">GIF</span>
+            </h3>
+            <p id="inspector-modal-subtitle" class="text-[11px] text-zinc-400 font-mono mt-0.5">Timestamp: 0.0s - 3.0s | Duration: 3.0s</p>
+          </div>
+        </div>
+        <button onclick="closeMaterialInspector()" class="text-zinc-400 hover:text-white text-xs font-mono px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 transition">
+          Close (Esc)
+        </button>
+      </div>
+
+      <!-- Script Narration Bar -->
+      <div class="px-5 py-2.5 bg-zinc-900/60 border-b border-zinc-800/80 text-xs">
+        <div class="text-[10px] font-mono uppercase text-zinc-400 font-bold mb-0.5">Scene Script Narration</div>
+        <div id="inspector-narration-text" class="text-zinc-200 italic font-sans text-xs sm:text-sm"></div>
+      </div>
+
+      <!-- Modal Body (Two-Column Desktop) -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 p-5 overflow-y-auto flex-1 text-xs">
+        
+        <!-- Left: Current Active Key Material (5 cols) -->
+        <div class="lg:col-span-5 space-y-3 flex flex-col">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs uppercase font-mono text-zinc-300">Active Frame Material</span>
+            <span id="inspector-current-prov-tag" class="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-zinc-900 border border-zinc-700 text-zinc-300">Giphy</span>
+          </div>
+
+          <!-- Preview Frame Display -->
+          <div class="bg-black border border-zinc-800 rounded-none overflow-hidden relative flex items-center justify-center min-h-[220px] max-h-[260px]">
+            <video id="inspector-current-video" controls autoplay loop muted class="w-full h-full max-h-[260px] object-contain hidden"></video>
+            <img id="inspector-current-img" class="w-full h-full max-h-[260px] object-contain hidden" alt="Current Key Material">
+            <div id="inspector-preview-loading" class="text-xs font-mono text-zinc-500">Loading frame...</div>
+          </div>
+
+          <!-- Metadata Properties Table -->
+          <div class="bg-black/60 border border-zinc-800/80 p-3 space-y-1.5 text-[11px] font-mono text-zinc-400">
+            <div class="flex justify-between border-b border-zinc-900 pb-1">
+              <span class="text-zinc-500">Media Type:</span>
+              <span id="meta-media-type" class="text-zinc-200 uppercase font-bold">-</span>
+            </div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1">
+              <span class="text-zinc-500">Provider:</span>
+              <span id="meta-provider" class="text-zinc-200 uppercase font-bold">-</span>
+            </div>
+            <div class="flex justify-between border-b border-zinc-900 pb-1">
+              <span class="text-zinc-500">Search Query:</span>
+              <span id="meta-query" class="text-zinc-200 truncate max-w-[180px]">-</span>
+            </div>
+            <div class="flex flex-col border-b border-zinc-900 pb-1">
+              <span class="text-zinc-500 mb-0.5">Source URL:</span>
+              <a id="meta-source-url" href="#" target="_blank" class="text-blue-400 hover:underline truncate block">None</a>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-zinc-500 mb-0.5">Local Cache:</span>
+              <span id="meta-local-path" class="text-zinc-400 truncate block text-[10px]">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Material Replacement Suite (7 cols) -->
+        <div class="lg:col-span-7 flex flex-col space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-xs uppercase font-mono text-zinc-300">Choose Replacement Material</span>
+          </div>
+
+          <!-- Replacement Tabs -->
+          <div class="flex border-b border-zinc-800 gap-1 text-xs">
+            <button onclick="switchInspectorTab('giphy')" id="ins-tab-giphy" class="px-3 py-1.5 font-semibold text-white border-b-2 border-white transition">Giphy GIFs</button>
+            <button onclick="switchInspectorTab('pexels')" id="ins-tab-pexels" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Pexels Stock</button>
+            <button onclick="switchInspectorTab('library')" id="ins-tab-library" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Asset Library</button>
+            <button onclick="switchInspectorTab('upload')" id="ins-tab-upload" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Upload File</button>
+            <button onclick="switchInspectorTab('url')" id="ins-tab-url" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Direct URL</button>
+          </div>
+
+          <!-- TAB 1: GIPHY GIFS -->
+          <div id="ins-panel-giphy" class="space-y-3 flex-1 flex flex-col">
+            <div class="flex gap-2">
+              <input type="text" id="ins-giphy-query" placeholder="Search reaction GIF (e.g. mind blown, robot laughing)..." class="bg-black border border-zinc-800 px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-blue-500 font-mono">
+              <button onclick="searchGiphyInspectorCandidates()" class="px-3 py-1.5 bg-pink-900/60 hover:bg-pink-800 border border-pink-700/60 text-pink-200 text-xs font-medium transition">Search Giphy</button>
+            </div>
+            <div id="ins-giphy-grid" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-56 p-1 bg-black/40 border border-zinc-900 flex-1">
+              <div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Loading GIF candidates...</div>
+            </div>
+          </div>
+
+          <!-- TAB 2: PEXELS STOCK -->
+          <div id="ins-panel-pexels" class="space-y-3 flex-1 flex flex-col hidden">
+            <div class="flex gap-2">
+              <select id="ins-pexels-type" class="bg-black border border-zinc-800 px-2 py-1.5 text-xs text-zinc-300">
+                <option value="video" selected>Video Clip</option>
+                <option value="image">Photo</option>
+              </select>
+              <input type="text" id="ins-pexels-query" placeholder="Search stock footage (e.g. artificial intelligence, server room)..." class="bg-black border border-zinc-800 px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-blue-500 font-mono">
+              <button onclick="searchPexelsInspectorCandidates()" class="px-3 py-1.5 bg-emerald-900/60 hover:bg-emerald-800 border border-emerald-700/60 text-emerald-200 text-xs font-medium transition">Search Pexels</button>
+            </div>
+            <div id="ins-pexels-grid" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-56 p-1 bg-black/40 border border-zinc-900 flex-1">
+              <div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Enter search query and click Search Pexels.</div>
+            </div>
+          </div>
+
+          <!-- TAB 3: ASSET LIBRARY -->
+          <div id="ins-panel-library" class="space-y-3 flex-1 flex flex-col hidden">
+            <div class="flex items-center justify-between">
+              <span class="text-xs text-zinc-400 font-mono">Select vision-verified reusable B-roll</span>
+              <button onclick="loadInspectorLibrary()" class="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs transition">Refresh</button>
+            </div>
+            <div id="ins-library-grid" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-56 p-1 bg-black/40 border border-zinc-900 flex-1">
+              <div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Loading indexed library assets...</div>
+            </div>
+          </div>
+
+          <!-- TAB 4: UPLOAD FILE -->
+          <div id="ins-panel-upload" class="space-y-3 flex-1 flex flex-col hidden">
+            <div id="ins-dropzone" class="border-2 border-dashed border-zinc-700 hover:border-blue-500 p-6 text-center cursor-pointer bg-black/40 transition flex flex-col items-center justify-center space-y-2">
+              <input type="file" id="ins-file-input" accept=".gif,.mp4,.png,.jpg,.jpeg,.webp" class="hidden">
+              <span class="font-mono text-xs text-blue-400 font-bold uppercase">Drag & Drop Frame Material Here</span>
+              <span class="text-[11px] text-zinc-400">or click to browse (.gif, .mp4, .png, .jpg, .webp)</span>
+            </div>
+            <div id="ins-upload-preview-box" class="bg-black border border-zinc-800 p-3 hidden items-center justify-between">
+              <div class="flex items-center space-x-3 truncate">
+                <img id="ins-upload-thumb" class="w-12 h-12 object-cover bg-zinc-900 border border-zinc-700">
+                <div class="truncate">
+                  <div id="ins-upload-name" class="font-mono text-xs text-white truncate font-bold"></div>
+                  <div id="ins-upload-size" class="text-[10px] font-mono text-zinc-400"></div>
+                </div>
+              </div>
+              <button onclick="clearSelectedUpload()" class="text-xs text-red-400 hover:text-red-300 font-mono px-2 py-1">Remove</button>
+            </div>
+          </div>
+
+          <!-- TAB 5: DIRECT URL -->
+          <div id="ins-panel-url" class="space-y-3 flex-1 flex flex-col hidden">
+            <label class="block text-xs text-zinc-400 font-mono">Direct Media URL (GIF, MP4 video, or Image):</label>
+            <div class="flex gap-2">
+              <input type="text" id="ins-direct-url-input" placeholder="https://example.com/asset.gif" class="bg-black border border-zinc-800 px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-blue-500 font-mono">
+              <button onclick="previewDirectUrl()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs transition">Preview URL</button>
+            </div>
+            <div id="ins-url-preview-box" class="bg-black border border-zinc-800 p-3 min-h-[120px] flex items-center justify-center hidden">
+              <img id="ins-url-preview-img" class="max-h-28 object-contain hidden">
+              <video id="ins-url-preview-video" controls class="max-h-28 hidden"></video>
+            </div>
+          </div>
+
+          <!-- Selected Replacement Candidate Bar -->
+          <div id="ins-selected-summary" class="bg-blue-950/40 border border-blue-800/60 p-2.5 flex items-center justify-between text-xs">
+            <div class="flex items-center space-x-2 truncate">
+              <span class="w-2 h-2 bg-blue-400 inline-block"></span>
+              <span class="font-mono text-zinc-400">Selected Candidate:</span>
+              <span id="ins-selected-title" class="font-bold text-white truncate font-mono">None selected</span>
+            </div>
+            <span id="ins-selected-provider" class="text-[10px] font-mono uppercase px-1.5 py-0.5 bg-black border border-blue-800 text-blue-300">-</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="flex flex-wrap items-center justify-between px-5 py-3 border-t border-zinc-800 bg-black">
+        <div id="inspector-action-status" class="text-xs font-mono text-zinc-400"></div>
+        <div class="flex items-center space-x-2">
+          <button onclick="closeMaterialInspector()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 border border-zinc-700">Cancel</button>
+          <button onclick="applyMaterialChange()" id="btn-apply-inspector-material" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-none text-white shadow transition flex items-center gap-1.5 disabled:opacity-50">
+            <span>Apply Selected Material to Frame</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Post-Apply Quick Re-Render Prompt Banner (Hidden until swap applied) -->
+      <div id="inspector-rerender-banner" class="bg-emerald-950 border-t border-emerald-800 px-5 py-2.5 flex items-center justify-between text-xs hidden">
+        <div class="flex items-center space-x-2">
+          <span class="w-2 h-2 bg-emerald-400 inline-block"></span>
+          <span class="font-mono text-emerald-200">Key material updated successfully! Re-stitch video to see your new frame?</span>
+        </div>
+        <button onclick="triggerReRenderFromInspector()" id="btn-inspector-rerender" class="px-3.5 py-1 bg-emerald-600 hover:bg-emerald-500 font-bold text-white font-mono uppercase shadow text-xs transition">
+          Re-Render Video Now
+        </button>
+      </div>
+
     </div>
   </div>
 
@@ -2004,6 +2202,7 @@
           videoPlayer.src = `/static/videos/${filename}?t=${Date.now()}`;
           videoPlayer.load();
 
+          let currentActiveSentenceIndex = null;
           videoPlayer.ontimeupdate = () => {
             const cur = videoPlayer.currentTime;
             let activeIdx = null;
@@ -2011,6 +2210,7 @@
               const card = document.getElementById(`scene-card-${p.sentence_index}`);
               if (cur >= p.start_time && cur < p.end_time) {
                 activeIdx = p.sentence_index;
+                currentActiveSentenceIndex = activeIdx;
                 if (card) card.classList.add("ring-2", "ring-blue-500", "bg-zinc-950");
               } else if (card) {
                 card.classList.remove("ring-2", "ring-blue-500", "bg-zinc-950");
@@ -2059,11 +2259,30 @@
 
         const isVideo = p.media_type === "video" || (previewUrl && previewUrl.endsWith(".mp4"));
         const mediaTag = isVideo
-          ? `<video src="${previewUrl}" class="w-full h-32 object-cover rounded-none bg-black mb-2" controls muted preload="metadata"></video>`
-          : `<img src="${previewUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23111827\'/><text x=\'50\' y=\'50\' fill=\'%2364748b\' font-size=\'12\' text-anchor=\'middle\' dy=\'.3em\'>No Preview</text></svg>'}" class="w-full h-32 object-cover rounded-none bg-black mb-2" alt="Scene preview">`;
+          ? `<video src="${previewUrl}" class="w-full h-32 object-cover rounded-none bg-black pointer-events-none" muted preload="metadata"></video>`
+          : `<img src="${previewUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23111827\'/><text x=\'50\' y=\'50\' fill=\'%2364748b\' font-size=\'12\' text-anchor=\'middle\' dy=\'.3em\'>No Preview</text></svg>'}" class="w-full h-32 object-cover rounded-none bg-black pointer-events-none" alt="Scene preview">`;
 
         const provBadge = p.provider === "pexels" ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/40"
           : (p.provider === "giphy" ? "bg-pink-950/60 text-pink-400 border-pink-800/40" : "bg-purple-950/60 text-purple-400 border-purple-800/40");
+
+        const frameInteractive = `
+          <div class="relative group cursor-pointer border border-zinc-800 hover:border-blue-500 transition-all duration-150 mb-2 overflow-hidden bg-black"
+               onclick="openMaterialInspector(${jobId}, ${p.sentence_index})"
+               title="Click frame to inspect key materials (GIF, image, video)">
+            ${mediaTag}
+            <div class="absolute inset-0 bg-blue-950/80 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center backdrop-blur-[1px]">
+              <span class="text-xs font-mono font-bold text-white bg-blue-600 px-2 py-1 mb-1 shadow">
+                INSPECT MATERIAL
+              </span>
+              <span class="text-[10px] text-blue-200 font-mono">
+                Click to view raw ${p.media_type.toUpperCase()} & swap
+              </span>
+            </div>
+            <div class="absolute top-1.5 right-1.5 px-1.5 py-0.5 bg-black/80 border border-zinc-700 text-[9px] font-mono uppercase text-blue-400">
+              CLICK FRAME
+            </div>
+          </div>
+        `;
 
         card.innerHTML = `
           <div>
@@ -2073,16 +2292,20 @@
               <span class="text-[10px] font-mono uppercase px-1.5 py-0.5 rounded-none border ${provBadge}">${p.media_type} (${p.provider})</span>
             </div>
 
-            ${mediaTag}
+            ${frameInteractive}
 
             <div class="mb-2">
               <div class="text-[11px] text-zinc-300 italic mb-1 line-clamp-2">${p.text ? '"' + escapeHtml(p.text) + '"' : 'Sentence text not cached'}</div>
               <div class="text-[10px] text-zinc-400 font-mono truncate">Query: ${escapeHtml(p.query || "-")}</div>
             </div>
+
+            <button onclick="openMaterialInspector(${jobId}, ${p.sentence_index})" class="w-full py-1.5 mb-2 bg-zinc-900 hover:bg-blue-900/60 border border-zinc-700 hover:border-blue-600 text-xs font-medium text-zinc-200 hover:text-white transition flex items-center justify-center gap-1.5 cursor-pointer">
+              <span>Inspect & Swap Key Material</span>
+            </button>
           </div>
 
           <div class="border-t border-zinc-800/80 pt-2 mt-2 space-y-2">
-            <div class="text-[11px] font-semibold text-zinc-400">Replace Scene Asset</div>
+            <div class="text-[11px] font-semibold text-zinc-400">Quick Inline Swap</div>
             <div class="flex gap-1.5">
               <select id="prov-select-${p.sentence_index}" class="bg-zinc-950 border border-zinc-800 rounded-none px-1.5 py-1 text-[11px] text-zinc-300">
                 <option value="pexels" ${p.provider === 'pexels' ? 'selected' : ''}>Pexels</option>
@@ -2248,6 +2471,562 @@
         console.error("Failed to load assets:", err);
       }
     }
+
+    // Key Materials Inspector Logic
+    let inspectorState = {
+      jobId: null,
+      sentenceIndex: null,
+      placement: null,
+      selectedCandidate: null,
+      uploadedFile: null,
+      directUrl: null,
+      activeTab: "giphy"
+    };
+
+    function inspectActiveSceneFromPlayer() {
+      const jobId = document.getElementById("gallery-job-id").value;
+      if (!jobId) { showToast("Enter a Job ID first", "error"); return; }
+      if ((currentActiveSentenceIndex === null || currentActiveSentenceIndex === undefined) && currentJobPlacements && currentJobPlacements.length > 0) {
+        currentActiveSentenceIndex = currentJobPlacements[0].sentence_index;
+      }
+      if (currentActiveSentenceIndex === null || currentActiveSentenceIndex === undefined) {
+        showToast("No active scene found. Load scenes first.", "error");
+        return;
+      }
+      openMaterialInspector(jobId, currentActiveSentenceIndex);
+    }
+
+    async function openMaterialInspector(jobId, sentenceIndex) {
+      inspectorState.jobId = jobId;
+      inspectorState.sentenceIndex = sentenceIndex;
+      inspectorState.selectedCandidate = null;
+      inspectorState.uploadedFile = null;
+      inspectorState.directUrl = null;
+
+      let p = currentJobPlacements.find(item => item.sentence_index === sentenceIndex);
+      if (!p) {
+        try {
+          const res = await fetch(`/api/jobs/${jobId}/media`);
+          if (res.ok) {
+            currentJobPlacements = await res.json();
+            p = currentJobPlacements.find(item => item.sentence_index === sentenceIndex);
+          }
+        } catch (e) {
+          console.error("Failed to reload placements:", e);
+        }
+      }
+
+      if (!p) {
+        showToast("Scene placement not found", "error");
+        return;
+      }
+      inspectorState.placement = p;
+
+      // Populate Header & Subtitles
+      document.getElementById("inspector-modal-title").textContent = `Scene #${sentenceIndex} Key Material Inspector`;
+      document.getElementById("inspector-modal-badge").textContent = (p.media_type || "asset").toUpperCase();
+      const dur = (p.end_time - p.start_time).toFixed(1);
+      document.getElementById("inspector-modal-subtitle").textContent =
+        `Timestamp: ${p.start_time.toFixed(1)}s - ${p.end_time.toFixed(1)}s | Duration: ${dur}s | Job #${jobId}`;
+      document.getElementById("inspector-current-prov-tag").textContent = p.provider || "custom";
+
+      // Script narration
+      document.getElementById("inspector-narration-text").textContent = p.text ? `"${p.text}"` : "Narration not cached for this beat.";
+
+      // Metadata Table
+      document.getElementById("meta-media-type").textContent = p.media_type || "video";
+      document.getElementById("meta-provider").textContent = p.provider || "custom";
+      document.getElementById("meta-query").textContent = p.query || "-";
+      const srcLink = document.getElementById("meta-source-url");
+      if (p.source_url && p.source_url.startsWith("http")) {
+        srcLink.href = p.source_url;
+        srcLink.textContent = p.source_url;
+      } else {
+        srcLink.href = "#";
+        srcLink.textContent = p.source_url || "Local / Cache";
+      }
+      document.getElementById("meta-local-path").textContent = p.local_path || "-";
+
+      // Current Frame Preview
+      const videoEl = document.getElementById("inspector-current-video");
+      const imgEl = document.getElementById("inspector-current-img");
+      const loadTxt = document.getElementById("inspector-preview-loading");
+      loadTxt.classList.add("hidden");
+
+      let currentUrl = "";
+      if (p.local_path) {
+        const fname = p.local_path.split("/").pop();
+        currentUrl = `/static/media/${fname}?t=${Date.now()}`;
+      } else if (p.source_url) {
+        currentUrl = p.source_url;
+      }
+
+      const isVid = p.media_type === "video" || (currentUrl && currentUrl.endsWith(".mp4"));
+      if (isVid && currentUrl) {
+        imgEl.classList.add("hidden");
+        videoEl.classList.remove("hidden");
+        videoEl.src = currentUrl;
+        videoEl.play().catch(() => {});
+      } else {
+        videoEl.classList.add("hidden");
+        videoEl.pause();
+        imgEl.classList.remove("hidden");
+        imgEl.src = currentUrl || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><rect width='100' height='100' fill='%23111827'/></svg>";
+      }
+
+      // Reset replacement tab & queries
+      const defaultQuery = p.query || (p.keywords && p.keywords.length > 0 ? p.keywords.join(" ") : p.text || "ai technology");
+      document.getElementById("ins-giphy-query").value = defaultQuery;
+      document.getElementById("ins-pexels-query").value = defaultQuery;
+      document.getElementById("inspector-rerender-banner").classList.add("hidden");
+      document.getElementById("inspector-action-status").textContent = "";
+
+      updateSelectedCandidateDisplay(null);
+      switchInspectorTab("giphy");
+
+      // Auto-search Giphy
+      searchGiphyInspectorCandidates();
+
+      // Show Modal
+      document.getElementById("modal-material-inspector").classList.remove("hidden");
+    }
+
+    function closeMaterialInspector() {
+      const modal = document.getElementById("modal-material-inspector");
+      if (modal) modal.classList.add("hidden");
+      const videoEl = document.getElementById("inspector-current-video");
+      if (videoEl) videoEl.pause();
+    }
+
+    function switchInspectorTab(tabName) {
+      inspectorState.activeTab = tabName;
+      const tabs = ["giphy", "pexels", "library", "upload", "url"];
+      tabs.forEach(t => {
+        const btn = document.getElementById(`ins-tab-${t}`);
+        const panel = document.getElementById(`ins-panel-${t}`);
+        if (t === tabName) {
+          if (btn) {
+            btn.className = "px-3 py-1.5 font-semibold text-white border-b-2 border-white transition";
+          }
+          if (panel) panel.classList.remove("hidden");
+        } else {
+          if (btn) {
+            btn.className = "px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition";
+          }
+          if (panel) panel.classList.add("hidden");
+        }
+      });
+
+      if (tabName === "library") {
+        loadInspectorLibrary();
+      }
+    }
+
+    function updateSelectedCandidateDisplay(candidate) {
+      inspectorState.selectedCandidate = candidate;
+      const titleEl = document.getElementById("ins-selected-title");
+      const provEl = document.getElementById("ins-selected-provider");
+      const btn = document.getElementById("btn-apply-inspector-material");
+
+      if (!candidate) {
+        titleEl.textContent = "None selected (click a candidate below or upload a file)";
+        titleEl.className = "font-mono text-zinc-500 truncate";
+        provEl.textContent = "-";
+        btn.disabled = true;
+      } else {
+        titleEl.textContent = candidate.title || candidate.source_url || "Ready to apply";
+        titleEl.className = "font-mono text-white font-bold truncate";
+        provEl.textContent = candidate.provider || "custom";
+        btn.disabled = false;
+      }
+    }
+
+    function selectInspectorCandidate(candidate, element) {
+      document.querySelectorAll(".candidate-card-selected").forEach(el => {
+        el.classList.remove("candidate-card-selected", "ring-2", "ring-blue-500", "border-blue-500");
+      });
+      if (element) {
+        element.classList.add("candidate-card-selected", "ring-2", "ring-blue-500", "border-blue-500");
+      }
+      updateSelectedCandidateDisplay(candidate);
+    }
+
+    async function searchGiphyInspectorCandidates() {
+      const q = document.getElementById("ins-giphy-query").value.trim();
+      const grid = document.getElementById("ins-giphy-grid");
+      if (!q) {
+        grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Enter a search keyword for reaction GIFs.</div>';
+        return;
+      }
+
+      grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-400 font-mono text-xs">Searching Giphy for "' + escapeHtml(q) + '"...</div>';
+
+      try {
+        const res = await fetch(`/api/media/search?query=${encodeURIComponent(q)}&provider=giphy&limit=12`);
+        if (!res.ok) throw new Error("Giphy search failed");
+        const candidates = await res.json();
+
+        if (!candidates || candidates.length === 0) {
+          grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">No reaction GIFs found. Try another search query.</div>';
+          return;
+        }
+
+        grid.innerHTML = "";
+        candidates.forEach(c => {
+          const card = document.createElement("div");
+          card.className = "cursor-pointer border border-zinc-800 hover:border-pink-500 transition p-1 bg-black flex flex-col justify-between group";
+          card.onclick = () => selectInspectorCandidate(c, card);
+          card.innerHTML = `
+            <img src="${c.preview_url}" class="w-full h-20 object-cover bg-zinc-950 mb-1" alt="${escapeHtml(c.title)}">
+            <div class="text-[10px] text-zinc-400 truncate font-mono">${escapeHtml(c.title || "Reaction GIF")}</div>
+            <div class="text-[9px] text-pink-400 font-mono flex justify-between mt-0.5">
+              <span>GIF</span>
+              <span class="group-hover:text-white">Click to Select</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 font-mono text-xs">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function searchPexelsInspectorCandidates() {
+      const q = document.getElementById("ins-pexels-query").value.trim();
+      const type = document.getElementById("ins-pexels-type").value;
+      const grid = document.getElementById("ins-pexels-grid");
+      if (!q) {
+        grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Enter a search keyword for Pexels footage.</div>';
+        return;
+      }
+
+      grid.innerHTML = `<div class="col-span-full text-center py-6 text-zinc-400 font-mono text-xs">Searching Pexels for "${escapeHtml(q)}"...</div>`;
+
+      try {
+        const res = await fetch(`/api/media/search?query=${encodeURIComponent(q)}&provider=pexels&media_type=${type}&limit=12`);
+        if (!res.ok) throw new Error("Pexels search failed");
+        const candidates = await res.json();
+
+        if (!candidates || candidates.length === 0) {
+          grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">No Pexels stock found. Try different keywords.</div>';
+          return;
+        }
+
+        grid.innerHTML = "";
+        candidates.forEach(c => {
+          const card = document.createElement("div");
+          card.className = "cursor-pointer border border-zinc-800 hover:border-emerald-500 transition p-1 bg-black flex flex-col justify-between group";
+          card.onclick = () => selectInspectorCandidate(c, card);
+          card.innerHTML = `
+            <img src="${c.preview_url}" class="w-full h-20 object-cover bg-zinc-950 mb-1" alt="${escapeHtml(c.title)}">
+            <div class="text-[10px] text-zinc-400 truncate font-mono">${escapeHtml(c.title || "Pexels Asset")}</div>
+            <div class="text-[9px] text-emerald-400 font-mono flex justify-between mt-0.5">
+              <span>${c.media_type.toUpperCase()}${c.duration ? ` (${c.duration}s)` : ''}</span>
+              <span class="group-hover:text-white">Click to Select</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 font-mono text-xs">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    async function loadInspectorLibrary() {
+      const grid = document.getElementById("ins-library-grid");
+      grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-400 font-mono text-xs">Loading library assets...</div>';
+
+      try {
+        const res = await fetch("/api/assets?limit=24");
+        if (!res.ok) throw new Error("Failed to load asset library");
+        const assets = await res.json();
+
+        if (!assets || assets.length === 0) {
+          grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">No reusable assets in library yet.</div>';
+          return;
+        }
+
+        grid.innerHTML = "";
+        assets.forEach(a => {
+          let previewUrl = "";
+          if (a.local_path) {
+            const fname = a.local_path.split("/").pop();
+            previewUrl = `/static/media/${fname}`;
+          } else if (a.source_url) {
+            previewUrl = a.source_url;
+          }
+
+          const candidateObj = {
+            id: String(a.id),
+            title: a.query || "Library Asset",
+            preview_url: previewUrl,
+            source_url: a.source_url || a.local_path,
+            local_path: a.local_path,
+            provider: "asset_library",
+            media_type: a.media_type || "video"
+          };
+
+          const card = document.createElement("div");
+          card.className = "cursor-pointer border border-zinc-800 hover:border-purple-500 transition p-1 bg-black flex flex-col justify-between group";
+          card.onclick = () => selectInspectorCandidate(candidateObj, card);
+
+          const mediaElem = a.media_type === "video"
+            ? `<video src="${previewUrl}" class="w-full h-20 object-cover bg-zinc-950 mb-1 pointer-events-none" muted></video>`
+            : `<img src="${previewUrl}" class="w-full h-20 object-cover bg-zinc-950 mb-1" alt="${escapeHtml(a.query || 'Asset')}">`;
+
+          card.innerHTML = `
+            ${mediaElem}
+            <div class="text-[10px] text-zinc-400 truncate font-mono">${escapeHtml(a.query || "Library Asset")}</div>
+            <div class="text-[9px] text-purple-400 font-mono flex justify-between mt-0.5">
+              <span>${(a.media_type || "asset").toUpperCase()}</span>
+              <span class="group-hover:text-white">Click to Select</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 font-mono text-xs">Error: ${escapeHtml(err.message)}</div>`;
+      }
+    }
+
+    // Drag and Drop File Upload Setup
+    function setupInspectorDropzone() {
+      const dropzone = document.getElementById("ins-dropzone");
+      const fileInput = document.getElementById("ins-file-input");
+      if (!dropzone || !fileInput) return;
+
+      dropzone.onclick = () => fileInput.click();
+
+      fileInput.onchange = (e) => {
+        if (e.target.files && e.target.files.length > 0) {
+          handleInspectorSelectedFile(e.target.files[0]);
+        }
+      };
+
+      dropzone.ondragover = (e) => {
+        e.preventDefault();
+        dropzone.classList.add("border-blue-500", "bg-blue-950/20");
+      };
+
+      dropzone.ondragleave = () => {
+        dropzone.classList.remove("border-blue-500", "bg-blue-950/20");
+      };
+
+      dropzone.ondrop = (e) => {
+        e.preventDefault();
+        dropzone.classList.remove("border-blue-500", "bg-blue-950/20");
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          handleInspectorSelectedFile(e.dataTransfer.files[0]);
+        }
+      };
+    }
+
+    function handleInspectorSelectedFile(file) {
+      inspectorState.uploadedFile = file;
+      const previewBox = document.getElementById("ins-upload-preview-box");
+      const thumb = document.getElementById("ins-upload-thumb");
+      const nameEl = document.getElementById("ins-upload-name");
+      const sizeEl = document.getElementById("ins-upload-size");
+
+      nameEl.textContent = file.name;
+      sizeEl.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+
+      if (file.type.startsWith("image/")) {
+        const reader = new FileReader();
+        reader.onload = (ev) => { thumb.src = ev.target.result; };
+        reader.readAsDataURL(file);
+      } else {
+        thumb.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='48' height='48'><rect width='48' height='48' fill='%231e293b'/><text x='24' y='28' fill='%2394a3b8' font-size='10' text-anchor='middle'>VIDEO</text></svg>";
+      }
+
+      previewBox.classList.remove("hidden");
+      previewBox.classList.add("flex");
+
+      const candidateObj = {
+        type: "upload",
+        file: file,
+        title: `Upload: ${file.name}`,
+        provider: "custom",
+        media_type: file.type.startsWith("video/") ? "video" : (file.name.toLowerCase().endsWith(".gif") ? "gif" : "image")
+      };
+      updateSelectedCandidateDisplay(candidateObj);
+    }
+
+    function clearSelectedUpload() {
+      inspectorState.uploadedFile = null;
+      const previewBox = document.getElementById("ins-upload-preview-box");
+      const fileInput = document.getElementById("ins-file-input");
+      if (previewBox) {
+        previewBox.classList.add("hidden");
+        previewBox.classList.remove("flex");
+      }
+      if (fileInput) fileInput.value = "";
+      updateSelectedCandidateDisplay(null);
+    }
+
+    function previewDirectUrl() {
+      const url = document.getElementById("ins-direct-url-input").value.trim();
+      const previewBox = document.getElementById("ins-url-preview-box");
+      const img = document.getElementById("ins-url-preview-img");
+      const vid = document.getElementById("ins-url-preview-video");
+
+      if (!url) {
+        showToast("Enter a valid URL", "error");
+        return;
+      }
+
+      previewBox.classList.remove("hidden");
+      const isVid = url.endsWith(".mp4") || url.includes("video");
+      if (isVid) {
+        img.classList.add("hidden");
+        vid.classList.remove("hidden");
+        vid.src = url;
+      } else {
+        vid.classList.add("hidden");
+        img.classList.remove("hidden");
+        img.src = url;
+      }
+
+      const candidateObj = {
+        type: "url",
+        source_url: url,
+        title: `URL: ${url}`,
+        provider: "custom",
+        media_type: isVid ? "video" : (url.toLowerCase().endsWith(".gif") ? "gif" : "image")
+      };
+      updateSelectedCandidateDisplay(candidateObj);
+    }
+
+    async function applyMaterialChange() {
+      if (!inspectorState.selectedCandidate) {
+        showToast("Select a candidate material first", "error");
+        return;
+      }
+
+      const jobId = inspectorState.jobId;
+      const sentenceIndex = inspectorState.sentenceIndex;
+      const btn = document.getElementById("btn-apply-inspector-material");
+      const statusEl = document.getElementById("inspector-action-status");
+
+      btn.disabled = true;
+      btn.textContent = "Applying...";
+      statusEl.textContent = "Updating key material for frame...";
+
+      try {
+        let updatedPlacement = null;
+
+        if (inspectorState.selectedCandidate.type === "upload" && inspectorState.uploadedFile) {
+          const formData = new FormData();
+          formData.append("file", inspectorState.uploadedFile);
+          const uploadRes = await fetch(`/api/jobs/${jobId}/media/${sentenceIndex}/upload`, {
+            method: "POST",
+            body: formData
+          });
+          const uploadData = await uploadRes.json();
+          if (!uploadRes.ok) throw new Error(uploadData.detail || "Upload failed");
+          updatedPlacement = uploadData.placement;
+        } else if (inspectorState.selectedCandidate.local_path && inspectorState.selectedCandidate.provider === "asset_library") {
+          const res = await fetch(`/api/jobs/${jobId}/media/${sentenceIndex}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              file_path: inspectorState.selectedCandidate.local_path,
+              provider: "asset_library"
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Failed to update placement");
+          updatedPlacement = data.placement;
+        } else {
+          const targetUrl = inspectorState.selectedCandidate.source_url || inspectorState.selectedCandidate.preview_url;
+          const res = await fetch(`/api/jobs/${jobId}/media/${sentenceIndex}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              url: targetUrl,
+              provider: inspectorState.selectedCandidate.provider || "custom"
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.detail || "Failed to update placement");
+          updatedPlacement = data.placement;
+        }
+
+        // Update local state placements
+        const pIdx = currentJobPlacements.findIndex(item => item.sentence_index === sentenceIndex);
+        if (pIdx !== -1 && updatedPlacement) {
+          currentJobPlacements[pIdx] = updatedPlacement;
+        }
+
+        // Refresh grid
+        renderPlacements(jobId, currentJobPlacements);
+
+        // Update Left Preview in Modal
+        if (updatedPlacement) {
+          let updatedUrl = "";
+          if (updatedPlacement.local_path) {
+            const fname = updatedPlacement.local_path.split("/").pop();
+            updatedUrl = `/static/media/${fname}?t=${Date.now()}`;
+          } else if (updatedPlacement.source_url) {
+            updatedUrl = updatedPlacement.source_url;
+          }
+
+          const videoEl = document.getElementById("inspector-current-video");
+          const imgEl = document.getElementById("inspector-current-img");
+          const isVid = updatedPlacement.media_type === "video" || (updatedUrl && updatedUrl.endsWith(".mp4"));
+
+          if (isVid && updatedUrl) {
+            imgEl.classList.add("hidden");
+            videoEl.classList.remove("hidden");
+            videoEl.src = updatedUrl;
+            videoEl.play().catch(() => {});
+          } else {
+            videoEl.classList.add("hidden");
+            videoEl.pause();
+            imgEl.classList.remove("hidden");
+            imgEl.src = updatedUrl;
+          }
+
+          document.getElementById("meta-media-type").textContent = updatedPlacement.media_type;
+          document.getElementById("meta-provider").textContent = updatedPlacement.provider;
+          document.getElementById("meta-local-path").textContent = updatedPlacement.local_path || "-";
+          document.getElementById("inspector-current-prov-tag").textContent = updatedPlacement.provider;
+          document.getElementById("inspector-modal-badge").textContent = updatedPlacement.media_type.toUpperCase();
+        }
+
+        statusEl.textContent = "Saved";
+        statusEl.className = "text-xs font-mono text-emerald-400";
+        showToast(`Scene #${sentenceIndex} key material updated successfully`, "success");
+
+        // Show Re-Render prompt banner
+        document.getElementById("inspector-rerender-banner").classList.remove("hidden");
+      } catch (err) {
+        statusEl.textContent = "Failed";
+        statusEl.className = "text-xs font-mono text-red-400";
+        showToast("Error updating frame material: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Apply Selected Material to Frame";
+      }
+    }
+
+    async function triggerReRenderFromInspector() {
+      const btn = document.getElementById("btn-inspector-rerender");
+      btn.disabled = true;
+      btn.textContent = "Rendering...";
+      try {
+        await triggerReRender();
+        btn.textContent = "Re-Render Complete";
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = "Re-Render Video Now";
+      }
+    }
+
+    // Initialize dropzone on load
+    document.addEventListener("DOMContentLoaded", () => {
+      setupInspectorDropzone();
+    });
 
     // Central Audit Logs
     async function loadLogs() {

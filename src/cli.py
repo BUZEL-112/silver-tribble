@@ -1,7 +1,7 @@
 import json
 import re
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import typer
 from rich.console import Console
@@ -272,11 +272,16 @@ def config_llm(
                     if not effective_gkey:
                         raise ValueError("GEMINI_API_KEY is not configured")
                     g_client = genai.Client(api_key=effective_gkey)
-                    resp = g_client.models.embed_content(
+                    g_resp = g_client.models.embed_content(
                         model=model,
-                        contents=["ping"],
+                        contents="ping",
                     )
-                    emb_dim = len(resp.embeddings[0].values)
+                    emb_vals = (
+                        g_resp.embeddings[0].values
+                        if g_resp.embeddings and g_resp.embeddings[0].values
+                        else []
+                    )
+                    emb_dim = len(emb_vals)
                     console.print(
                         f"[bold green][OK] Success:[/bold green] {role} ('{model}') "
                         f"generated {emb_dim}-dim vector via Google AI Studio."
@@ -300,12 +305,12 @@ def config_llm(
                         f"generated {emb_dim}-dim vector."
                     )
                 else:
-                    resp = client.chat.completions.create(
+                    chat_resp = client.chat.completions.create(
                         model=model,
                         messages=[{"role": "user", "content": "ping"}],
                         max_tokens=5,
                     )
-                    reply = resp.choices[0].message.content or ""
+                    reply = chat_resp.choices[0].message.content or ""
                     console.print(
                         f"[bold green][OK] Success:[/bold green] {role} ('{model}') responded: "
                         f"[dim]{reply.strip()}[/dim]"
@@ -1348,7 +1353,7 @@ def edit_media(
                 details={"sentence_index": index},
             ):
                 if query:
-                    prov = provider or "pexels"
+                    prov: Literal["pexels", "giphy"] = "giphy" if provider == "giphy" else "pexels"
                     updated_placement = media_svc.search_and_replace_placement(
                         job_id=job_db_id,
                         sentence_index=index,
@@ -2246,7 +2251,7 @@ def trending_clusters(
     with get_session() as session:
         repo = ArticleRepository(session)
         raw_trending = repo.get_trending_clusters(limit=limit, hours_back=hours_back)
-        trending_data = [
+        trending_data: list[dict[str, Any]] = [
             {
                 "id": c.id,
                 "title": c.title or "Untitled",

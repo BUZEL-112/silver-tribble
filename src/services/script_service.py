@@ -270,40 +270,42 @@ class ScriptService:
             else:
                 context_point = cluster.title
 
-            return BeatSheetResponse(
-                title=cluster.title[:80],
-                beats=[
-                    {
-                        "beat_number": 1,
-                        "beat_type": "hook",
-                        "emotion": "alarm",
-                        "shot_type": "wide",
-                        "core_point": f"Breaking news in AI: {cluster.title[:60]}",
-                        "visual_direction": "High energy digital glitch headline reveal",
-                        "on_screen_text": "BREAKING AI NEWS",
-                        "target_duration_seconds": 8.0,
-                    },
-                    {
-                        "beat_number": 2,
-                        "beat_type": "context",
-                        "emotion": "technical_focus",
-                        "shot_type": "medium",
-                        "core_point": context_point,
-                        "visual_direction": "Data center servers with neon cyan glow",
-                        "on_screen_text": "THE RAW REALITY",
-                        "target_duration_seconds": 15.0,
-                    },
-                    {
-                        "beat_number": 3,
-                        "beat_type": "outro",
-                        "emotion": "humor",
-                        "shot_type": "reaction",
-                        "core_point": "Stay skeptical of the AI hype cycle and hit subscribe",
-                        "visual_direction": "Outro signature card with subscribe pulse",
-                        "on_screen_text": "STAY SKEPTICAL",
-                        "target_duration_seconds": 7.0,
-                    },
-                ],
+            return BeatSheetResponse.model_validate(
+                {
+                    "title": cluster.title[:80],
+                    "beats": [
+                        {
+                            "beat_number": 1,
+                            "beat_type": "hook",
+                            "emotion": "alarm",
+                            "shot_type": "wide",
+                            "core_point": f"Breaking news in AI: {cluster.title[:60]}",
+                            "visual_direction": "High energy digital glitch headline reveal",
+                            "on_screen_text": "BREAKING AI NEWS",
+                            "target_duration_seconds": 8.0,
+                        },
+                        {
+                            "beat_number": 2,
+                            "beat_type": "context",
+                            "emotion": "technical_focus",
+                            "shot_type": "medium",
+                            "core_point": context_point,
+                            "visual_direction": "Data center servers with neon cyan glow",
+                            "on_screen_text": "THE RAW REALITY",
+                            "target_duration_seconds": 15.0,
+                        },
+                        {
+                            "beat_number": 3,
+                            "beat_type": "outro",
+                            "emotion": "humor",
+                            "shot_type": "reaction",
+                            "core_point": "Stay skeptical of the AI hype cycle and hit subscribe",
+                            "visual_direction": "Outro signature card with subscribe pulse",
+                            "on_screen_text": "STAY SKEPTICAL",
+                            "target_duration_seconds": 7.0,
+                        },
+                    ],
+                }
             )
 
     def expand_script_persona(
@@ -455,7 +457,7 @@ class ScriptService:
                 )
 
             beats_data = fallback_beats
-            full_narration = " ".join([b["narration_text"] for b in beats_data])
+            full_narration = " ".join([str(b["narration_text"]) for b in beats_data])
             title = beat_sheet.title
 
         script_record = self.script_repo.create_script(
@@ -571,6 +573,11 @@ class ScriptService:
             for idx, b in enumerate(raw_beats):
                 default_dur = b.get("estimated_duration_seconds", story_duration_each)
                 dur = float(b.get("target_duration_seconds", default_dur))
+                ost = b.get("on_screen_text", f"AI STORY {idx + 1}")
+                if 1 <= idx <= len(valid_clusters):
+                    cluster_id = valid_clusters[idx - 1].id
+                    if f"#{cluster_id}" not in ost:
+                        ost = f"{ost} [#{cluster_id}]"
                 beats_data.append(
                     {
                         "beat_number": b.get("beat_number", idx + 1),
@@ -581,7 +588,7 @@ class ScriptService:
                         "visual_direction": b.get(
                             "visual_direction", "modern datacenter server room"
                         ),
-                        "on_screen_text": b.get("on_screen_text", f"AI STORY {idx + 1}"),
+                        "on_screen_text": ost,
                         "target_duration_seconds": dur,
                         "estimated_duration_seconds": dur,
                         "narration_text": clean_narration_for_tts(
@@ -658,7 +665,7 @@ class ScriptService:
                 }
             )
             beats_data = fallback_beats
-            full_narration = " ".join([b["narration_text"] for b in beats_data])
+            full_narration = " ".join([str(b["narration_text"]) for b in beats_data])
 
         primary_cluster_id = valid_clusters[0].id
         all_cluster_ids = [c.id for c in valid_clusters]

@@ -81,9 +81,7 @@ def main() -> None:
                 except Exception:
                     placements = []
 
-            has_valid_media = any(
-                p.local_path and Path(p.local_path).exists() for p in placements
-            )
+            has_valid_media = any(p.local_path and Path(p.local_path).exists() for p in placements)
             has_media_keys = bool(settings.pexels_api_key or settings.giphy_api_key)
 
             if not placements or (has_media_keys and not has_valid_media):

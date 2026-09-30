@@ -109,11 +109,15 @@ def main() -> None:
                 if args.json:
                     print(json.dumps(result, indent=2))
                 else:
-                    print(f"=== Media Placements for Job #{job_id} ({len(placements)} materials) ===")
+                    print(
+                        f"=== Media Placements for Job #{job_id} ({len(placements)} materials) ==="
+                    )
                     for p in placements:
                         print(
-                            f"[Scene #{p.sentence_index}] {p.start_time:.1f}s - {p.end_time:.1f}s | "
-                            f"{p.media_type.upper()} ({p.provider}) | {p.local_path or p.source_url}"
+                            f"[Scene #{p.sentence_index}] "
+                            f"{p.start_time:.1f}s - {p.end_time:.1f}s | "
+                            f"{p.media_type.upper()} ({p.provider}) | "
+                            f"{p.local_path or p.source_url}"
                         )
                         if p.text:
                             print(f"  Sentence: {p.text}")

@@ -23,6 +23,10 @@ def build_engine(database_url: str | None = None):
     PostgreSQL uses connection pooling with pre-ping validation.
     """
     url = database_url or settings.database_url
+    # SQLAlchemy 2.x defaults bare "postgresql://" to psycopg (v3).
+    # This project ships psycopg2-binary, so pin the dialect explicitly.
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     connect_args: dict[str, Any] = {}
     if url.startswith("sqlite"):
         connect_args["check_same_thread"] = False

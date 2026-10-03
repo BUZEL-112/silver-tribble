@@ -748,7 +748,7 @@ class MediaService:
 
                 if resp.status_code in (200, 201):
                     data = resp.json()
-                    parts = re.split(r"\.|\b", c.response_url_path.strip())
+                    parts = re.split(r"\.|\\b", c.response_url_path.strip())
                     curr = data
                     for p in parts:
                         if not p:
@@ -778,6 +778,7 @@ class MediaService:
         except Exception:
             return []
         return []
+
 
     def download_asset(self, url: str, destination_path: Path) -> tuple[bool, Path]:
         """Download remote asset to local path, transcoding GIFs to MP4 to prevent looping."""

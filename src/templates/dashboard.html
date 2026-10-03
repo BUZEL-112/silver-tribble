@@ -1816,6 +1816,7 @@
     </div>
   </div>
 
+
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
 
@@ -3292,50 +3293,6 @@
       }
     }
 
-    async function searchProviderHubInspectorCandidates() {
-      const provider = document.getElementById("ins-hub-provider-select").value || "pexels";
-      const q = document.getElementById("ins-hub-query").value.trim();
-      const grid = document.getElementById("ins-hub-grid");
-      if (!q) {
-        grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Enter a search keyword for provider query.</div>';
-        return;
-      }
-
-      grid.innerHTML = `<div class="col-span-full text-center py-6 text-zinc-400 font-mono text-xs">Searching ${escapeHtml(provider)} for "${escapeHtml(q)}"...</div>`;
-
-      try {
-        const res = await fetch(`/api/media/search?query=${encodeURIComponent(q)}&provider=${encodeURIComponent(provider)}&limit=12`);
-        if (!res.ok) throw new Error(`Search failed for provider ${provider}`);
-        const candidates = await res.json();
-
-        if (!candidates || candidates.length === 0) {
-          grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">No media assets found. Try another query.</div>';
-          return;
-        }
-
-        grid.innerHTML = "";
-        candidates.forEach(c => {
-          const card = document.createElement("div");
-          card.className = "cursor-pointer border border-zinc-800 hover:border-blue-500 transition p-1 bg-black flex flex-col justify-between group";
-          card.onclick = () => selectInspectorCandidate(c, card);
-          const isVideo = c.media_type === "video";
-          const mediaElem = isVideo
-            ? `<video src="${c.preview_url}" class="w-full h-20 object-cover bg-zinc-950 mb-1 pointer-events-none" muted></video>`
-            : `<img src="${c.preview_url}" class="w-full h-20 object-cover bg-zinc-950 mb-1" alt="${escapeHtml(c.title || 'Candidate')}">`;
-
-          card.innerHTML = `
-            ${mediaElem}
-            <div class="text-[10px] text-zinc-400 truncate font-mono">${escapeHtml(c.title || c.query || "Media Asset")}</div>
-            <div class="text-[9px] text-blue-400 font-mono flex justify-between mt-0.5">
-              <span>${escapeHtml(c.provider || provider).toUpperCase()}</span>
-              <span class="group-hover:text-white">Click to Select</span>
-            </div>
-          `;
-          grid.appendChild(card);
-        });
-      } catch (err) {
-        grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 font-mono text-xs">Error: ${escapeHtml(err.message)}</div>`;
-      }
     }
 
     async function loadInspectorLibrary() {

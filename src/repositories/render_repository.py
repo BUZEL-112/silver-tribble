@@ -77,6 +77,15 @@ class RenderRepository(BaseRepository):
             job.render_props_path = render_props_path
             self.session.flush()
 
+    def update_job_status(self, job_id: int, status: str, error_message: str | None = None) -> None:
+        """Update job execution status and optional diagnostic message."""
+        job = self.get_job_by_id(job_id)
+        if job:
+            job.status = status
+            if error_message is not None:
+                job.error_message = error_message
+            self.session.flush()
+
     def complete_job(self, job_id: int, output_video_path: str) -> None:
         """Mark job as successfully rendered."""
         job = self.get_job_by_id(job_id)

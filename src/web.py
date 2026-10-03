@@ -1,12 +1,13 @@
 """FastAPI web server and interactive dashboard for AI Video Production Platform."""
 
+import hmac
 import json
 import math
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from fastapi import FastAPI, File, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -14,15 +15,34 @@ from pydantic import BaseModel, Field
 
 from src.core.config import find_yaml_config_path, reload_settings, settings
 from src.core.database import get_session, init_db
+from src.core.security import (
+    generate_session_token,
+    invalidate_session_token,
+    is_session_token_valid,
+    mask_dict_secrets,
+    verify_auth_token,
+)
 from src.flows.video_pipeline_flow import run_roundup_pipeline, run_video_pipeline
 from src.models.schemas import (
+    CustomProviderConfig,
     HealthStatus,
+    ProviderCredentialsRequest,
+    ProviderInfo,
+    ProviderPriorityRequest,
+    ProviderTestRequest,
+    ProviderTestResponse,
+    ProviderToggleRequest,
     PruneResult,
     ScriptAuditReport,
     SentenceMediaPlacement,
     VisualAssetResponse,
+    VisualConfigSchema,
+    VisualConfigUpdateRequest,
+    VisualPresetInfo,
     WordCaption,
     YouTubeMetadata,
+    YouTubeUploadRequest,
+    YouTubeUploadResult,
 )
 from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
@@ -34,7 +54,9 @@ from src.services.cache_pruning_service import CachePruningService
 from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
 from src.services.health_service import HealthService
+from src.services.job_queue_service import JobQueueService
 from src.services.media_service import MediaService
+from src.services.provider_service import ProviderService
 from src.services.render_service import RenderService
 from src.services.rss_service import RssService
 from src.services.script_auditor_service import ScriptAuditorService
@@ -42,7 +64,9 @@ from src.services.script_service import ScriptService
 from src.services.storage_service import get_storage_service
 from src.services.subtitle_service import SubtitleService
 from src.services.tts_service import TtsService
+from src.services.visual_config_service import VisualConfigService
 from src.services.youtube_metadata_service import YouTubeMetadataService
+from src.services.youtube_upload_service import YouTubeUploadService
 
 settings.ensure_directories()
 init_db()
@@ -91,9 +115,15 @@ class MediaCreateRequest(BaseModel):
     job_id: int
 
 
+class LoginRequest(BaseModel):
+    password: str | None = None
+    token: str | None = None
+
+
 class RenderCreateRequest(BaseModel):
     job_id: int
     dry_run: bool = False
+    async_mode: bool = False
 
 
 class MediaPlacementUpdateRequest(BaseModel):
@@ -127,6 +157,7 @@ class PipelineRunRequest(BaseModel):
     cluster_ids: list[int] | None = None
     aspect_ratio: str = "9:16"
     dry_run: bool = False
+    async_mode: bool = False
 
 
 class RoundupRunRequest(BaseModel):
@@ -192,6 +223,85 @@ class ConfigSaveRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # REST API Endpoints
 # ---------------------------------------------------------------------------
+
+
+@app.get("/api/auth/status")
+def get_auth_status(request: Request) -> dict[str, Any]:
+    """Check whether authentication is enforced and whether client is authenticated."""
+    configured = bool(settings.api_auth_token or settings.admin_password)
+    cookie_token = request.cookies.get("ai_video_session")
+    is_authenticated = not configured or is_session_token_valid(cookie_token)
+    return {
+        "auth_required": configured,
+        "authenticated": is_authenticated,
+    }
+
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest, response: Response) -> dict[str, Any]:
+    """Authenticate dashboard session with admin password or bearer token."""
+    configured_token = settings.api_auth_token
+    configured_password = settings.admin_password
+
+    if not configured_token and not configured_password:
+        return {"status": "success", "message": "Authentication not configured"}
+
+    valid = False
+    if req.token and configured_token and hmac.compare_digest(req.token, configured_token):
+        valid = True
+    elif (
+        req.password
+        and configured_password
+        and hmac.compare_digest(req.password, configured_password)
+    ):
+        valid = True
+    elif req.password and configured_token and hmac.compare_digest(req.password, configured_token):
+        valid = True
+
+    if not valid:
+        raise HTTPException(status_code=401, detail="Invalid password or token")
+
+    session_token = generate_session_token()
+    response.set_cookie(
+        key="ai_video_session",
+        value=session_token,
+        httponly=True,
+        samesite="lax",
+        secure=False,
+        max_age=86400 * 7,
+    )
+    return {"status": "success", "token": session_token}
+
+
+@app.post("/api/auth/logout")
+def logout(request: Request, response: Response) -> dict[str, Any]:
+    """Invalidate session token and clear authentication cookie."""
+    cookie_token = request.cookies.get("ai_video_session")
+    if cookie_token:
+        invalidate_session_token(cookie_token)
+    response.delete_cookie("ai_video_session")
+    return {"status": "success"}
+
+
+@app.get("/api/budget")
+def get_budget_status() -> dict[str, Any]:
+    """Query current spend against configured daily and monthly cost caps."""
+    with get_session() as session:
+        cost_repo = CostRepository(session)
+        total_spend = cost_repo.get_total_spend()
+
+    daily_cap = settings.cost_daily_budget_usd
+    monthly_cap = settings.cost_monthly_budget_usd
+    daily_exceeded = bool(daily_cap and total_spend >= daily_cap)
+    monthly_exceeded = bool(monthly_cap and total_spend >= monthly_cap)
+
+    return {
+        "total_spend_usd": round(total_spend, 4),
+        "daily_budget_usd": daily_cap,
+        "monthly_budget_usd": monthly_cap,
+        "daily_budget_exceeded": daily_exceeded,
+        "monthly_budget_exceeded": monthly_exceeded,
+    }
 
 
 @app.post("/api/pipeline/ingest")
@@ -421,8 +531,22 @@ def trigger_media(req: MediaCreateRequest) -> dict[str, Any]:
 
 
 @app.post("/api/pipeline/render")
-def trigger_render(req: RenderCreateRequest) -> dict[str, Any]:
+def trigger_render(
+    req: RenderCreateRequest,
+    response: Response,
+    _: bool = Depends(verify_auth_token),
+) -> dict[str, Any]:
     """Execute Remotion video render for a job."""
+    if req.async_mode:
+        queue_svc = JobQueueService()
+        queue_svc.submit_render_job(job_id=req.job_id, dry_run=req.dry_run)
+        response.status_code = 202
+        return {
+            "status": "queued",
+            "job_id": req.job_id,
+            "message": "Render job dispatched to queue",
+        }
+
     try:
         storage = get_storage_service()
         with get_session() as session:
@@ -513,8 +637,27 @@ def trigger_render(req: RenderCreateRequest) -> dict[str, Any]:
 
 
 @app.post("/api/pipeline/run")
-def trigger_run_all(req: PipelineRunRequest) -> dict[str, Any]:
+def trigger_run_all(
+    req: PipelineRunRequest,
+    response: Response,
+    _: bool = Depends(verify_auth_token),
+) -> dict[str, Any]:
     """Run full pipeline end-to-end from news clustering to finished video."""
+    if req.async_mode:
+        queue_svc = JobQueueService()
+        job_id = queue_svc.submit_pipeline_job(
+            cluster_id=req.cluster_id,
+            cluster_ids=req.cluster_ids,
+            aspect_ratio=req.aspect_ratio,
+            dry_run=req.dry_run,
+        )
+        response.status_code = 202
+        return {
+            "status": "queued",
+            "job_id": job_id,
+            "message": "Pipeline run dispatched to background queue",
+        }
+
     try:
         result = run_video_pipeline(
             cluster_id=req.cluster_id,
@@ -525,6 +668,48 @@ def trigger_run_all(req: PipelineRunRequest) -> dict[str, Any]:
         return {"status": "success", **result}
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/jobs/{job_id}/progress")
+def get_job_progress(job_id: int) -> dict[str, Any]:
+    """Retrieve real-time execution progress, stage, and completion artifact."""
+    progress = JobQueueService.get_progress(job_id)
+    if not progress:
+        raise HTTPException(status_code=404, detail=f"Job #{job_id} not found")
+    return progress
+
+
+@app.post("/api/jobs/{job_id}/publish-youtube", response_model=YouTubeUploadResult)
+def publish_to_youtube(
+    job_id: int,
+    req: YouTubeUploadRequest,
+    _: bool = Depends(verify_auth_token),
+) -> YouTubeUploadResult:
+    """Upload completed video to YouTube channel using configured OAuth credentials."""
+    upload_svc = YouTubeUploadService()
+    if not upload_svc.is_configured():
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "YouTube OAuth credentials not configured. Please supply client_id, "
+                "client_secret, and refresh_token in settings."
+            ),
+        )
+    try:
+        req.job_id = job_id
+        return upload_svc.upload_video_for_job(req)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/youtube/status")
+def get_youtube_status() -> dict[str, Any]:
+    """Check whether YouTube channel authorization is configured."""
+    upload_svc = YouTubeUploadService()
+    return {
+        "configured": upload_svc.is_configured(),
+        "client_id": upload_svc.client_id[:6] + "..." if upload_svc.client_id else None,
+    }
 
 
 @app.post("/api/pipeline/roundup")
@@ -1070,7 +1255,7 @@ def update_job_media_placement(
 @app.get("/api/media/search")
 def search_media_candidates(
     query: str = Query(..., min_length=1, description="Search keywords"),
-    provider: Literal["giphy", "pexels"] = Query("giphy", description="Media search provider"),
+    provider: str = Query("giphy", description="Media search provider"),
     media_type: Literal["video", "image"] = Query("video", description="Desired media type"),
     limit: int = Query(12, ge=1, le=50, description="Max candidate results"),
     aspect_ratio: str = Query("9:16", description="Target aspect ratio"),
@@ -1095,7 +1280,19 @@ def search_media_candidates(
                 limit=limit,
                 aspect_ratio=aspect_ratio,
             )
-        return []
+        elif provider == "pixabay":
+            return media_svc.search_pixabay_candidates(
+                query=query,
+                media_type=media_type,
+                limit=limit,
+                aspect_ratio=aspect_ratio,
+            )
+        else:
+            return media_svc.search_custom_candidates(
+                provider_id=provider,
+                query=query,
+                limit=limit,
+            )
 
 
 @app.post("/api/jobs/{job_id}/media/{sentence_index}/upload")
@@ -1475,11 +1672,21 @@ def get_config_yaml(path: str | None = Query(None)) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Configuration file {target_path} not found")
 
     content = target_path.read_text(encoding="utf-8")
+    try:
+        raw_dict = yaml.safe_load(content)
+        if isinstance(raw_dict, dict):
+            masked_dict = mask_dict_secrets(raw_dict)
+            safe_content = yaml.dump(masked_dict, default_flow_style=False, sort_keys=False)
+        else:
+            safe_content = content
+    except Exception:
+        safe_content = content
+
     return {
         "status": "success",
         "path": str(target_path),
         "exists": True,
-        "yaml_content": content,
+        "yaml_content": safe_content,
         "is_example": False,
     }
 
@@ -1559,6 +1766,179 @@ def save_config_yaml(req: ConfigSaveRequest) -> dict[str, Any]:
         "config_source": settings.config_source_label,
         "settings": get_settings(),
     }
+
+
+# ---------------------------------------------------------------------------
+# Visual Provider Hub and Diagnostics Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/providers", response_model=list[ProviderInfo])
+def get_providers_list() -> list[ProviderInfo]:
+    """Retrieve full catalog of built-in and custom providers with live status and priority."""
+    provider_svc = ProviderService()
+    return provider_svc.list_providers()
+
+
+@app.post("/api/providers/test", response_model=ProviderTestResponse)
+def test_provider_connection(req: ProviderTestRequest) -> ProviderTestResponse:
+    """Execute live latency and authentication test against a specific media provider."""
+    provider_svc = ProviderService()
+    return provider_svc.test_provider(
+        provider_id=req.provider_id,
+        api_key=req.api_key,
+        custom_config=req.custom_config,
+    )
+
+
+@app.post("/api/providers/custom", response_model=CustomProviderConfig)
+def add_or_update_custom_provider(config: CustomProviderConfig) -> CustomProviderConfig:
+    """Register or update a custom HTTP image, GIF, or video provider."""
+    provider_svc = ProviderService()
+    return provider_svc.add_custom_provider(config)
+
+
+@app.delete("/api/providers/custom/{provider_id}")
+def delete_custom_provider(provider_id: str) -> dict[str, Any]:
+    """Delete a custom provider by identifier and remove from active pipeline cascade."""
+    provider_svc = ProviderService()
+    success = provider_svc.delete_custom_provider(provider_id)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Custom provider '{provider_id}' not found")
+    return {"status": "success", "message": f"Deleted custom provider {provider_id}"}
+
+
+@app.post("/api/providers/priority")
+def update_provider_priority(req: ProviderPriorityRequest) -> dict[str, Any]:
+    """Update priority cascade order for visual media selection."""
+    provider_svc = ProviderService()
+    updated_order = provider_svc.update_priority(req.priority_order)
+    return {
+        "status": "success",
+        "priority_order": updated_order,
+    }
+
+
+@app.post("/api/providers/{provider_id}/toggle")
+def toggle_provider_state(provider_id: str, req: ProviderToggleRequest) -> dict[str, Any]:
+    """Enable or disable a specific provider in the cascade."""
+    provider_svc = ProviderService()
+    new_state = provider_svc.toggle_provider(provider_id, req.enabled)
+    return {
+        "status": "success",
+        "provider_id": provider_id,
+        "is_enabled": new_state,
+    }
+
+
+@app.post("/api/providers/credentials")
+def update_provider_credentials(req: ProviderCredentialsRequest) -> dict[str, Any]:
+    """Update and persist API credentials for a built-in or custom provider."""
+    provider_svc = ProviderService()
+    provider_svc.update_credentials(req.provider_id, req.api_key)
+    return {
+        "status": "success",
+        "provider_id": req.provider_id,
+        "message": f"Credentials updated for {req.provider_id}",
+    }
+
+
+@app.post("/api/providers/{provider_id}/move")
+def move_provider_priority(
+    provider_id: str,
+    direction: Literal["up", "down"] = Query(..., description="Direction to shift priority"),
+) -> dict[str, Any]:
+    """Move a provider up or down in the fallback cascade order."""
+    provider_svc = ProviderService()
+    new_order = provider_svc.move_priority(provider_id, direction)
+    return {"status": "success", "provider_id": provider_id, "priority_order": new_order}
+
+
+@app.post("/api/providers/{provider_id}/remove")
+def remove_provider_from_cascade(provider_id: str) -> dict[str, Any]:
+    """Remove a provider from active cascade or delete if custom."""
+    provider_svc = ProviderService()
+    if any(c.get("id") == provider_id for c in settings.custom_providers):
+        provider_svc.delete_custom_provider(provider_id)
+        action_type = "deleted_custom"
+    else:
+        provider_svc.remove_from_cascade(provider_id)
+        action_type = "removed_from_cascade"
+    return {
+        "status": "success",
+        "provider_id": provider_id,
+        "action": action_type,
+        "priority_order": settings.provider_priority,
+    }
+
+
+@app.post("/api/providers/test-all", response_model=list[ProviderTestResponse])
+def test_all_providers_connection() -> list[ProviderTestResponse]:
+    """Execute live latency and authentication test across all registered providers."""
+    provider_svc = ProviderService()
+    return provider_svc.test_all_providers()
+
+
+# ---------------------------------------------------------------------------
+# Visual Configuration and Presets Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/config/visual", response_model=VisualConfigSchema)
+def get_visual_pipeline_config() -> VisualConfigSchema:
+    """Retrieve current visual pipeline configuration state."""
+    visual_svc = VisualConfigService()
+    return visual_svc.get_visual_config()
+
+
+@app.get("/api/config/visual/presets", response_model=list[VisualPresetInfo])
+def list_visual_presets() -> list[VisualPresetInfo]:
+    """Retrieve catalog of one-click pipeline configuration presets."""
+    visual_svc = VisualConfigService()
+    return visual_svc.list_presets()
+
+
+@app.post("/api/config/visual", response_model=VisualConfigSchema)
+def update_visual_pipeline_config(req: VisualConfigUpdateRequest) -> VisualConfigSchema:
+    """Save visual pipeline parameters into config.yaml and hot-reload runtime."""
+    visual_svc = VisualConfigService()
+    updated = visual_svc.save_visual_config(req)
+
+    with get_session() as session:
+        action_repo = ActionLogRepository(session)
+        action_repo.record_action(
+            stage="pipeline",
+            action="update_visual_config",
+            actor="web",
+            status="success",
+            message="Updated visual pipeline parameters and hot-reloaded configuration",
+            details=req.model_dump(exclude_none=True),
+        )
+
+    return updated
+
+
+@app.post("/api/config/visual/preset/{preset_id}", response_model=VisualConfigSchema)
+def apply_visual_pipeline_preset(preset_id: str) -> VisualConfigSchema:
+    """Apply a preset configuration profile and hot-reload pipeline settings."""
+    visual_svc = VisualConfigService()
+    try:
+        updated = visual_svc.apply_preset(preset_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    with get_session() as session:
+        action_repo = ActionLogRepository(session)
+        action_repo.record_action(
+            stage="pipeline",
+            action="apply_visual_preset",
+            actor="web",
+            status="success",
+            message=f"Applied visual configuration preset {preset_id}",
+            details={"preset_id": preset_id},
+        )
+
+    return updated
 
 
 @app.get("/api/health", response_model=HealthStatus)

@@ -1,0 +1,30 @@
+# Caddy production reverse proxy configuration
+{$DOMAIN::80} {
+    encode gzip zstd
+
+    # Logging
+    log {
+        output stdout
+        format console
+    }
+
+    # Static asset caching headers
+    @static path /static/*
+    header @static Cache-Control "public, max-age=86400"
+
+    # Reverse proxy to FastAPI application
+    reverse_proxy app:8000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+
+        # Flush responses immediately for streaming progress
+        flush_interval -1
+
+        # Generous timeout for video processing requests
+        transport http {
+            response_header_timeout 600s
+        }
+    }
+}

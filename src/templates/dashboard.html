@@ -977,30 +977,319 @@
         </div>
       </div>
 
-      <!-- Plug and Play YAML Configuration -->
-      <div class="bg-zinc-950 border border-zinc-800 rounded-none-none p-6 shadow-xl space-y-4">
+      <!-- VISUAL MEDIA AND ARTIFACT PROVIDERS HUB -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h3 class="text-base font-bold text-white tracking-tight">Plug-and-Play YAML Configuration</h3>
-            <p class="text-xs text-zinc-400 mt-0.5">Switch active configuration profiles and hot-reload pipeline parameters live.</p>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-blue-500 inline-block"></span>
+              <h3 class="text-base font-bold text-white tracking-tight uppercase">Visual Media and Artifact Providers Hub</h3>
+            </div>
+            <p class="text-xs text-zinc-400 mt-1">Integrate, test, configure credentials, and reorder fallback cascade priority for all stock, AI generation, and custom providers.</p>
           </div>
-          <div class="flex items-center space-x-2 bg-black px-3 py-1.5 rounded-none-none border border-zinc-800 text-xs">
-            <span class="text-zinc-400">Active Source:</span>
-            <span id="active-config-badge" class="font-mono font-semibold text-blue-400">Loading...</span>
-          </div>
-        </div>
-
-        <div class="flex flex-wrap items-center justify-between gap-2 bg-black/80 p-3 rounded-none-none border border-zinc-800">
           <div class="flex flex-wrap items-center gap-2">
-            <input id="yaml-path-input" value="config.yaml" class="bg-zinc-950 border border-zinc-700 rounded-none px-3 py-1.5 text-xs w-60 text-white font-mono" placeholder="config.yaml">
-            <button onclick="loadYamlFile()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition">Load File</button>
-            <button onclick="loadTemplateYaml()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition">Load Template</button>
+            <button onclick="openAddProviderModal()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded-none text-white transition shadow flex items-center gap-1.5 cursor-pointer">
+              <span>+ Register New Provider</span>
+            </button>
+            <button onclick="testAllProviders()" id="btn-test-all-providers" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium rounded-none text-zinc-200 transition cursor-pointer">
+              <span>Test All Connections</span>
+            </button>
           </div>
-          <button onclick="saveAndApplyYaml()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded-none text-white transition shadow">Save & Apply</button>
         </div>
 
-        <div>
-          <textarea id="yaml-editor-textarea" rows="16" class="w-full bg-black border border-zinc-800 rounded-none-none p-3 text-xs text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-blue-500" placeholder="YAML configuration will appear here..."></textarea>
+        <!-- Active Fallback Cascade Preview Banner -->
+        <div class="bg-black/80 border border-zinc-800 p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-mono uppercase text-zinc-400 font-bold">Active Priority Cascade Order</span>
+            <span class="text-[10px] font-mono text-zinc-500">Left-to-right fallback sequence</span>
+          </div>
+          <div id="providers-cascade-pills" class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="text-zinc-500 font-mono text-xs">Loading cascade order...</span>
+          </div>
+        </div>
+
+        <!-- Providers Cards Grid -->
+        <div id="providers-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          <div class="col-span-full text-center py-8 text-zinc-500 font-mono text-xs">Loading registered providers...</div>
+        </div>
+      </div>
+
+      <!-- VISUAL PIPELINE CONFIGURATION STUDIO -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-emerald-500 inline-block"></span>
+              <h3 class="text-base font-bold text-white tracking-tight uppercase">Visual Pipeline Configuration Studio</h3>
+            </div>
+            <p class="text-xs text-zinc-400 mt-1">Control video timeline, voice synthesis, subtitles, media balance, and AI models via interactive buttons and instant presets.</p>
+          </div>
+          <div class="flex items-center space-x-3 bg-black px-3.5 py-1.5 border border-zinc-800 text-xs">
+            <span class="text-zinc-400">Active Profile:</span>
+            <span id="visual-active-preset-badge" class="font-mono font-bold text-emerald-400">Custom Profile</span>
+          </div>
+        </div>
+
+        <!-- Quick Presets Bar -->
+        <div class="bg-black/80 border border-zinc-800 p-3.5 space-y-2">
+          <div class="text-[10px] font-mono uppercase text-zinc-400 font-bold">One-Click Pipeline Presets</div>
+          <div id="visual-presets-container" class="flex flex-wrap gap-2.5">
+            <button onclick="applyVisualPreset('viral_shorts_9_16')" class="preset-btn px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium text-zinc-200 transition cursor-pointer text-left">
+              <div class="font-bold text-white">Viral Shorts (9:16)</div>
+              <div class="text-[10px] text-zinc-400">5 beats, Gemini voice, 50/50 stock and GIFs</div>
+            </button>
+            <button onclick="applyVisualPreset('widescreen_documentary_16_9')" class="preset-btn px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium text-zinc-200 transition cursor-pointer text-left">
+              <div class="font-bold text-white">Widescreen Documentary (16:9)</div>
+              <div class="text-[10px] text-zinc-400">7 beats, Charon voice, 85% stock footage</div>
+            </button>
+            <button onclick="applyVisualPreset('high_retention_meme')" class="preset-btn px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium text-zinc-200 transition cursor-pointer text-left">
+              <div class="font-bold text-white">High-Retention Meme (9:16)</div>
+              <div class="text-[10px] text-zinc-400">80% reaction GIFs, kinetic hormozi captions</div>
+            </button>
+            <button onclick="applyVisualPreset('fast_draft_low_cost')" class="preset-btn px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium text-zinc-200 transition cursor-pointer text-left">
+              <div class="font-bold text-white">Fast Draft / Low-Cost</div>
+              <div class="text-[10px] text-zinc-400">3 beats, minimal captions, fast local routing</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- Interactive Visual Cards Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <!-- Card 1: Video Format and Timeline -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <span class="text-xs font-bold text-white uppercase font-mono tracking-wider">1. Video Format and Timeline</span>
+              <span class="text-[10px] font-mono text-zinc-500">Aspect and pacing</span>
+            </div>
+
+            <!-- Aspect Ratio -->
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-mono text-zinc-400">Canvas Aspect Ratio:</label>
+              <div class="grid grid-cols-2 gap-2">
+                <button type="button" onclick="setVisualControl('aspect_ratio', '9:16')" id="vbtn-aspect-9-16" class="vbtn py-2 px-3 text-xs font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer transition">
+                  9:16 Vertical (Shorts/Reels)
+                </button>
+                <button type="button" onclick="setVisualControl('aspect_ratio', '16:9')" id="vbtn-aspect-16-9" class="vbtn py-2 px-3 text-xs font-mono font-bold border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  16:9 Landscape (Widescreen)
+                </button>
+              </div>
+            </div>
+
+            <!-- Target Beats / Duration -->
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-mono text-zinc-400">Target Story Beats:</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setVisualControl('target_beats', 3)" id="vbtn-beats-3" class="vbtn py-1.5 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  3 Beats (30s)
+                </button>
+                <button type="button" onclick="setVisualControl('target_beats', 5)" id="vbtn-beats-5" class="vbtn py-1.5 text-xs font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer transition">
+                  5 Beats (60s)
+                </button>
+                <button type="button" onclick="setVisualControl('target_beats', 7)" id="vbtn-beats-7" class="vbtn py-1.5 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  7 Beats (90s)
+                </button>
+              </div>
+            </div>
+
+            <!-- Ingestion Window and Max Clusters -->
+            <div class="grid grid-cols-2 gap-3 pt-1">
+              <div class="space-y-1.5">
+                <label class="text-[11px] font-mono text-zinc-400">Ingestion Window:</label>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button type="button" onclick="setVisualControl('time_limit_hours', 12)" id="vbtn-time-12" class="vbtn py-1 text-[11px] font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">12h</button>
+                  <button type="button" onclick="setVisualControl('time_limit_hours', 24)" id="vbtn-time-24" class="vbtn py-1 text-[11px] font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer">24h</button>
+                  <button type="button" onclick="setVisualControl('time_limit_hours', 48)" id="vbtn-time-48" class="vbtn py-1 text-[11px] font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">48h</button>
+                  <button type="button" onclick="setVisualControl('time_limit_hours', 168)" id="vbtn-time-168" class="vbtn py-1 text-[11px] font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">7d</button>
+                </div>
+              </div>
+              <div class="space-y-1.5">
+                <label class="text-[11px] font-mono text-zinc-400">Max Clusters per Run:</label>
+                <div class="flex items-center border border-zinc-800 bg-zinc-950 p-1">
+                  <button type="button" onclick="adjustMaxClusters(-1)" class="w-8 h-8 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 text-white font-bold cursor-pointer">-</button>
+                  <span id="vval-max-clusters" class="flex-1 text-center font-mono font-bold text-sm text-white">5</span>
+                  <button type="button" onclick="adjustMaxClusters(1)" class="w-8 h-8 flex items-center justify-center bg-zinc-900 hover:bg-zinc-800 text-white font-bold cursor-pointer">+</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 2: Voice Narration and Captions -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <span class="text-xs font-bold text-white uppercase font-mono tracking-wider">2. Voice Narration and Captions</span>
+              <span class="text-[10px] font-mono text-zinc-500">Audio and subtitles</span>
+            </div>
+
+            <!-- TTS Provider -->
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-mono text-zinc-400">Voice Synthesis Provider:</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setVisualControl('tts_provider', 'gemini')" id="vbtn-tts-gemini" class="vbtn py-2 text-xs font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer transition">
+                  Gemini Audio
+                </button>
+                <button type="button" onclick="setVisualControl('tts_provider', 'edge_tts')" id="vbtn-tts-edge_tts" class="vbtn py-2 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  Edge Neural
+                </button>
+                <button type="button" onclick="setVisualControl('tts_provider', 'local')" id="vbtn-tts-local" class="vbtn py-2 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  Local Piper/Kokoro
+                </button>
+              </div>
+            </div>
+
+            <!-- Voice Persona -->
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-mono text-zinc-400">Host Voice Persona:</label>
+              <div class="grid grid-cols-3 sm:grid-cols-5 gap-1.5 text-xs font-mono">
+                <button type="button" onclick="setVisualControl('tts_voice', 'Puck')" id="vbtn-voice-Puck" class="vbtn py-1 border border-blue-600 bg-blue-950/60 text-white cursor-pointer">Puck</button>
+                <button type="button" onclick="setVisualControl('tts_voice', 'Charon')" id="vbtn-voice-Charon" class="vbtn py-1 border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Charon</button>
+                <button type="button" onclick="setVisualControl('tts_voice', 'Kore')" id="vbtn-voice-Kore" class="vbtn py-1 border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Kore</button>
+                <button type="button" onclick="setVisualControl('tts_voice', 'Aoede')" id="vbtn-voice-Aoede" class="vbtn py-1 border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Aoede</button>
+                <button type="button" onclick="setVisualControl('tts_voice', 'Fenrir')" id="vbtn-voice-Fenrir" class="vbtn py-1 border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Fenrir</button>
+              </div>
+            </div>
+
+            <!-- Caption Style -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[11px] font-mono text-zinc-400">Kinetic Caption Style:</label>
+                <span class="text-[10px] font-mono text-blue-400 uppercase">Synchronized Subtitles</span>
+              </div>
+              <div class="grid grid-cols-4 gap-1.5">
+                <button type="button" onclick="setVisualControl('caption_style', 'hormozi')" id="vbtn-cap-hormozi" class="vbtn py-1.5 text-[11px] font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer">Hormozi</button>
+                <button type="button" onclick="setVisualControl('caption_style', 'cinematic')" id="vbtn-cap-cinematic" class="vbtn py-1.5 text-[11px] font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Cinematic</button>
+                <button type="button" onclick="setVisualControl('caption_style', 'karaoke')" id="vbtn-cap-karaoke" class="vbtn py-1.5 text-[11px] font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Karaoke</button>
+                <button type="button" onclick="setVisualControl('caption_style', 'minimal')" id="vbtn-cap-minimal" class="vbtn py-1.5 text-[11px] font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 cursor-pointer">Minimal</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Media Retrieval & Visual Inspector -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <span class="text-xs font-bold text-white uppercase font-mono tracking-wider">3. Media Gathering and Visual Inspection</span>
+              <span class="text-[10px] font-mono text-zinc-500">Asset ratio and VLM gate</span>
+            </div>
+
+            <!-- Stock vs GIF Balance -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[11px] font-mono text-zinc-400">Stock Footage vs Reaction GIFs Ratio:</label>
+                <span id="vval-ratio-label" class="font-mono text-xs font-bold text-blue-400">50% Stock / 50% GIFs</span>
+              </div>
+              <input type="range" id="vrange-media-ratio" min="0" max="1" step="0.05" value="0.5" oninput="updateMediaRatioDisplay(this.value)" class="w-full accent-blue-500 cursor-pointer">
+              <div class="flex justify-between text-[10px] font-mono text-zinc-500">
+                <span>0% (100% GIFs)</span>
+                <span>50% Balanced</span>
+                <span>100% (Stock Clips Only)</span>
+              </div>
+            </div>
+
+            <!-- Media Inspector Mode -->
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-mono text-zinc-400">Media Inspector Gate Mode:</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setVisualControl('media_inspector_mode', 'off')" id="vbtn-ins-off" class="vbtn py-2 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  Off (Fastest)
+                </button>
+                <button type="button" onclick="setVisualControl('media_inspector_mode', 'multimodal')" id="vbtn-ins-multimodal" class="vbtn py-2 text-xs font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer transition">
+                  Multimodal VLM
+                </button>
+                <button type="button" onclick="setVisualControl('media_inspector_mode', 'hil')" id="vbtn-ins-hil" class="vbtn py-2 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  Human Review
+                </button>
+              </div>
+            </div>
+
+            <!-- Minimum Relevance Score -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[11px] font-mono text-zinc-400">VLM Minimum Relevance Cutoff:</label>
+                <span id="vval-score-label" class="font-mono text-xs font-bold text-emerald-400">6.0 / 10.0</span>
+              </div>
+              <input type="range" id="vrange-min-score" min="1" max="10" step="0.5" value="6.0" oninput="updateMinScoreDisplay(this.value)" class="w-full accent-emerald-500 cursor-pointer">
+            </div>
+          </div>
+
+          <!-- Card 4: AI Story Intelligence -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-4">
+            <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+              <span class="text-xs font-bold text-white uppercase font-mono tracking-wider">4. AI and Story Intelligence</span>
+              <span class="text-[10px] font-mono text-zinc-500">Models and clustering</span>
+            </div>
+
+            <!-- LLM Planning Model -->
+            <div class="space-y-1.5">
+              <label class="text-[11px] font-mono text-zinc-400">Planning and Structuring Model:</label>
+              <div class="grid grid-cols-3 gap-2">
+                <button type="button" onclick="setVisualControl('llm_planning_model', 'gemini-2.0-flash')" id="vbtn-llm-gemini" class="vbtn py-2 text-xs font-mono font-bold border border-blue-600 bg-blue-950/60 text-white cursor-pointer transition">
+                  Gemini Flash
+                </button>
+                <button type="button" onclick="setVisualControl('llm_planning_model', 'gpt-4o-mini')" id="vbtn-llm-gpt" class="vbtn py-2 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  GPT-4o Mini
+                </button>
+                <button type="button" onclick="setVisualControl('llm_planning_model', 'deepseek-chat')" id="vbtn-llm-deepseek" class="vbtn py-2 text-xs font-mono border border-zinc-800 bg-zinc-950 text-zinc-400 hover:text-white cursor-pointer transition">
+                  DeepSeek Chat
+                </button>
+              </div>
+            </div>
+
+            <!-- Clustering Similarity Threshold -->
+            <div class="space-y-1.5">
+              <div class="flex items-center justify-between">
+                <label class="text-[11px] font-mono text-zinc-400">Story Clustering Similarity Cutoff:</label>
+                <span id="vval-sim-label" class="font-mono text-xs font-bold text-purple-400">0.82</span>
+              </div>
+              <input type="range" id="vrange-similarity" min="0.5" max="0.98" step="0.02" value="0.82" oninput="updateSimilarityDisplay(this.value)" class="w-full accent-purple-500 cursor-pointer">
+              <div class="flex justify-between text-[10px] font-mono text-zinc-500">
+                <span>0.50 (Broad Stories)</span>
+                <span>0.82 (Balanced Default)</span>
+                <span>0.98 (Strict Duplicate Only)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Control Bar -->
+        <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-zinc-800">
+          <div class="flex items-center space-x-2">
+            <button onclick="saveVisualPipelineConfig()" id="btn-save-visual-config" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-none text-white transition shadow flex items-center gap-2 cursor-pointer">
+              <span class="w-2 h-2 bg-white inline-block"></span>
+              <span>Save and Hot-Reload Pipeline Settings</span>
+            </button>
+            <button onclick="resetVisualConfigToDefaults()" class="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium rounded-none text-zinc-300 transition cursor-pointer">
+              <span>Reset to Defaults</span>
+            </button>
+          </div>
+          <button onclick="toggleRawYamlEditor()" id="btn-toggle-raw-yaml" class="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs font-mono text-zinc-400 hover:text-zinc-200 transition cursor-pointer flex items-center gap-1.5">
+            <span>Show Raw YAML Editor (Advanced)</span>
+          </button>
+        </div>
+
+        <!-- Collapsible Raw YAML Editor Section -->
+        <div id="raw-yaml-collapsible" class="space-y-4 pt-3 border-t border-zinc-800/80 hidden">
+          <div class="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <div class="text-sm font-bold text-white uppercase font-mono">Raw YAML File Configuration</div>
+              <p class="text-xs text-zinc-400">Directly inspect or edit the backing YAML file on disk.</p>
+            </div>
+            <div class="flex items-center space-x-2 bg-black px-3 py-1.5 border border-zinc-800 text-xs">
+              <span class="text-zinc-400">Active Source:</span>
+              <span id="active-config-badge" class="font-mono font-semibold text-blue-400">Loading...</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center justify-between gap-2 bg-black/80 p-3 border border-zinc-800">
+            <div class="flex flex-wrap items-center gap-2">
+              <input id="yaml-path-input" value="config.yaml" class="bg-zinc-950 border border-zinc-700 rounded-none px-3 py-1.5 text-xs w-60 text-white font-mono" placeholder="config.yaml">
+              <button onclick="loadYamlFile()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition cursor-pointer">Load File</button>
+              <button onclick="loadTemplateYaml()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition cursor-pointer">Load Template</button>
+            </div>
+            <button onclick="saveAndApplyYaml()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded-none text-white transition shadow cursor-pointer">Save and Apply File</button>
+          </div>
+
+          <div>
+            <textarea id="yaml-editor-textarea" rows="14" class="w-full bg-black border border-zinc-800 p-3 text-xs text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-blue-500" placeholder="YAML configuration will appear here..."></textarea>
+          </div>
         </div>
       </div>
     </section>
@@ -1091,6 +1380,23 @@
             <button onclick="copyElementText('yt-tags-input')" class="text-blue-400 hover:text-blue-300">Copy Tags</button>
           </div>
           <input id="yt-tags-input" readonly class="w-full bg-black border border-zinc-800 rounded-none p-2 text-zinc-300 font-mono">
+        </div>
+
+        <!-- Direct Channel Upload Section -->
+        <div class="border-t border-zinc-800 pt-4 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-white uppercase text-[11px] tracking-wider">Direct Channel Publishing</span>
+            <span id="yt-channel-badge" class="px-2 py-0.5 text-[10px] rounded-none bg-zinc-900 border border-zinc-700 text-zinc-300">Checking OAuth...</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <select id="yt-privacy-select" class="bg-black border border-zinc-800 rounded-none p-2 text-zinc-200 text-xs">
+              <option value="unlisted">Unlisted (Review First)</option>
+              <option value="public">Public (Immediate Release)</option>
+              <option value="private">Private</option>
+            </select>
+            <button id="yt-publish-btn" onclick="publishCurrentJobToYouTube()" class="flex-1 py-2 bg-red-600 hover:bg-red-500 font-bold text-white rounded-none text-xs transition">Publish to YouTube Channel</button>
+          </div>
+          <div id="yt-publish-result" class="hidden p-3 bg-zinc-900 border border-zinc-800 rounded-none text-xs font-mono"></div>
         </div>
       </div>
     </div>
@@ -1222,6 +1528,7 @@
           <div class="flex border-b border-zinc-800 gap-1 text-xs">
             <button onclick="switchInspectorTab('giphy')" id="ins-tab-giphy" class="px-3 py-1.5 font-semibold text-white border-b-2 border-white transition">Giphy GIFs</button>
             <button onclick="switchInspectorTab('pexels')" id="ins-tab-pexels" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Pexels Stock</button>
+            <button onclick="switchInspectorTab('provider_hub')" id="ins-tab-provider_hub" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">All Providers</button>
             <button onclick="switchInspectorTab('library')" id="ins-tab-library" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Asset Library</button>
             <button onclick="switchInspectorTab('upload')" id="ins-tab-upload" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Upload File</button>
             <button onclick="switchInspectorTab('url')" id="ins-tab-url" class="px-3 py-1.5 font-semibold text-zinc-400 hover:text-white border-b-2 border-transparent transition">Direct URL</button>
@@ -1250,6 +1557,22 @@
             </div>
             <div id="ins-pexels-grid" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-56 p-1 bg-black/40 border border-zinc-900 flex-1">
               <div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Enter search query and click Search Pexels.</div>
+            </div>
+          </div>
+
+          <!-- TAB: ALL PROVIDERS -->
+          <div id="ins-panel-provider_hub" class="space-y-3 flex-1 flex flex-col hidden">
+            <div class="flex gap-2">
+              <select id="ins-hub-provider-select" class="bg-black border border-zinc-800 px-2 py-1.5 text-xs text-zinc-300 font-mono">
+                <option value="pixabay">Pixabay</option>
+                <option value="pexels">Pexels</option>
+                <option value="giphy">Giphy</option>
+              </select>
+              <input type="text" id="ins-hub-query" placeholder="Search across chosen provider..." class="bg-black border border-zinc-800 px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-blue-500 font-mono">
+              <button onclick="searchProviderHubInspectorCandidates()" class="px-3 py-1.5 bg-blue-900/60 hover:bg-blue-800 border border-blue-700/60 text-blue-200 text-xs font-medium transition cursor-pointer">Search Provider</button>
+            </div>
+            <div id="ins-hub-grid" class="grid grid-cols-3 gap-2 overflow-y-auto max-h-56 p-1 bg-black/40 border border-zinc-900 flex-1">
+              <div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Select a provider, enter query, and click Search Provider.</div>
             </div>
           </div>
 
@@ -1333,6 +1656,167 @@
     </div>
   </div>
 
+  <!-- ===================================================================== -->
+  <!-- MODAL 5: REGISTER NEW CUSTOM MEDIA PROVIDER                          -->
+  <!-- ===================================================================== -->
+  <div id="modal-add-provider" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-950 border border-zinc-800 w-full max-w-2xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 flex items-center justify-between bg-black">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 bg-blue-500 inline-block"></span>
+          <h3 class="font-bold text-sm text-white font-mono uppercase">Register New Media Provider</h3>
+        </div>
+        <button onclick="closeAddProviderModal()" class="text-zinc-400 hover:text-white text-xs font-mono px-2 py-1 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-5 overflow-y-auto space-y-4 flex-1 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Provider Identifier (Slug):</label>
+            <input type="text" id="new-prov-id" placeholder="e.g. unsplash, tenor, fal_ai" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono focus:outline-none focus:border-blue-500">
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Display Name:</label>
+            <input type="text" id="new-prov-name" placeholder="e.g. Unsplash Photos" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono focus:outline-none focus:border-blue-500">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Media Type:</label>
+            <select id="new-prov-media-type" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+              <option value="image">Image (Photos / AI Visuals)</option>
+              <option value="video">Video (MP4 Stock Footage)</option>
+              <option value="gif">Reaction GIF</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Integration Mode:</label>
+            <select id="new-prov-mode" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+              <option value="rest_query">REST API Query Endpoint</option>
+              <option value="openai_compatible">OpenAI-Compatible Image Generation</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="block font-mono text-zinc-400">Endpoint URL (use {query} placeholder or query parameter):</label>
+          <input type="text" id="new-prov-url" placeholder="https://api.unsplash.com/search/photos?query={query}" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono focus:outline-none focus:border-blue-500">
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">HTTP Method:</label>
+            <select id="new-prov-method" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Auth Header Name:</label>
+            <input type="text" id="new-prov-header" value="Authorization" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Query Param Name:</label>
+            <input type="text" id="new-prov-query-param" value="query" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Auth Token / Secret API Key:</label>
+            <input type="password" id="new-prov-token" placeholder="Optional token or key..." class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Response URL JSON Path:</label>
+            <input type="text" id="new-prov-url-path" value="results.0.urls.regular" placeholder="e.g. data.0.url or results.0.urls.regular" class="w-full bg-black border border-zinc-800 px-3 py-1.5 text-white font-mono">
+          </div>
+        </div>
+
+        <!-- Live Connectivity Test Box -->
+        <div id="new-prov-test-box" class="bg-black/60 border border-zinc-800 p-3 space-y-2 hidden">
+          <div class="flex items-center justify-between text-xs">
+            <span class="font-mono text-zinc-400">Test Result:</span>
+            <span id="new-prov-test-badge" class="font-mono font-bold">-</span>
+          </div>
+          <div id="new-prov-test-msg" class="text-zinc-300 font-mono text-[11px]"></div>
+          <div id="new-prov-preview-container" class="mt-2 hidden">
+            <img id="new-prov-preview-img" class="h-24 w-auto object-cover border border-zinc-700 bg-zinc-900" alt="Sample Preview">
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-zinc-800 bg-black flex items-center justify-between">
+        <button type="button" onclick="testNewProviderInModal()" id="btn-modal-test-prov" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium text-zinc-200 cursor-pointer">
+          Test Connection
+        </button>
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="closeAddProviderModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-400 cursor-pointer">Cancel</button>
+          <button type="button" onclick="saveNewProvider()" id="btn-save-new-prov" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow cursor-pointer">
+            Register Provider
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 6: PROVIDER CREDENTIALS EDITOR                                 -->
+  <!-- ===================================================================== -->
+  <div id="modal-provider-credentials" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-950 border border-zinc-800 w-full max-w-md flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 flex items-center justify-between bg-black">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 bg-purple-500 inline-block"></span>
+          <h3 class="font-bold text-sm text-white font-mono uppercase">Update Provider Credentials</h3>
+        </div>
+        <button onclick="closeCredentialsModal()" class="text-zinc-400 hover:text-white text-xs font-mono px-2 py-1 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs">
+        <div>
+          <div class="text-[11px] font-mono text-zinc-400">Provider:</div>
+          <div id="cred-provider-name" class="font-bold text-sm text-white font-mono mt-0.5">Pexels</div>
+          <input type="hidden" id="cred-provider-id" value="">
+        </div>
+
+        <div class="space-y-1">
+          <label class="block font-mono text-zinc-400">API Key / Secret Token:</label>
+          <input type="password" id="cred-api-key" placeholder="Paste your API key or token here..." class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-blue-500">
+          <p class="text-[10px] text-zinc-500 mt-1">Credentials will be securely persisted to active config.yaml and hot-reloaded into runtime.</p>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-zinc-800 bg-black flex items-center justify-end space-x-2">
+        <button type="button" onclick="closeCredentialsModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-400 cursor-pointer">Cancel</button>
+        <button type="button" onclick="saveProviderCredentials()" id="btn-save-credentials" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 font-bold text-xs text-white shadow cursor-pointer">
+          Save Credentials
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 7: SAMPLE MEDIA PREVIEW                                        -->
+  <!-- ===================================================================== -->
+  <div id="modal-provider-preview" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-950 border border-zinc-800 w-full max-w-lg flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-3 border-b border-zinc-800 flex items-center justify-between bg-black">
+        <div class="flex items-center space-x-2">
+          <span class="w-2 h-2 bg-emerald-400 inline-block"></span>
+          <h3 id="preview-modal-title" class="font-bold text-xs text-white font-mono uppercase">Provider Media Preview</h3>
+        </div>
+        <button onclick="closePreviewModal()" class="text-zinc-400 hover:text-white text-xs font-mono px-2 py-0.5 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-4 flex items-center justify-center bg-black min-h-[220px]">
+        <img id="preview-modal-img" class="max-h-72 object-contain hidden" alt="Provider Preview">
+        <video id="preview-modal-video" controls class="max-h-72 hidden"></video>
+      </div>
+    </div>
+  </div>
+
+
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
 
@@ -1388,6 +1872,8 @@
       if (tabId === "system") {
         runHealthCheck();
         checkActiveConfig();
+        loadProviders();
+        loadVisualConfig();
         const cur = document.getElementById("yaml-editor-textarea").value;
         if (!cur || cur.trim() === "") loadYamlFile();
       }
@@ -1668,8 +2154,76 @@
       loadGalleryJob();
     }
 
+    let currentYouTubeJobId = null;
+
+    async function checkYouTubeStatus() {
+      const badge = document.getElementById("yt-channel-badge");
+      if (!badge) return;
+      try {
+        const res = await fetch("/api/youtube/status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.configured) {
+            badge.textContent = "OAuth Connected";
+            badge.className = "px-2 py-0.5 text-[10px] rounded-none bg-emerald-950/60 border border-emerald-700/60 text-emerald-400";
+          } else {
+            badge.textContent = "OAuth Not Configured";
+            badge.className = "px-2 py-0.5 text-[10px] rounded-none bg-yellow-950/60 border border-yellow-700/60 text-yellow-400";
+          }
+        }
+      } catch (e) {
+        badge.textContent = "Status Unknown";
+      }
+    }
+
+    async function publishCurrentJobToYouTube() {
+      if (!currentYouTubeJobId) return;
+      const btn = document.getElementById("yt-publish-btn");
+      const resDiv = document.getElementById("yt-publish-result");
+      const privacy = document.getElementById("yt-privacy-select").value;
+      const title = document.getElementById("yt-title-input").value;
+      const desc = document.getElementById("yt-desc-input").value;
+
+      btn.disabled = true;
+      btn.textContent = "Uploading to YouTube...";
+      resDiv.classList.add("hidden");
+
+      try {
+        const res = await fetch(`/api/jobs/${currentYouTubeJobId}/publish-youtube`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            job_id: currentYouTubeJobId,
+            title: title,
+            description: desc,
+            privacy_status: privacy,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Upload failed");
+
+        resDiv.classList.remove("hidden");
+        resDiv.innerHTML = `
+          <div class="text-emerald-400 font-bold mb-1">Upload Successful!</div>
+          <div>Video URL: <a href="${escapeHtml(data.video_url)}" target="_blank" class="text-blue-400 underline">${escapeHtml(data.video_url)}</a></div>
+          <div class="text-zinc-500 mt-0.5">Privacy: ${escapeHtml(data.privacy_status)}</div>
+        `;
+        showToast("Published to YouTube successfully!", "success");
+      } catch (err) {
+        resDiv.classList.remove("hidden");
+        resDiv.innerHTML = `<div class="text-red-400 font-bold">Upload Error: ${escapeHtml(err.message)}</div>`;
+        showToast("YouTube publish failed: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Publish to YouTube Channel";
+      }
+    }
+
     // YouTube Publishing Drawer
     async function openYouTubeModalFromJob(jobId) {
+      currentYouTubeJobId = jobId;
+      checkYouTubeStatus();
       const modal = document.getElementById("youtube-modal");
       modal.classList.remove("hidden");
       document.getElementById("yt-title-input").value = "Loading metadata...";
@@ -2578,6 +3132,8 @@
       const defaultQuery = p.query || (p.keywords && p.keywords.length > 0 ? p.keywords.join(" ") : p.text || "ai technology");
       document.getElementById("ins-giphy-query").value = defaultQuery;
       document.getElementById("ins-pexels-query").value = defaultQuery;
+      const hubQueryEl = document.getElementById("ins-hub-query");
+      if (hubQueryEl) hubQueryEl.value = defaultQuery;
       document.getElementById("inspector-rerender-banner").classList.add("hidden");
       document.getElementById("inspector-action-status").textContent = "";
 
@@ -2600,7 +3156,7 @@
 
     function switchInspectorTab(tabName) {
       inspectorState.activeTab = tabName;
-      const tabs = ["giphy", "pexels", "library", "upload", "url"];
+      const tabs = ["giphy", "pexels", "provider_hub", "library", "upload", "url"];
       tabs.forEach(t => {
         const btn = document.getElementById(`ins-tab-${t}`);
         const panel = document.getElementById(`ins-panel-${t}`);
@@ -2619,6 +3175,11 @@
 
       if (tabName === "library") {
         loadInspectorLibrary();
+      } else if (tabName === "provider_hub") {
+        const hubGrid = document.getElementById("ins-hub-grid");
+        if (hubGrid && hubGrid.children.length <= 1) {
+          searchProviderHubInspectorCandidates();
+        }
       }
     }
 
@@ -2730,6 +3291,8 @@
       } catch (err) {
         grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 font-mono text-xs">Error: ${escapeHtml(err.message)}</div>`;
       }
+    }
+
     }
 
     async function loadInspectorLibrary() {
@@ -3521,6 +4084,682 @@
       }
     }
 
+    // =========================================================================
+    // VISUAL MEDIA AND ARTIFACT PROVIDERS HUB LOGIC
+    // =========================================================================
+    let registeredProviders = [];
+    const providerTestResults = {};
+
+    async function loadProviders() {
+      try {
+        const res = await fetch("/api/providers");
+        if (!res.ok) throw new Error("Failed to load providers");
+        registeredProviders = await res.json();
+        renderProvidersCascadePills(registeredProviders);
+        renderProvidersCardsGrid(registeredProviders);
+        updateInspectorProviderSelect(registeredProviders);
+      } catch (err) {
+        console.error("loadProviders error:", err);
+        const grid = document.getElementById("providers-cards-grid");
+        if (grid) {
+          grid.innerHTML = `<div class="col-span-full text-center py-8 text-red-400 font-mono text-xs">Error loading providers: ${escapeHtml(err.message)}</div>`;
+        }
+      }
+    }
+
+    function renderProvidersCascadePills(providers) {
+      const pillsBox = document.getElementById("providers-cascade-pills");
+      if (!pillsBox) return;
+      const enabled = (providers || []).filter(p => p.is_enabled).sort((a, b) => a.priority_rank - b.priority_rank);
+      if (enabled.length === 0) {
+        pillsBox.innerHTML = '<span class="text-yellow-500 font-mono text-xs">No providers currently enabled in fallback cascade.</span>';
+        return;
+      }
+      pillsBox.innerHTML = "";
+      enabled.forEach((p, idx) => {
+        const pill = document.createElement("div");
+        pill.className = "inline-flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-200";
+        pill.innerHTML = `
+          <span class="text-blue-400 font-bold">${idx + 1}.</span>
+          <span class="font-bold text-white">${escapeHtml(p.name)}</span>
+          <span class="text-[9px] text-zinc-500">(${(p.media_types || []).join(", ")})</span>
+        `;
+        pillsBox.appendChild(pill);
+        if (idx < enabled.length - 1) {
+          const sep = document.createElement("span");
+          sep.className = "text-zinc-600 font-mono text-xs";
+          sep.textContent = "->";
+          pillsBox.appendChild(sep);
+        }
+      });
+    }
+
+    function renderProvidersCardsGrid(providers) {
+      const grid = document.getElementById("providers-cards-grid");
+      if (!grid) return;
+      if (!providers || providers.length === 0) {
+        grid.innerHTML = '<div class="col-span-full text-center py-8 text-zinc-500 font-mono text-xs">No media providers registered.</div>';
+        return;
+      }
+
+      grid.innerHTML = "";
+      providers.forEach(p => {
+        const card = document.createElement("div");
+        card.className = "bg-black border border-zinc-800 p-4 flex flex-col justify-between space-y-3";
+
+        let statusText = "Disabled";
+        let statusColor = "text-zinc-500";
+        let statusDot = "bg-zinc-500";
+        if (p.is_enabled) {
+          if (p.is_configured) {
+            statusText = "Ready";
+            statusColor = "text-emerald-400";
+            statusDot = "bg-emerald-400";
+          } else {
+            statusText = "No Key";
+            statusColor = "text-yellow-400";
+            statusDot = "bg-yellow-400";
+          }
+        }
+
+        const testRes = providerTestResults[p.id];
+        let latencyInfo = "";
+        if (testRes) {
+          if (testRes.status === "success") {
+            latencyInfo = `<span class="text-[10px] font-mono text-emerald-400">${testRes.latency_ms}ms</span>`;
+          } else {
+            latencyInfo = `<span class="text-[10px] font-mono text-red-400" title="${escapeHtml(testRes.message)}">Failed</span>`;
+          }
+        }
+
+        const mediaBadges = (p.media_types || []).map(t =>
+          `<span class="text-[9px] font-mono px-1.5 py-0.5 bg-zinc-900 border border-zinc-800 text-zinc-400 uppercase">${escapeHtml(t)}</span>`
+        ).join(" ");
+
+        const keyDisplay = p.api_key_masked || (p.is_configured ? "Configured via Env" : "Key not provided");
+        const previewBtn = (testRes && testRes.sample_preview_url)
+          ? `<button onclick="openPreviewModal('${escapeHtml(testRes.sample_preview_url)}', '${p.media_types[0] || 'image'}', '${escapeHtml(p.name)}')" class="text-[10px] text-blue-400 hover:text-blue-300 font-mono underline cursor-pointer">Preview Media</button>`
+          : "";
+
+        card.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="font-bold text-xs text-white font-mono flex items-center gap-1.5">
+                  <span>${escapeHtml(p.name)}</span>
+                  ${p.is_custom ? '<span class="text-[9px] font-mono px-1 py-0.2 bg-purple-950 border border-purple-800 text-purple-300">CUSTOM</span>' : ''}
+                </div>
+                <div class="text-[10px] font-mono text-zinc-500">${escapeHtml(p.id)}</div>
+              </div>
+              <span class="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-blue-950 border border-blue-800 text-blue-300">#${p.priority_rank}</span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+              <span class="inline-flex items-center gap-1 ${statusColor}">
+                <span class="w-1.5 h-1.5 rounded-none ${statusDot}"></span>
+                <span>${statusText}</span>
+              </span>
+              ${latencyInfo ? `<span class="text-zinc-600">|</span> ${latencyInfo}` : ''}
+              ${previewBtn ? `<span class="text-zinc-600">|</span> ${previewBtn}` : ''}
+            </div>
+
+            <div class="flex flex-wrap gap-1 pt-1">
+              ${mediaBadges}
+            </div>
+
+            <div class="text-[10px] font-mono text-zinc-500 truncate" title="${escapeHtml(keyDisplay)}">
+              Key: <span class="text-zinc-400">${escapeHtml(keyDisplay)}</span>
+            </div>
+          </div>
+
+          <div class="space-y-1.5 pt-2 border-t border-zinc-900">
+            <div class="grid grid-cols-3 gap-1 text-[10px] font-mono">
+              <button type="button" onclick="moveProviderPriority('${p.id}', 'up')" class="py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 transition text-center cursor-pointer">
+                Up
+              </button>
+              <button type="button" onclick="moveProviderPriority('${p.id}', 'down')" class="py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 transition text-center cursor-pointer">
+                Down
+              </button>
+              <button type="button" onclick="toggleProvider('${p.id}', ${!p.is_enabled})" class="py-1 ${p.is_enabled ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-400' : 'bg-emerald-950 hover:bg-emerald-900 border-emerald-700 text-emerald-300'} border transition text-center cursor-pointer">
+                ${p.is_enabled ? "Disable" : "Enable"}
+              </button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-1 text-[10px] font-mono">
+              <button type="button" onclick="testProvider('${p.id}')" class="py-1 bg-blue-950 hover:bg-blue-900 border border-blue-800 text-blue-300 transition text-center cursor-pointer">
+                Test
+              </button>
+              <button type="button" onclick="openCredentialsModal('${p.id}', '${escapeHtml(p.name)}')" class="py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 transition text-center cursor-pointer">
+                Config
+              </button>
+              <button type="button" onclick="removeProvider('${p.id}', '${escapeHtml(p.name)}', ${p.is_custom})" class="py-1 bg-zinc-900 hover:bg-red-950 border border-zinc-800 hover:border-red-800 text-zinc-400 hover:text-red-300 transition text-center cursor-pointer">
+                ${p.is_custom ? "Delete" : "Remove"}
+              </button>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+    }
+
+    function updateInspectorProviderSelect(providers) {
+      const select = document.getElementById("ins-hub-provider-select");
+      if (!select) return;
+      const currentVal = select.value;
+      select.innerHTML = "";
+      providers.forEach(p => {
+        const opt = document.createElement("option");
+        opt.value = p.id;
+        opt.textContent = `${p.name} (${(p.media_types || []).join(", ").toUpperCase()})`;
+        select.appendChild(opt);
+      });
+      if (currentVal && Array.from(select.options).some(o => o.value === currentVal)) {
+        select.value = currentVal;
+      }
+    }
+
+    async function moveProviderPriority(providerId, direction) {
+      try {
+        const res = await fetch(`/api/providers/${encodeURIComponent(providerId)}/move?direction=${direction}`, { method: "POST" });
+        if (!res.ok) throw new Error("Priority update failed");
+        showToast(`Priority shifted ${direction} for ${providerId}`, "info");
+        await loadProviders();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    async function toggleProvider(providerId, newEnabledState) {
+      try {
+        const res = await fetch(`/api/providers/${encodeURIComponent(providerId)}/toggle`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: newEnabledState })
+        });
+        if (!res.ok) throw new Error("Toggle failed");
+        showToast(`${providerId} ${newEnabledState ? "enabled" : "disabled"}`, "info");
+        await loadProviders();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    async function removeProvider(providerId, providerName, isCustom) {
+      const promptMsg = isCustom
+        ? `Delete custom provider "${providerName}" (${providerId}) permanently?`
+        : `Remove "${providerName}" (${providerId}) from fallback cascade?`;
+      if (!confirm(promptMsg)) return;
+
+      try {
+        const res = await fetch(`/api/providers/${encodeURIComponent(providerId)}/remove`, { method: "POST" });
+        if (!res.ok) throw new Error("Failed to remove provider");
+        showToast(`Removed ${providerId}`, "info");
+        await loadProviders();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    async function testProvider(providerId) {
+      showToast(`Testing connectivity for ${providerId}...`, "info");
+      try {
+        const res = await fetch("/api/providers/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider_id: providerId })
+        });
+        const result = await res.json();
+        providerTestResults[providerId] = result;
+        if (result.status === "success") {
+          showToast(`${providerId} online (${result.latency_ms}ms)`, "success");
+        } else {
+          showToast(`${providerId} test failed: ${result.message}`, "error");
+        }
+        renderProvidersCardsGrid(registeredProviders);
+      } catch (err) {
+        showToast(`Test error: ${err.message}`, "error");
+      }
+    }
+
+    async function testAllProviders() {
+      const btn = document.getElementById("btn-test-all-providers");
+      if (btn) btn.innerHTML = "<span>Testing Connections...</span>";
+      showToast("Dispatching parallel connection tests across all providers...", "info");
+      try {
+        const res = await fetch("/api/providers/test-all", { method: "POST" });
+        if (!res.ok) throw new Error("Batch test failed");
+        const results = await res.json();
+        let successCount = 0;
+        results.forEach(r => {
+          providerTestResults[r.provider_id] = r;
+          if (r.status === "success") successCount++;
+        });
+        renderProvidersCardsGrid(registeredProviders);
+        showToast(`Batch test complete: ${successCount}/${results.length} operational`, successCount === results.length ? "success" : "info");
+      } catch (err) {
+        showToast(`Batch test error: ${err.message}`, "error");
+      } finally {
+        if (btn) btn.innerHTML = "<span>Test All Connections</span>";
+      }
+    }
+
+    function openCredentialsModal(providerId, providerName) {
+      document.getElementById("cred-provider-id").value = providerId;
+      document.getElementById("cred-provider-name").textContent = providerName || providerId;
+      document.getElementById("cred-api-key").value = "";
+      document.getElementById("modal-provider-credentials").classList.remove("hidden");
+    }
+
+    function closeCredentialsModal() {
+      document.getElementById("modal-provider-credentials").classList.add("hidden");
+    }
+
+    async function saveProviderCredentials() {
+      const providerId = document.getElementById("cred-provider-id").value;
+      const apiKey = document.getElementById("cred-api-key").value.trim();
+      if (!apiKey) {
+        showToast("Please enter an API key or token", "error");
+        return;
+      }
+      try {
+        const res = await fetch("/api/providers/credentials", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider_id: providerId, api_key: apiKey })
+        });
+        if (!res.ok) throw new Error("Failed to save credentials");
+        showToast(`Credentials saved and hot-reloaded for ${providerId}`, "success");
+        closeCredentialsModal();
+        await loadProviders();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    function openAddProviderModal() {
+      document.getElementById("new-prov-id").value = "";
+      document.getElementById("new-prov-name").value = "";
+      document.getElementById("new-prov-media-type").value = "image";
+      document.getElementById("new-prov-mode").value = "rest_query";
+      document.getElementById("new-prov-url").value = "";
+      document.getElementById("new-prov-method").value = "GET";
+      document.getElementById("new-prov-header").value = "Authorization";
+      document.getElementById("new-prov-query-param").value = "query";
+      document.getElementById("new-prov-token").value = "";
+      document.getElementById("new-prov-url-path").value = "results.0.urls.regular";
+      document.getElementById("new-prov-test-box").classList.add("hidden");
+      document.getElementById("modal-add-provider").classList.remove("hidden");
+    }
+
+    function closeAddProviderModal() {
+      document.getElementById("modal-add-provider").classList.add("hidden");
+    }
+
+    async function testNewProviderInModal() {
+      const id = document.getElementById("new-prov-id").value.trim() || "test_provider";
+      const name = document.getElementById("new-prov-name").value.trim() || "Test Provider";
+      const mediaType = document.getElementById("new-prov-media-type").value;
+      const mode = document.getElementById("new-prov-mode").value;
+      const url = document.getElementById("new-prov-url").value.trim();
+      const method = document.getElementById("new-prov-method").value;
+      const header = document.getElementById("new-prov-header").value.trim() || "Authorization";
+      const queryParam = document.getElementById("new-prov-query-param").value.trim() || "query";
+      const token = document.getElementById("new-prov-token").value.trim();
+      const urlPath = document.getElementById("new-prov-url-path").value.trim() || "url";
+
+      if (!url) {
+        showToast("Please enter an endpoint URL to test", "error");
+        return;
+      }
+
+      const testBox = document.getElementById("new-prov-test-box");
+      const testBadge = document.getElementById("new-prov-test-badge");
+      const testMsg = document.getElementById("new-prov-test-msg");
+      const prevContainer = document.getElementById("new-prov-preview-container");
+      const prevImg = document.getElementById("new-prov-preview-img");
+
+      testBox.classList.remove("hidden");
+      testBadge.textContent = "Testing...";
+      testBadge.className = "font-mono font-bold text-blue-400";
+      testMsg.textContent = "Dispatching HTTP test probe...";
+      prevContainer.classList.add("hidden");
+
+      try {
+        const res = await fetch("/api/providers/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            provider_id: id,
+            custom_config: {
+              id: id,
+              name: name,
+              media_type: mediaType,
+              mode: mode,
+              endpoint_url: url,
+              http_method: method,
+              auth_header_name: header,
+              auth_token: token,
+              query_param_name: queryParam,
+              response_url_path: urlPath,
+              enabled: true,
+              priority: 10
+            }
+          })
+        });
+        const result = await res.json();
+        if (result.status === "success") {
+          testBadge.textContent = `Success (${result.latency_ms}ms)`;
+          testBadge.className = "font-mono font-bold text-emerald-400";
+          testMsg.textContent = result.message || "Provider responded successfully with media URL.";
+          if (result.sample_preview_url) {
+            prevImg.src = result.sample_preview_url;
+            prevContainer.classList.remove("hidden");
+          }
+        } else {
+          testBadge.textContent = "Failed";
+          testBadge.className = "font-mono font-bold text-red-400";
+          testMsg.textContent = result.message || "Failed to query provider endpoint.";
+        }
+      } catch (err) {
+        testBadge.textContent = "Error";
+        testBadge.className = "font-mono font-bold text-red-400";
+        testMsg.textContent = err.message;
+      }
+    }
+
+    async function saveNewProvider() {
+      const id = document.getElementById("new-prov-id").value.trim().toLowerCase();
+      const name = document.getElementById("new-prov-name").value.trim();
+      const mediaType = document.getElementById("new-prov-media-type").value;
+      const mode = document.getElementById("new-prov-mode").value;
+      const url = document.getElementById("new-prov-url").value.trim();
+      const method = document.getElementById("new-prov-method").value;
+      const header = document.getElementById("new-prov-header").value.trim() || "Authorization";
+      const queryParam = document.getElementById("new-prov-query-param").value.trim() || "query";
+      const token = document.getElementById("new-prov-token").value.trim();
+      const urlPath = document.getElementById("new-prov-url-path").value.trim() || "url";
+
+      if (!id || !name || !url) {
+        showToast("Identifier, Name, and Endpoint URL are required", "error");
+        return;
+      }
+
+      const payload = {
+        id: id,
+        name: name,
+        media_type: mediaType,
+        mode: mode,
+        endpoint_url: url,
+        http_method: method,
+        auth_header_name: header,
+        auth_token: token,
+        query_param_name: queryParam,
+        response_url_path: urlPath,
+        enabled: true,
+        priority: 10
+      };
+
+      try {
+        const res = await fetch("/api/providers/custom", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || "Failed to register custom provider");
+        }
+        showToast(`Provider "${name}" registered and added to cascade`, "success");
+        closeAddProviderModal();
+        await loadProviders();
+      } catch (err) {
+        showToast(`Error: ${err.message}`, "error");
+      }
+    }
+
+    function openPreviewModal(url, mediaType, title) {
+      const modal = document.getElementById("modal-provider-preview");
+      const titleEl = document.getElementById("preview-modal-title");
+      const imgEl = document.getElementById("preview-modal-img");
+      const vidEl = document.getElementById("preview-modal-video");
+
+      titleEl.textContent = title || "Provider Media Preview";
+      if (mediaType === "video" || (url && url.endsWith(".mp4"))) {
+        imgEl.classList.add("hidden");
+        vidEl.classList.remove("hidden");
+        vidEl.src = url;
+        vidEl.play().catch(() => {});
+      } else {
+        vidEl.classList.add("hidden");
+        vidEl.pause();
+        imgEl.classList.remove("hidden");
+        imgEl.src = url;
+      }
+      modal.classList.remove("hidden");
+    }
+
+    function closePreviewModal() {
+      const modal = document.getElementById("modal-provider-preview");
+      const vidEl = document.getElementById("preview-modal-video");
+      if (vidEl) {
+        vidEl.pause();
+        vidEl.src = "";
+      }
+      if (modal) modal.classList.add("hidden");
+    }
+
+    // =========================================================================
+    // VISUAL PIPELINE CONFIGURATION STUDIO LOGIC
+    // =========================================================================
+    let currentVisualConfig = {
+      aspect_ratio: "9:16",
+      target_beats: 5,
+      max_clusters: 5,
+      time_limit_hours: 24,
+      tts_provider: "gemini",
+      tts_voice: "Puck",
+      caption_style: "hormozi",
+      default_media_type_ratio: 0.5,
+      media_inspector_mode: "multimodal",
+      media_inspector_min_score: 6.0,
+      llm_planning_model: "gemini-2.0-flash",
+      similarity_threshold: 0.82,
+      active_preset: null
+    };
+
+    async function loadVisualConfig() {
+      try {
+        const res = await fetch("/api/config/visual");
+        if (!res.ok) throw new Error("Failed to load visual config");
+        const data = await res.json();
+        currentVisualConfig = Object.assign(currentVisualConfig, data);
+        renderVisualConfigUI();
+      } catch (err) {
+        console.error("loadVisualConfig error:", err);
+      }
+    }
+
+    function setButtonGroupActive(activeId, allIds) {
+      allIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (id === activeId) {
+          el.classList.add("border-blue-600", "bg-blue-950/60", "text-white", "font-bold");
+          el.classList.remove("border-zinc-800", "bg-zinc-950", "text-zinc-400");
+        } else {
+          el.classList.remove("border-blue-600", "bg-blue-950/60", "text-white", "font-bold");
+          el.classList.add("border-zinc-800", "bg-zinc-950", "text-zinc-400");
+        }
+      });
+    }
+
+    function renderVisualConfigUI() {
+      // 1. Aspect Ratio
+      const aspectKey = (currentVisualConfig.aspect_ratio || "9:16").replace(":", "-");
+      setButtonGroupActive("vbtn-aspect-" + aspectKey, ["vbtn-aspect-9-16", "vbtn-aspect-16-9"]);
+
+      // Target Beats
+      const beats = currentVisualConfig.target_beats || 5;
+      setButtonGroupActive("vbtn-beats-" + beats, ["vbtn-beats-3", "vbtn-beats-5", "vbtn-beats-7"]);
+
+      // Ingestion Window
+      const timeHrs = currentVisualConfig.time_limit_hours || 24;
+      setButtonGroupActive("vbtn-time-" + timeHrs, ["vbtn-time-12", "vbtn-time-24", "vbtn-time-48", "vbtn-time-168"]);
+
+      // Max Clusters
+      const clustersEl = document.getElementById("vval-max-clusters");
+      if (clustersEl) clustersEl.textContent = currentVisualConfig.max_clusters || 5;
+
+      // 2. TTS Provider
+      const tts = currentVisualConfig.tts_provider || "gemini";
+      setButtonGroupActive("vbtn-tts-" + tts, ["vbtn-tts-gemini", "vbtn-tts-edge_tts", "vbtn-tts-local"]);
+
+      // TTS Voice
+      const voice = currentVisualConfig.tts_voice || "Puck";
+      setButtonGroupActive("vbtn-voice-" + voice, ["vbtn-voice-Puck", "vbtn-voice-Charon", "vbtn-voice-Kore", "vbtn-voice-Aoede", "vbtn-voice-Fenrir"]);
+
+      // Caption Style
+      const caption = currentVisualConfig.caption_style || "hormozi";
+      setButtonGroupActive("vbtn-cap-" + caption, ["vbtn-cap-hormozi", "vbtn-cap-cinematic", "vbtn-cap-karaoke", "vbtn-cap-minimal"]);
+
+      // 3. Media Ratio
+      const ratioRange = document.getElementById("vrange-media-ratio");
+      if (ratioRange) ratioRange.value = currentVisualConfig.default_media_type_ratio ?? 0.5;
+      updateMediaRatioDisplay(currentVisualConfig.default_media_type_ratio ?? 0.5);
+
+      // Media Inspector Mode
+      const insMode = currentVisualConfig.media_inspector_mode || "multimodal";
+      setButtonGroupActive("vbtn-ins-" + insMode, ["vbtn-ins-off", "vbtn-ins-multimodal", "vbtn-ins-hil"]);
+
+      // Min Score
+      const scoreRange = document.getElementById("vrange-min-score");
+      if (scoreRange) scoreRange.value = currentVisualConfig.media_inspector_min_score ?? 6.0;
+      updateMinScoreDisplay(currentVisualConfig.media_inspector_min_score ?? 6.0);
+
+      // 4. LLM Planning Model
+      const model = currentVisualConfig.llm_planning_model || "gemini-2.0-flash";
+      let modelBtnId = "vbtn-llm-gemini";
+      if (model.includes("gpt")) modelBtnId = "vbtn-llm-gpt";
+      if (model.includes("deepseek")) modelBtnId = "vbtn-llm-deepseek";
+      setButtonGroupActive(modelBtnId, ["vbtn-llm-gemini", "vbtn-llm-gpt", "vbtn-llm-deepseek"]);
+
+      // Clustering Similarity
+      const simRange = document.getElementById("vrange-similarity");
+      if (simRange) simRange.value = currentVisualConfig.similarity_threshold ?? 0.82;
+      updateSimilarityDisplay(currentVisualConfig.similarity_threshold ?? 0.82);
+
+      // Active Preset Badge
+      const badge = document.getElementById("visual-active-preset-badge");
+      if (badge) {
+        badge.textContent = currentVisualConfig.active_preset || "Custom Profile";
+      }
+    }
+
+    function setVisualControl(key, value) {
+      currentVisualConfig[key] = value;
+      currentVisualConfig.active_preset = "Custom Profile";
+      renderVisualConfigUI();
+    }
+
+    function adjustMaxClusters(delta) {
+      const cur = currentVisualConfig.max_clusters || 5;
+      const next = Math.max(1, Math.min(20, cur + delta));
+      setVisualControl("max_clusters", next);
+    }
+
+    function updateMediaRatioDisplay(val) {
+      const num = parseFloat(val);
+      currentVisualConfig.default_media_type_ratio = num;
+      const label = document.getElementById("vval-ratio-label");
+      if (label) {
+        const stockPct = Math.round(num * 100);
+        const gifPct = 100 - stockPct;
+        label.textContent = `${stockPct}% Stock / ${gifPct}% GIFs`;
+      }
+    }
+
+    function updateMinScoreDisplay(val) {
+      const num = parseFloat(val);
+      currentVisualConfig.media_inspector_min_score = num;
+      const label = document.getElementById("vval-score-label");
+      if (label) label.textContent = `${num.toFixed(1)} / 10.0`;
+    }
+
+    function updateSimilarityDisplay(val) {
+      const num = parseFloat(val);
+      currentVisualConfig.similarity_threshold = num;
+      const label = document.getElementById("vval-sim-label");
+      if (label) label.textContent = num.toFixed(2);
+    }
+
+    async function applyVisualPreset(presetId) {
+      try {
+        const res = await fetch(`/api/config/visual/preset/${encodeURIComponent(presetId)}`, { method: "POST" });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || "Failed to apply preset");
+        }
+        const updated = await res.json();
+        currentVisualConfig = Object.assign(currentVisualConfig, updated);
+        renderVisualConfigUI();
+        showToast(`Preset applied: ${presetId}`, "success");
+        checkActiveConfig();
+        const yamlEditor = document.getElementById("yaml-editor-textarea");
+        if (yamlEditor && !document.getElementById("raw-yaml-collapsible").classList.contains("hidden")) {
+          loadYamlFile();
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, "error");
+      }
+    }
+
+    function resetVisualConfigToDefaults() {
+      applyVisualPreset("viral_shorts_9_16");
+    }
+
+    async function saveVisualPipelineConfig() {
+      const btn = document.getElementById("btn-save-visual-config");
+      if (btn) btn.disabled = true;
+      try {
+        const res = await fetch("/api/config/visual", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(currentVisualConfig)
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || "Failed to save configuration");
+        }
+        const updated = await res.json();
+        currentVisualConfig = Object.assign(currentVisualConfig, updated);
+        renderVisualConfigUI();
+        showToast("Visual pipeline settings saved and hot-reloaded", "success");
+        checkActiveConfig();
+        const yamlEditor = document.getElementById("yaml-editor-textarea");
+        if (yamlEditor && !document.getElementById("raw-yaml-collapsible").classList.contains("hidden")) {
+          loadYamlFile();
+        }
+      } catch (err) {
+        showToast(`Error: ${err.message}`, "error");
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    }
+
+    function toggleRawYamlEditor() {
+      const panel = document.getElementById("raw-yaml-collapsible");
+      const btn = document.getElementById("btn-toggle-raw-yaml");
+      if (!panel || !btn) return;
+      if (panel.classList.contains("hidden")) {
+        panel.classList.remove("hidden");
+        btn.innerHTML = "<span>Hide Raw YAML Editor</span>";
+        loadYamlFile();
+      } else {
+        panel.classList.add("hidden");
+        btn.innerHTML = "<span>Show Raw YAML Editor (Advanced)</span>";
+      }
+    }
+
     function escapeHtml(text) {
       if (!text) return "";
       return String(text)
@@ -3536,6 +4775,8 @@
       refreshPlatformStats();
       loadRecentJobs();
       runHealthCheck();
+      loadProviders();
+      loadVisualConfig();
 
       // Poll action logs if logs tab is active
       setInterval(() => {

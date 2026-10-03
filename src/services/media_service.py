@@ -3,6 +3,7 @@ import re
 import subprocess
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import quote_plus
 
 import httpx
 
@@ -618,6 +619,166 @@ class MediaService:
         except Exception:
             return []
         return candidates
+
+    def search_pixabay_candidates(
+        self,
+        query: str,
+        media_type: Literal["video", "image"] = "video",
+        limit: int = 12,
+        aspect_ratio: str = "9:16",
+    ) -> list[dict[str, Any]]:
+        """Search Pixabay API and return candidate items with preview and source links."""
+        if not self.pixabay_api_key or not query.strip():
+            return []
+
+        orientation = "vertical" if aspect_ratio == "9:16" else "horizontal"
+        candidates: list[dict[str, Any]] = []
+
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                if media_type == "video":
+                    limit_count = min(limit, 50)
+                    encoded_q = quote_plus(query)
+                    url = (
+                        f"https://pixabay.com/api/videos/?key={self.pixabay_api_key}"
+                        f"&q={encoded_q}&orientation={orientation}&per_page={limit_count}"
+                    )
+                    resp = client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        hits = data.get("hits", [])
+                        for h in hits:
+                            videos = h.get("videos", {})
+                            best_link = None
+                            for k in ["large", "medium", "small", "tiny"]:
+                                if k in videos and videos[k].get("url"):
+                                    best_link = videos[k]["url"]
+                                    break
+                            if not best_link:
+                                continue
+                            picture_id = h.get("picture_id")
+                            preview = (
+                                f"https://i.vimeocdn.com/video/{picture_id}_640x360.jpg"
+                                if picture_id
+                                else best_link
+                            )
+                            candidates.append(
+                                {
+                                    "id": str(h.get("id")),
+                                    "title": f"Pixabay Video {h.get('id')}",
+                                    "preview_url": preview,
+                                    "source_url": best_link,
+                                    "provider": "pixabay",
+                                    "media_type": "video",
+                                    "width": videos.get("large", {}).get("width") or 1080,
+                                    "height": videos.get("large", {}).get("height") or 1920,
+                                    "duration": h.get("duration", 0),
+                                }
+                            )
+                else:
+                    limit_count = min(limit, 50)
+                    encoded_q = quote_plus(query)
+                    url = (
+                        f"https://pixabay.com/api/?key={self.pixabay_api_key}"
+                        f"&q={encoded_q}&image_type=photo&orientation={orientation}"
+                        f"&per_page={limit_count}"
+                    )
+                    resp = client.get(url)
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        hits = data.get("hits", [])
+                        for h in hits:
+                            src = h.get("largeImageURL") or h.get("webformatURL")
+                            prev = h.get("webformatURL") or h.get("previewURL")
+                            if not src:
+                                continue
+                            candidates.append(
+                                {
+                                    "id": str(h.get("id")),
+                                    "title": f"Pixabay Photo {h.get('tags') or h.get('id')}",
+                                    "preview_url": prev,
+                                    "source_url": src,
+                                    "provider": "pixabay",
+                                    "media_type": "image",
+                                    "width": h.get("imageWidth"),
+                                    "height": h.get("imageHeight"),
+                                    "duration": 0,
+                                }
+                            )
+        except Exception:
+            return []
+        return candidates
+
+    def search_custom_candidates(
+        self,
+        provider_id: str,
+        query: str,
+        limit: int = 12,
+    ) -> list[dict[str, Any]]:
+        """Query custom registered HTTP endpoint and return candidate items."""
+        cfg_item = next((c for c in settings.custom_providers if c.get("id") == provider_id), None)
+        if not cfg_item:
+            return []
+
+        try:
+            from src.models.schemas import CustomProviderConfig
+
+            c = CustomProviderConfig.model_validate(cfg_item)
+            headers: dict[str, str] = {}
+            if c.auth_token:
+                headers[c.auth_header_name] = c.auth_token
+
+            with httpx.Client(timeout=12.0) as client:
+                if c.mode == "openai_compatible":
+                    resp = client.post(
+                        c.endpoint_url,
+                        json={"prompt": query, "n": 1, "size": "1024x1024"},
+                        headers=headers,
+                    )
+                else:
+                    if "{query}" in c.endpoint_url:
+                        target_url = c.endpoint_url.replace("{query}", query)
+                    else:
+                        sep = "&" if "?" in c.endpoint_url else "?"
+                        target_url = f"{c.endpoint_url}{sep}{c.query_param_name}={query}"
+                    if c.http_method == "POST":
+                        resp = client.post(target_url, json={"query": query}, headers=headers)
+                    else:
+                        resp = client.get(target_url, headers=headers)
+
+                if resp.status_code in (200, 201):
+                    data = resp.json()
+                    parts = re.split(r"\.|\\b", c.response_url_path.strip())
+                    curr = data
+                    for p in parts:
+                        if not p:
+                            continue
+                        if isinstance(curr, dict) and p in curr:
+                            curr = curr[p]
+                        elif isinstance(curr, list):
+                            try:
+                                curr = curr[int(p)]
+                            except Exception:
+                                curr = None
+                                break
+                    if isinstance(curr, str) and curr.startswith(("http://", "https://")):
+                        return [
+                            {
+                                "id": f"{c.id}_1",
+                                "title": f"{c.name} result for '{query}'",
+                                "preview_url": curr,
+                                "source_url": curr,
+                                "provider": c.id,
+                                "media_type": c.media_type,
+                                "width": 1080,
+                                "height": 1920,
+                                "duration": 0,
+                            }
+                        ]
+        except Exception:
+            return []
+        return []
+
 
     def download_asset(self, url: str, destination_path: Path) -> tuple[bool, Path]:
         """Download remote asset to local path, transcoding GIFs to MP4 to prevent looping."""

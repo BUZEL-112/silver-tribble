@@ -421,3 +421,44 @@ class YouTubeUploadResult(BaseModel):
     title: str
     privacy_status: str
     uploaded_at: str
+
+
+class ModelDefinition(BaseModel):
+    """Configuration for a specific model provider endpoint."""
+
+    name: str = Field(..., min_length=1, description="Friendly alias or identifier")
+    model_name: str = Field(
+        ..., min_length=1, description="Underlying model identifier passed to the API"
+    )
+    base_url: str | None = Field(default=None, description="Base API endpoint URL")
+    api_key: str | None = Field(
+        default=None, description="API key or environment variable reference"
+    )
+    api_format: Literal["openai", "anthropic"] = Field(
+        default="openai", description="API wire protocol format"
+    )
+    endpoint_type: Literal["chat", "embedding", "multimodal"] = Field(
+        default="chat", description="Endpoint capability type"
+    )
+    timeout: float = Field(default=30.0, ge=1.0, description="HTTP request timeout in seconds")
+    extra_headers: dict[str, str] = Field(
+        default_factory=dict, description="Custom HTTP request headers"
+    )
+
+
+class RoleMappingsConfig(BaseModel):
+    """Fallback priority chains mapping pipeline roles to model names."""
+
+    planning: list[str] = Field(
+        default_factory=list, description="Ordered model aliases for beat sheet generation"
+    )
+    writing: list[str] = Field(
+        default_factory=list, description="Ordered model aliases for host dialogue expansion"
+    )
+    embedding: list[str] = Field(
+        default_factory=list, description="Ordered model aliases for text embedding generation"
+    )
+    vlm_inspector: list[str] = Field(
+        default_factory=list,
+        description="Ordered model aliases for visual candidate inspection",
+    )

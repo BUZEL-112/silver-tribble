@@ -1,11 +1,13 @@
 """Visual asset inspection service supporting off, multimodal (VLM), and HIL modes."""
 
 import json
+import re
 import subprocess
 from pathlib import Path
-from typing import Any, Literal
+from typing import Literal
 
 from src.core.config import settings
+from src.services.model_registry_service import ModelRegistryService
 
 
 class MediaInspector:
@@ -17,11 +19,13 @@ class MediaInspector:
         model_name: str | None = None,
         min_score: float | None = None,
         api_key: str | None = None,
+        model_registry_service: ModelRegistryService | None = None,
     ) -> None:
         self.mode = mode or settings.media_inspector_mode
         self.model_name = model_name or settings.media_inspector_model
         self.min_score = min_score if min_score is not None else settings.media_inspector_min_score
         self.api_key = api_key or settings.gemini_api_key
+        self.model_registry_service = model_registry_service or ModelRegistryService()
 
     def _extract_preview_frame(self, media_path: Path) -> Path | None:
         """Extract a single JPEG preview frame from a video or GIF."""
@@ -92,55 +96,83 @@ class MediaInspector:
         keywords: list[str],
         media_path: Path,
     ) -> tuple[bool, str]:
-        """Call Gemini 2.0 Flash to evaluate image/video relevance to news sentence."""
-        if not self.api_key or self.api_key == "your_gemini_api_key_here":
-            return True, "Gemini API key not configured; skipping VLM inspection"
-
+        """Call VLM via ModelRegistryService or Gemini Flash to evaluate image/video relevance."""
         preview_frame = self._extract_preview_frame(media_path)
         if not preview_frame or not preview_frame.exists():
             return True, "Could not extract preview frame for VLM inspection"
 
+        system_instruction = self._load_system_prompt()
+        user_prompt = (
+            f'Narration sentence: "{sentence_text}"\n'
+            f"Keywords: {', '.join(keywords)}\n"
+            f"Threshold: Minimum score {self.min_score:.1f}/10 to approve.\n"
+            "Evaluate visual frame against narration context and return JSON: "
+            '{"score": 8.0, "approved": true, "reason": "..."}'
+        )
+
         try:
-            from google import genai
-            from google.genai import types
-
-            client = genai.Client(api_key=self.api_key)
-            system_instruction = self._load_system_prompt()
-            user_prompt = (
-                f'Narration sentence: "{sentence_text}"\n'
-                f"Keywords: {', '.join(keywords)}\n"
-                f"Threshold: Minimum score {self.min_score:.1f}/10 to approve.\n"
-                "Evaluate the visual frame against the narration context."
-            )
-
             image_bytes = preview_frame.read_bytes()
-            prompt_parts: list[Any] = [
-                types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                types.Part.from_text(text=user_prompt),
-            ]
-            response = client.models.generate_content(
-                model=self.model_name,
-                contents=prompt_parts,
-                config=types.GenerateContentConfig(
-                    system_instruction=system_instruction,
-                    response_mime_type="application/json",
-                ),
+            raw_text, actual_model, _ = self.model_registry_service.execute_role_fallback_vlm(
+                text_prompt=user_prompt,
+                image_bytes=image_bytes,
+                mime_type="image/jpeg",
+                system_instruction=system_instruction,
+                model_override=self.model_name,
             )
 
-            raw_text = (response.text or "").strip()
-            if "```json" in raw_text:
-                raw_text = raw_text.split("```json")[1].split("```")[0].strip()
-            elif "```" in raw_text:
-                raw_text = raw_text.split("```")[1].split("```")[0].strip()
+            raw_text = raw_text.strip()
+            if "```" in raw_text:
+                match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_text)
+                if match:
+                    raw_text = match.group(1).strip()
 
             verdict = json.loads(raw_text)
             score = float(verdict.get("score", 0.0))
             approved = bool(verdict.get("approved", score >= self.min_score))
             reason = verdict.get("reason", f"VLM score: {score}")
 
-            return approved, f"VLM (Score {score:.1f}/{self.min_score}): {reason}"
-
+            return approved, f"VLM [{actual_model}] (Score {score:.1f}/{self.min_score}): {reason}"
         except Exception as exc:
+            # Direct Google GenAI fallback if key is present
+            if self.api_key and self.api_key != "your_gemini_api_key_here":
+                try:
+                    from google import genai
+                    from google.genai import types
+
+                    client = genai.Client(api_key=self.api_key)
+                    image_bytes = preview_frame.read_bytes()
+                    prompt_parts = [
+                        types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
+                        types.Part.from_text(text=user_prompt),
+                    ]
+                    target_vlm = (
+                        "gemini-3.5-flash-lite"
+                        if self.model_name == "gemini-2.0-flash"
+                        else self.model_name
+                    )
+                    response = client.models.generate_content(
+                        model=target_vlm,
+                        contents=prompt_parts,  # type: ignore[arg-type]
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction,
+                            response_mime_type="application/json",
+                        ),
+                    )
+                    raw_text = (response.text or "").strip()
+                    if "```" in raw_text:
+                        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", raw_text)
+                        if match:
+                            raw_text = match.group(1).strip()
+                    verdict = json.loads(raw_text)
+                    score = float(verdict.get("score", 0.0))
+                    approved = bool(verdict.get("approved", score >= self.min_score))
+                    reason = verdict.get("reason", f"VLM score: {score}")
+                    return (
+                        approved,
+                        f"VLM [{target_vlm}] (Score {score:.1f}/{self.min_score}): {reason}",
+                    )
+                except Exception:
+                    pass
             return True, f"VLM inspection error fallback: {exc}"
 
     def _inspect_hil(

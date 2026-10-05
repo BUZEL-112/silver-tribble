@@ -10,6 +10,7 @@ from src.models.entities import StoryCluster
 from src.models.schemas import CostLogCreate
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository
+from src.services.model_registry_service import ModelRegistryService
 
 
 class ClusteringService:
@@ -26,6 +27,7 @@ class ClusteringService:
         gemini_key: str | None = None,
         embedding_base_url: str | None = None,
         embedding_api_key: str | None = None,
+        model_registry_service: ModelRegistryService | None = None,
     ) -> None:
         self.article_repo = article_repo
         self.cost_repo = cost_repo
@@ -35,6 +37,9 @@ class ClusteringService:
         self.openai_key = openai_key or settings.openai_api_key
         self.gemini_key = gemini_key or settings.gemini_api_key
         self.client = client or self._resolve_client(settings.llm_embedding_model)
+        self.model_registry_service = model_registry_service or ModelRegistryService(
+            cost_repo=self.cost_repo
+        )
 
     @staticmethod
     def is_local_model(model: str) -> bool:
@@ -133,108 +138,36 @@ class ClusteringService:
         target_model = model or settings.llm_embedding_model
         texts = [f"{a.title}. {a.summary[:300]}" for a in articles]
 
-        # 1. Local In-Process Embedding Mode (fastembed)
-        if self.is_local_model(target_model):
-            try:
-                from fastembed import TextEmbedding
-
-                local_name = self.parse_local_model_name(target_model)
-                embedding_model = TextEmbedding(model_name=local_name)
-                generator = embedding_model.embed(texts)
-                for idx, embedding in enumerate(generator):
-                    self.article_repo.update_article_embedding(articles[idx].id, embedding.tolist())
-
-                self.cost_repo.log_cost(
-                    CostLogCreate(
-                        stage="clustering",
-                        provider="local-fastembed",
-                        model=local_name,
-                        units=float(len(texts)),
-                        unit_type="articles",
-                        cost_usd=0.0,
-                    )
-                )
-                return len(articles)
-            except Exception:
-                pass
-
-        # 2. Google AI Studio Native Mode (google-genai SDK)
-        if self.is_google_embedding_model(target_model) and (self.gemini_key or self.api_key):
-            try:
-                from google import genai
-
-                effective_key = self.gemini_key or self.api_key
-                g_client = genai.Client(api_key=effective_key)
-                embeddings_list: list[list[float]] = []
-                try:
-                    # google-genai expects a list of lists of strings (or Content objects)
-                    # to embed multiple individual documents. Passing a flat list of strings
-                    # treats all strings as parts of a single multimodal content object.
-                    g_resp = g_client.models.embed_content(
-                        model=target_model,
-                        contents=[[t] for t in texts],  # type: ignore[arg-type]
-                    )
-                    embeddings_list = [
-                        list(e.values) for e in (g_resp.embeddings or []) if e.values is not None
-                    ]
-                except Exception:
-                    embeddings_list = []
-                    for t in texts:
-                        r = g_client.models.embed_content(
-                            model=target_model,
-                            contents=t,
-                        )
-                        if r.embeddings and r.embeddings[0].values:
-                            embeddings_list.append(list(r.embeddings[0].values))
-
-                saved_count = 0
-                for idx, emb_vals in enumerate(embeddings_list):
-                    if idx < len(articles):
-                        self.article_repo.update_article_embedding(articles[idx].id, emb_vals)
-                        saved_count += 1
-
-                self.cost_repo.log_cost(
-                    CostLogCreate(
-                        stage="clustering",
-                        provider="google-ai-studio",
-                        model=target_model,
-                        units=float(saved_count),
-                        unit_type="articles",
-                        cost_usd=0.0,
-                    )
-                )
-                return saved_count
-            except Exception:
-                pass
-
-        # 3. Remote OpenAI-compatible or LiteLLM Mode
         try:
-            client = self._resolve_client(target_model)
-            response = client.embeddings.create(
-                model=target_model,
-                input=texts,
-            )
-            for idx, item in enumerate(response.data):
-                self.article_repo.update_article_embedding(articles[idx].id, item.embedding)
-
-            # text-embedding-3-small pricing is approximately $0.00002 per 1k tokens
-            total_tokens = getattr(response.usage, "total_tokens", len(texts) * 50)
-            cost_usd = (total_tokens / 1000.0) * 0.00002
-
-            if self.is_google_embedding_model(target_model):
-                resolved_provider = "google-ai-studio"
-            elif self.base_url:
-                resolved_provider = "byok-provider"
-            elif self.openai_key:
-                resolved_provider = "openai"
+            if self._custom_client:
+                response = self._custom_client.embeddings.create(
+                    model=target_model,
+                    input=texts,
+                )
+                embeddings_data = [item.embedding for item in response.data]
+                actual_model = target_model
+                provider = "custom_client"
+                total_tokens = getattr(response.usage, "total_tokens", len(texts) * 50)
             else:
-                resolved_provider = "litellm"
+                embeddings_data, actual_model, model_def = (
+                    self.model_registry_service.execute_role_fallback_embedding(
+                        texts=texts,
+                        model_override=model,
+                    )
+                )
+                provider = "model_registry"
+                total_tokens = len(texts) * 50
 
+            for idx, emb_vals in enumerate(embeddings_data):
+                if idx < len(articles):
+                    self.article_repo.update_article_embedding(articles[idx].id, emb_vals)
+
+            cost_usd = (total_tokens / 1000.0) * 0.00002
             self.cost_repo.log_cost(
                 CostLogCreate(
                     stage="clustering",
-                    provider=resolved_provider,
-                    model=target_model,
+                    provider=provider,
+                    model=actual_model,
                     units=float(total_tokens),
                     unit_type="tokens",
                     cost_usd=cost_usd,

@@ -572,7 +572,7 @@ def trigger_render(
 
             if not captions:
                 caption_svc = CaptionService(storage, cost_repo)
-                _, captions = caption_svc.generate_captions(
+                cap_path, captions = caption_svc.generate_captions(
                     audio_path_or_url=job.audio_path or "",
                     job_id=job.id,
                     reference_text=script.full_narration,
@@ -874,9 +874,20 @@ def get_clusters(
         if response is not None:
             response.headers["X-Total-Count"] = str(total)
 
+        def _get_cluster_art_ids(cluster_obj: Any) -> list[int]:
+            raw_ids = getattr(cluster_obj, "article_ids", None)
+            if isinstance(raw_ids, str):
+                try:
+                    raw_ids = json.loads(raw_ids)
+                except Exception:
+                    raw_ids = []
+            if isinstance(raw_ids, list):
+                return [int(x) for x in raw_ids if str(x).isdigit()]
+            return []
+
         articles_map: dict[int, dict[str, Any]] = {}
         if include_articles:
-            all_art_ids = [aid for c in clusters for aid in (c.article_ids or [])]
+            all_art_ids = [aid for c in clusters for aid in _get_cluster_art_ids(c)]
             if all_art_ids:
                 articles = art_repo.get_articles_by_ids(all_art_ids)
                 articles_map = {
@@ -894,8 +905,9 @@ def get_clusters(
 
         results: list[dict[str, Any]] = []
         for c in clusters:
+            c_aids = _get_cluster_art_ids(c)
             cluster_articles = (
-                [articles_map[aid] for aid in (c.article_ids or []) if aid in articles_map]
+                [articles_map[aid] for aid in c_aids if aid in articles_map]
                 if include_articles
                 else []
             )
@@ -906,7 +918,7 @@ def get_clusters(
                     "title": c.title,
                     "summary": c.summary,
                     "article_count": c.article_count,
-                    "article_ids": c.article_ids or [],
+                    "article_ids": c_aids,
                     "articles": cluster_articles,
                     "status": c.status,
                     "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -1964,6 +1976,16 @@ def prune_system_cache(
 # ---------------------------------------------------------------------------
 
 DASHBOARD_TEMPLATE_PATH = Path(__file__).resolve().parent / "templates" / "dashboard.html"
+FAVICON_PATH = Path(__file__).resolve().parent / "static" / "favicon.svg"
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.svg", include_in_schema=False)
+def favicon() -> Response:
+    """Serve the studio tab icon."""
+    if FAVICON_PATH.exists():
+        return Response(content=FAVICON_PATH.read_bytes(), media_type="image/svg+xml")
+    return Response(status_code=404)
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -8,9 +8,12 @@ import yaml
 from pydantic import Field
 from pydantic_settings import (
     BaseSettings,
+    EnvSettingsSource,
     PydanticBaseSettingsSource,
     SettingsConfigDict,
 )
+
+from src.models.schemas import ModelDefinition
 
 DEFAULT_RSS_FEEDS: list[dict[str, str]] = [
     {
@@ -82,19 +85,70 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "api_key" in lt:
             flat["litellm_api_key"] = lt["api_key"]
 
-    # 4. Models section
+    # 3.1 Model Registry section
+    if "model_registry" in data and isinstance(data["model_registry"], list):
+        flat["model_registry"] = data["model_registry"]
+    elif "models_registry" in data and isinstance(data["models_registry"], list):
+        flat["model_registry"] = data["models_registry"]
+
+    # 3.2 Roles section
+    roles_map: dict[str, list[str]] = {}
+    if "roles" in data and isinstance(data["roles"], dict):
+        for r_name, r_val in data["roles"].items():
+            if isinstance(r_val, list):
+                roles_map[str(r_name)] = [str(x) for x in r_val]
+            elif isinstance(r_val, str):
+                roles_map[str(r_name)] = [r_val]
+    elif "model_roles" in data and isinstance(data["model_roles"], dict):
+        for r_name, r_val in data["model_roles"].items():
+            if isinstance(r_val, list):
+                roles_map[str(r_name)] = [str(x) for x in r_val]
+            elif isinstance(r_val, str):
+                roles_map[str(r_name)] = [r_val]
+
+    # 4. Models section (backward compatibility & list fallback support)
     if "models" in data and isinstance(data["models"], dict):
         m = data["models"]
-        if "planning" in m:
-            flat["llm_planning_model"] = m["planning"]
-        if "writing" in m:
-            flat["llm_writing_model"] = m["writing"]
-        if "embedding" in m:
-            flat["llm_embedding_model"] = m["embedding"]
+        for role_key, flat_field in [
+            ("planning", "llm_planning_model"),
+            ("writing", "llm_writing_model"),
+            ("embedding", "llm_embedding_model"),
+        ]:
+            if role_key in m:
+                val = m[role_key]
+                if isinstance(val, list):
+                    if val:
+                        flat[flat_field] = str(val[0])
+                    if role_key not in roles_map:
+                        roles_map[role_key] = [str(x) for x in val]
+                elif isinstance(val, str):
+                    flat[flat_field] = val
+                    if role_key not in roles_map:
+                        roles_map[role_key] = [val]
+
         if "embedding_base_url" in m:
             flat["embedding_base_url"] = m["embedding_base_url"]
         if "embedding_api_key" in m:
             flat["embedding_api_key"] = m["embedding_api_key"]
+
+    if (
+        "multimodal_model" in data.get("media", {})
+        if isinstance(data.get("media"), dict)
+        else False
+    ):
+        med_val = data["media"]["multimodal_model"]
+        if isinstance(med_val, list):
+            if med_val:
+                flat["media_inspector_model"] = str(med_val[0])
+            if "vlm_inspector" not in roles_map:
+                roles_map["vlm_inspector"] = [str(x) for x in med_val]
+        elif isinstance(med_val, str):
+            flat["media_inspector_model"] = med_val
+            if "vlm_inspector" not in roles_map:
+                roles_map["vlm_inspector"] = [med_val]
+
+    if roles_map:
+        flat["roles"] = roles_map
 
     # 5. Providers section
     if "providers" in data and isinstance(data["providers"], dict):
@@ -222,7 +276,12 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "inspector_mode" in med:
             flat["media_inspector_mode"] = med["inspector_mode"]
         if "multimodal_model" in med:
-            flat["media_inspector_model"] = med["multimodal_model"]
+            val = med["multimodal_model"]
+            if isinstance(val, list):
+                if val:
+                    flat["media_inspector_model"] = str(val[0])
+            else:
+                flat["media_inspector_model"] = str(val)
         if "min_relevance_score" in med:
             flat["media_inspector_min_score"] = float(med["min_relevance_score"])
         if "provider_priority" in med and isinstance(med["provider_priority"], list):
@@ -453,6 +512,21 @@ class YamlCustomSettingsSource(PydanticBaseSettingsSource):
         return {}
 
 
+class NonEmptyEnvSettingsSource(EnvSettingsSource):
+    """Environment settings source that ignores empty strings and template placeholders."""
+
+    def __call__(self) -> dict[str, Any]:
+        data = super().__call__()
+        filtered: dict[str, Any] = {}
+        for k, v in data.items():
+            if isinstance(v, str):
+                s = v.strip()
+                if not s or (s.startswith("your_") and s.endswith("_here")):
+                    continue
+            filtered[k] = v
+        return filtered
+
+
 class Settings(BaseSettings):
     """Pipeline configuration settings loaded from config.yaml, environment, or .env file."""
 
@@ -476,6 +550,16 @@ class Settings(BaseSettings):
     litellm_api_key: str = Field(
         default="sk-litellm-master-key",
         description="API key for authentication with LiteLLM proxy",
+    )
+
+    # Model Registry and Role Fallback Chains
+    model_registry: list[dict[str, Any]] = Field(
+        default_factory=list,
+        description="Unified registry of model provider endpoints, credentials, and protocols",
+    )
+    roles: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Ordered priority fallback lists mapping pipeline roles to model aliases",
     )
 
     # LLM Model Routing (routed through LiteLLM or direct OpenAI-compatible endpoint)
@@ -866,7 +950,7 @@ class Settings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         return (
             init_settings,
-            env_settings,
+            NonEmptyEnvSettingsSource(settings_cls),
             YamlCustomSettingsSource(settings_cls),
             dotenv_settings,
             file_secret_settings,
@@ -879,6 +963,130 @@ class Settings(BaseSettings):
         if p:
             return f"{p} (YAML)"
         return ".env (Environment)"
+
+    def get_model_definitions_for_role(self, role: str) -> list[ModelDefinition]:
+        """Resolve ordered fallback chain of ModelDefinition objects for a given role."""
+        model_names = self.roles.get(role, [])
+        registry_map: dict[str, dict[str, Any]] = {
+            str(m["name"]): m for m in self.model_registry if isinstance(m, dict) and m.get("name")
+        }
+
+        resolved: list[ModelDefinition] = []
+        for name in model_names:
+            if name in registry_map:
+                entry = dict(registry_map[name])
+                if not entry.get("api_key"):
+                    entry["api_key"] = self._resolve_fallback_api_key(
+                        entry.get("model_name", name), entry.get("base_url")
+                    )
+                resolved.append(ModelDefinition(**entry))
+            else:
+                resolved.append(self._synthesize_model_definition(name, role))
+
+        if not resolved:
+            legacy_model = self._get_legacy_model_for_role(role)
+            if legacy_model:
+                resolved.append(self._synthesize_model_definition(legacy_model, role))
+
+        return resolved
+
+    def get_model_definition_by_name(self, name: str, role: str = "planning") -> ModelDefinition:
+        """Find a model in the registry by name or synthesize a default definition."""
+        for entry in self.model_registry:
+            if isinstance(entry, dict) and entry.get("name") == name:
+                entry_copy = dict(entry)
+                if not entry_copy.get("api_key"):
+                    entry_copy["api_key"] = self._resolve_fallback_api_key(
+                        entry_copy.get("model_name", name), entry_copy.get("base_url")
+                    )
+                return ModelDefinition(**entry_copy)
+        return self._synthesize_model_definition(name, role)
+
+    def _get_legacy_model_for_role(self, role: str) -> str:
+        """Return the default fallback model string for a given pipeline role."""
+        if role == "planning":
+            return self.llm_planning_model
+        if role == "writing":
+            return self.llm_writing_model
+        if role == "embedding":
+            return self.llm_embedding_model
+        if role == "vlm_inspector":
+            return self.media_inspector_model
+        return self.llm_planning_model
+
+    def _resolve_fallback_api_key(self, model_name: str, base_url: str | None = None) -> str | None:
+        """Resolve the appropriate API key based on model naming or provider base URL."""
+        m_lower = model_name.lower()
+        if "gemini" in m_lower or "google" in m_lower:
+            return self.gemini_api_key
+        if "deepseek" in m_lower:
+            return self.deepseek_api_key
+        if any(x in m_lower for x in ["gpt", "o1", "o3", "text-embedding"]):
+            return self.openai_api_key
+        if "claude" in m_lower or "anthropic" in m_lower:
+            return os.environ.get("ANTHROPIC_API_KEY") or self.api_auth_token
+        return self.litellm_api_key or self.openai_api_key or "sk-dummy"
+
+    def _synthesize_model_definition(self, name: str, role: str) -> ModelDefinition:
+        """Construct a ModelDefinition for a standalone model name using system credentials."""
+        m_lower = name.lower()
+        endpoint_type: Literal["chat", "embedding", "multimodal"] = "chat"
+        if role == "embedding":
+            endpoint_type = "embedding"
+        elif role == "vlm_inspector":
+            endpoint_type = "multimodal"
+
+        if "claude" in m_lower or "anthropic" in m_lower:
+            return ModelDefinition(
+                name=name,
+                model_name=name,
+                base_url="https://api.anthropic.com/v1",
+                api_key=os.environ.get("ANTHROPIC_API_KEY") or self.api_auth_token,
+                api_format="anthropic",
+                endpoint_type=endpoint_type,
+            )
+
+        if "gemini" in m_lower or "google" in m_lower:
+            return ModelDefinition(
+                name=name,
+                model_name=name,
+                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                api_key=self.gemini_api_key,
+                api_format="openai",
+                endpoint_type=endpoint_type,
+            )
+
+        if "deepseek" in m_lower:
+            return ModelDefinition(
+                name=name,
+                model_name=name,
+                base_url="https://api.deepseek.com/v1",
+                api_key=self.deepseek_api_key,
+                api_format="openai",
+                endpoint_type=endpoint_type,
+            )
+
+        if any(x in m_lower for x in ["gpt", "o1", "o3", "text-embedding"]):
+            return ModelDefinition(
+                name=name,
+                model_name=name,
+                base_url="https://api.openai.com/v1",
+                api_key=self.openai_api_key,
+                api_format="openai",
+                endpoint_type=endpoint_type,
+            )
+
+        # Default fallback to LiteLLM proxy
+        raw_url = (self.litellm_base_url or "http://localhost:4000").rstrip("/")
+        effective_base_url = raw_url if raw_url.endswith("/v1") else f"{raw_url}/v1"
+        return ModelDefinition(
+            name=name,
+            model_name=name,
+            base_url=effective_base_url,
+            api_key=self.litellm_api_key or "sk-litellm-master-key",
+            api_format="openai",
+            endpoint_type=endpoint_type,
+        )
 
     def ensure_directories(self) -> None:
         """Create required local directories if they do not exist."""

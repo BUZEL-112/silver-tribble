@@ -100,6 +100,7 @@ class ProviderService:
             is_configured = False
             masked_key = None
             endpoint = None
+            key: str | None = None
 
             if pid == "asset_library" or pid == "brand_card":
                 is_configured = True
@@ -191,6 +192,7 @@ class ProviderService:
 
         # Built-in providers test
         effective_key = api_key
+        key: str | None = None
         try:
             if provider_id in ["asset_library", "local"]:
                 latency = (time.perf_counter() - t0) * 1000.0
@@ -320,8 +322,8 @@ class ProviderService:
                     )
                 from google import genai
 
-                client = genai.Client(api_key=key)
-                client.models.get(model="gemini-2.0-flash")
+                genai_client = genai.Client(api_key=key)
+                genai_client.models.get(model="gemini-2.5-flash")
                 latency = (time.perf_counter() - t0) * 1000.0
                 return ProviderTestResponse(
                     provider_id=provider_id,
@@ -512,9 +514,12 @@ class ProviderService:
 
     def update_priority(self, new_order: list[str]) -> list[str]:
         """Update provider priority cascade order and persist to YAML."""
-        valid_ids = {p["id"] for p in self.BUILTIN_PROVIDERS} | {
-            item.get("id") for item in settings.custom_providers
+        custom_ids = {
+            str(item["id"])
+            for item in settings.custom_providers
+            if isinstance(item, dict) and item.get("id")
         }
+        valid_ids: set[str] = {str(p["id"]) for p in self.BUILTIN_PROVIDERS} | custom_ids
         filtered_order = [pid for pid in new_order if pid in valid_ids]
         # Append any missing providers at the end to prevent orphans
         for pid in valid_ids:

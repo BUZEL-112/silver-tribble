@@ -18,6 +18,17 @@ from src.models.schemas import (
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository
 from src.repositories.script_repository import ScriptRepository
+from src.services.model_registry_service import ModelRegistryService
+
+
+def extract_json_object(raw_text: str) -> Any:
+    """Extract and parse JSON object from LLM response, stripping code blocks."""
+    cleaned = raw_text.strip()
+    if "```" in cleaned:
+        match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", cleaned)
+        if match:
+            cleaned = match.group(1).strip()
+    return json.loads(cleaned)
 
 
 def sanitize_news_text(text: str) -> str:
@@ -60,7 +71,7 @@ def clean_narration_for_tts(text: str) -> str:
 
 
 class ScriptService:
-    """Orchestrates structured script generation across gpt-4o-mini and DeepSeek."""
+    """Orchestrates structured script generation across configurable model provider chains."""
 
     def __init__(
         self,
@@ -74,6 +85,7 @@ class ScriptService:
         openai_key: str | None = None,
         deepseek_key: str | None = None,
         gemini_key: str | None = None,
+        model_registry_service: ModelRegistryService | None = None,
     ) -> None:
         self.article_repo = article_repo
         self.script_repo = script_repo
@@ -86,6 +98,9 @@ class ScriptService:
         self.deepseek_key = deepseek_key or settings.deepseek_api_key
         self.gemini_key = gemini_key or settings.gemini_api_key
         self.client = client or self._resolve_client(settings.llm_planning_model)
+        self.model_registry_service = model_registry_service or ModelRegistryService(
+            cost_repo=self.cost_repo
+        )
 
     def _resolve_client(self, model: str) -> OpenAI:
         """Resolve the appropriate OpenAI-compatible client for the target model."""
@@ -194,36 +209,37 @@ class ScriptService:
         )
 
         target_model = model or settings.llm_planning_model
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
         try:
-            client = self._resolve_client(target_model)
-            try:
-                response = client.chat.completions.create(
+            if self._custom_client:
+                response = self._custom_client.chat.completions.create(  # type: ignore[call-overload]
                     model=target_model,
                     response_format={"type": "json_object"},
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=0.7,
                 )
-            except Exception:
-                if self.gemini_key and target_model != "gemini-3.5-flash-lite":
-                    target_model = "gemini-3.5-flash-lite"
-                    client = self._resolve_client(target_model)
-                    response = client.chat.completions.create(
-                        model=target_model,
-                        response_format={"type": "json_object"},
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_message},
-                        ],
-                        temperature=0.7,
+                raw_json = response.choices[0].message.content or "{}"
+                actual_model = target_model
+                usage_obj = getattr(response, "usage", None)
+                prompt_tokens = getattr(usage_obj, "prompt_tokens", 500) if usage_obj else 500
+                completion_tokens = (
+                    getattr(usage_obj, "completion_tokens", 400) if usage_obj else 400
+                )
+            else:
+                raw_json, actual_model, _, usage_dict = (
+                    self.model_registry_service.execute_role_fallback_chat(
+                        role="planning",
+                        messages=messages,
+                        model_override=model,
                     )
-                else:
-                    raise
+                )
+                prompt_tokens = usage_dict.get("prompt_tokens", 500)
+                completion_tokens = usage_dict.get("completion_tokens", 400)
 
-            raw_json = response.choices[0].message.content or "{}"
-            parsed = json.loads(raw_json)
+            parsed = extract_json_object(raw_json)
             if isinstance(parsed, list):
                 parsed = {
                     "title": cluster.title if cluster else "AI News Update",
@@ -239,17 +255,12 @@ class ScriptService:
 
             beat_sheet = BeatSheetResponse.model_validate(parsed)
 
-            # Pricing estimate based on standard tokens
-            usage = response.usage
-            prompt_tokens = getattr(usage, "prompt_tokens", 500)
-            completion_tokens = getattr(usage, "completion_tokens", 400)
             cost_usd = (prompt_tokens * 0.15 + completion_tokens * 0.60) / 1_000_000
-
             self.cost_repo.log_cost(
                 CostLogCreate(
                     stage="script_beat_sheet",
-                    provider="litellm",
-                    model=target_model,
+                    provider="model_registry",
+                    model=actual_model,
                     units=float(prompt_tokens + completion_tokens),
                     unit_type="tokens",
                     cost_usd=cost_usd,
@@ -341,36 +352,37 @@ class ScriptService:
         )
 
         target_model = model or settings.llm_writing_model
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
         try:
-            client = self._resolve_client(target_model)
-            try:
-                response = client.chat.completions.create(
+            if self._custom_client:
+                response = self._custom_client.chat.completions.create(  # type: ignore[call-overload]
                     model=target_model,
                     response_format={"type": "json_object"},
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
+                    messages=messages,  # type: ignore[arg-type]
                     temperature=0.8,
                 )
-            except Exception:
-                if self.gemini_key and target_model != "gemini-3.5-flash-lite":
-                    target_model = "gemini-3.5-flash-lite"
-                    client = self._resolve_client(target_model)
-                    response = client.chat.completions.create(
-                        model=target_model,
-                        response_format={"type": "json_object"},
-                        messages=[
-                            {"role": "system", "content": system_prompt},
-                            {"role": "user", "content": user_message},
-                        ],
-                        temperature=0.8,
+                raw_json = response.choices[0].message.content or "{}"
+                actual_model = target_model
+                usage_obj = getattr(response, "usage", None)
+                prompt_tokens = getattr(usage_obj, "prompt_tokens", 600) if usage_obj else 600
+                completion_tokens = (
+                    getattr(usage_obj, "completion_tokens", 500) if usage_obj else 500
+                )
+            else:
+                raw_json, actual_model, _, usage_dict = (
+                    self.model_registry_service.execute_role_fallback_chat(
+                        role="writing",
+                        messages=messages,
+                        model_override=model,
                     )
-                else:
-                    raise
+                )
+                prompt_tokens = usage_dict.get("prompt_tokens", 600)
+                completion_tokens = usage_dict.get("completion_tokens", 500)
 
-            raw_json = response.choices[0].message.content or "{}"
-            parsed = json.loads(raw_json)
+            parsed = extract_json_object(raw_json)
             if isinstance(parsed, list):
                 parsed = {
                     "title": cluster_title,
@@ -404,17 +416,12 @@ class ScriptService:
 
             expansion = ScriptExpansionResponse.model_validate(parsed)
 
-            # Pricing estimate based on standard tokens
-            usage = response.usage
-            prompt_tokens = getattr(usage, "prompt_tokens", 600)
-            completion_tokens = getattr(usage, "completion_tokens", 500)
             cost_usd = (prompt_tokens * 0.14 + completion_tokens * 0.28) / 1_000_000
-
             self.cost_repo.log_cost(
                 CostLogCreate(
                     stage="script_dialogue",
-                    provider="litellm",
-                    model=target_model,
+                    provider="model_registry",
+                    model=actual_model,
                     units=float(prompt_tokens + completion_tokens),
                     unit_type="tokens",
                     cost_usd=cost_usd,
@@ -554,19 +561,28 @@ class ScriptService:
         )
 
         target_model = model or settings.llm_planning_model
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
+        ]
         try:
-            client = self._resolve_client(target_model)
-            response = client.chat.completions.create(
-                model=target_model,
-                response_format={"type": "json_object"},
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                temperature=0.7,
-            )
-            raw_json = response.choices[0].message.content or "{}"
-            parsed = json.loads(raw_json)
+            if self._custom_client:
+                response = self._custom_client.chat.completions.create(  # type: ignore[call-overload]
+                    model=target_model,
+                    response_format={"type": "json_object"},
+                    messages=messages,  # type: ignore[arg-type]
+                    temperature=0.7,
+                )
+                raw_json = response.choices[0].message.content or "{}"
+            else:
+                raw_json, actual_model, _, _ = (
+                    self.model_registry_service.execute_role_fallback_chat(
+                        role="planning",
+                        messages=messages,
+                        model_override=model,
+                    )
+                )
+            parsed = extract_json_object(raw_json)
             title = parsed.get("title", f"AI Daily Roundup: {len(valid_clusters)} Top Stories")
             raw_beats = parsed.get("beats", [])
             beats_data = []

@@ -779,7 +779,6 @@ class MediaService:
             return []
         return []
 
-
     def download_asset(self, url: str, destination_path: Path) -> tuple[bool, Path]:
         """Download remote asset to local path, transcoding GIFs to MP4 to prevent looping."""
         try:

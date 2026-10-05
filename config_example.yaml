@@ -33,24 +33,96 @@ litellm:
   api_key: "sk-litellm-master-key"
 
 # ------------------------------------------------------------------------------
-# 3. LLM Model Routing
+# 3. Model Registry & Role Mappings (Decoupled Provider Endpoints & Fallback Chains)
 # ------------------------------------------------------------------------------
+# Define custom model endpoints in model_registry and map them to pipeline roles.
+# Each role accepts an ordered list of model names. The first entry is tried first;
+# if it fails, the pipeline automatically falls back to the next model in the list.
+#
+# Supported endpoint_type: "chat", "embedding", "multimodal"
+# Supported api_format: "openai", "anthropic"
+
+model_registry:
+  - name: "gemini-flash"
+    model_name: "gemini-3.5-flash-lite"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: null      # Defaults to providers.gemini_api_key if omitted
+    api_format: "openai"
+    endpoint_type: "chat"
+    timeout: 30.0
+
+  - name: "deepseek-cloud"
+    model_name: "deepseek-chat"
+    base_url: "https://api.deepseek.com/v1"
+    api_key: null      # Defaults to providers.deepseek_api_key if omitted
+    api_format: "openai"
+    endpoint_type: "chat"
+    timeout: 30.0
+
+  - name: "gpt-mini"
+    model_name: "gpt-4o-mini"
+    base_url: "https://api.openai.com/v1"
+    api_key: null      # Defaults to providers.openai_api_key if omitted
+    api_format: "openai"
+    endpoint_type: "chat"
+    timeout: 30.0
+
+  - name: "gemini-embed"
+    model_name: "gemini-embedding-2"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: null
+    api_format: "openai"
+    endpoint_type: "embedding"
+    timeout: 30.0
+
+  - name: "local-embed"
+    model_name: "local:BAAI/bge-small-en-v1.5"
+    base_url: null
+    api_key: null
+    api_format: "openai"
+    endpoint_type: "embedding"
+    timeout: 30.0
+
+  - name: "gemini-vlm"
+    model_name: "gemini-3.5-flash-lite"
+    base_url: "https://generativelanguage.googleapis.com/v1beta/openai/"
+    api_key: null
+    api_format: "openai"
+    endpoint_type: "multimodal"
+    timeout: 30.0
+
+roles:
+  # Stage 1: Narrative beat sheet structuring (ScriptService.generate_beat_sheet)
+  planning:
+    - "gemini-flash"
+    - "gpt-mini"
+    - "deepseek-cloud"
+
+  # Stage 2: Host persona dialogue expansion (ScriptService.expand_script_persona)
+  writing:
+    - "gemini-flash"
+    - "deepseek-cloud"
+    - "gpt-mini"
+
+  # Semantic story clustering embeddings (ClusteringService.generate_embeddings_for_new_articles)
+  embedding:
+    - "gemini-embed"
+    - "local-embed"
+
+  # Multimodal Visual Asset Inspector (MediaInspector.inspect_candidate)
+  vlm_inspector:
+    - "gemini-vlm"
+
+# Legacy scalar model configuration (still supported for backwards compatibility):
 models:
   # Stage 1: Narrative beat sheet structuring (fast, structured output model)
-  # Examples: gpt-4o-mini, gemini-2.0-flash, claude-3-5-haiku
-  planning: "gpt-4o-mini"
+  planning: "gemini-flash"
 
   # Stage 2: Comedic host persona dialogue expansion (creative, expressive writer)
-  # Examples: deepseek-chat, gpt-4o, qwen-2.5-72b
-  writing: "deepseek-chat"
+  writing: "gemini-flash"
 
   # Semantic story clustering vector embedding model:
-  # Options:
-  #   - "local" or "BAAI/bge-small-en-v1.5"  -> 100% Free, offline FastEmbed ONNX ($0.00)
-  #   - "sentence-transformers/all-MiniLM-L6-v2" -> Alternative local ONNX model
-  #   - "text-embedding-004"                -> Google AI Studio / Gemini
-  #   - "text-embedding-3-small"            -> OpenAI (1536 dimensions)
-  embedding: "text-embedding-3-small"
+  embedding: "gemini-embed"
 
   # Custom embedding endpoint (e.g. Ollama http://localhost:11434/v1 or Voyage AI):
   embedding_base_url: null

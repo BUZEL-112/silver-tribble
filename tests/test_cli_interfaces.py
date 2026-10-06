@@ -281,3 +281,79 @@ def test_cli_render_async_option() -> None:
         assert data["status"] == "queued"
         assert data["job_id"] == 10
         mock_submit.assert_called_once_with(job_id=10, dry_run=False)
+
+
+def test_cli_cluster_command_options() -> None:
+    """Verify cluster command supports --hours, --article-ids, and --run-id options."""
+    from unittest.mock import MagicMock
+
+    mock_cluster = MagicMock()
+    mock_cluster.id = 101
+    mock_cluster.title = "CLI Clustered Story"
+    mock_cluster.article_count = 3
+    mock_cluster.cluster_run_id = "run_cli_test"
+    mock_cluster.run_cluster_index = 1
+    mock_cluster.status = "pending"
+
+    with patch(
+        "src.services.clustering_service.ClusteringService.cluster_recent_articles",
+        return_value=[mock_cluster],
+    ) as mock_run:
+        res = runner.invoke(
+            app,
+            [
+                "cluster",
+                "--threshold",
+                "0.85",
+                "--hours",
+                "24",
+                "--article-ids",
+                "1,2,3",
+                "--run-id",
+                "run_cli_test",
+            ],
+        )
+        assert res.exit_code == 0
+        assert "run_cli_test" in res.stdout
+        mock_run.assert_called_once_with(
+            threshold=0.85,
+            article_ids=[1, 2, 3],
+            hours_back=24.0,
+            cluster_run_id="run_cli_test",
+        )
+
+
+def test_cli_clusters_command_run_id_filter() -> None:
+    """Verify clusters listing command filters by --run-id."""
+    init_db()
+    uid = uuid.uuid4().hex[:8]
+    run_a = f"run_{uid}_a"
+    run_b = f"run_{uid}_b"
+
+    with get_session() as session:
+        c_a = StoryCluster(
+            cluster_hash=f"{run_a}:1",
+            title=f"AlphaStory{uid}",
+            summary="Summary A",
+            article_ids=[1],
+            article_count=1,
+            cluster_run_id=run_a,
+            run_cluster_index=1,
+        )
+        c_b = StoryCluster(
+            cluster_hash=f"{run_b}:1",
+            title=f"BetaStory{uid}",
+            summary="Summary B",
+            article_ids=[2],
+            article_count=1,
+            cluster_run_id=run_b,
+            run_cluster_index=1,
+        )
+        session.add_all([c_a, c_b])
+        session.commit()
+
+    res = runner.invoke(app, ["clusters", "--run-id", run_a])
+    assert res.exit_code == 0
+    assert run_a in res.stdout
+    assert "Alpha" in res.stdout
+    assert "Beta" not in res.stdout

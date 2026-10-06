@@ -269,7 +269,7 @@ class VisualConfigService:
             media_block["min_relevance_score"] = req.media_inspector_min_score
             settings.media_inspector_min_score = req.media_inspector_min_score
 
-        # 6. Models section
+        # 6. Models and Roles section
         models_block = data.setdefault("models", {})
         if req.llm_planning_model is not None:
             models_block["planning"] = req.llm_planning_model
@@ -277,6 +277,21 @@ class VisualConfigService:
         if req.llm_writing_model is not None:
             models_block["writing"] = req.llm_writing_model
             settings.llm_writing_model = req.llm_writing_model
+
+        roles_block = data.setdefault("roles", {})
+        if isinstance(roles_block, dict):
+            if req.llm_planning_model is not None:
+                p_chain = roles_block.get("planning", [])
+                if isinstance(p_chain, list) and p_chain:
+                    roles_block["planning"] = [req.llm_planning_model] + [
+                        x for x in p_chain if str(x) != req.llm_planning_model
+                    ]
+            if req.llm_writing_model is not None:
+                w_chain = roles_block.get("writing", [])
+                if isinstance(w_chain, list) and w_chain:
+                    roles_block["writing"] = [req.llm_writing_model] + [
+                        x for x in w_chain if str(x) != req.llm_writing_model
+                    ]
 
         # Write YAML and hot reload
         config_path.write_text(yaml.dump(data, sort_keys=False), encoding="utf-8")

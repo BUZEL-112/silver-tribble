@@ -32,4 +32,8 @@ python -c "from src.core.database import init_db; init_db()" || {
 }
 
 echo "Database ready. Starting web server on port 8000..."
-exec uvicorn src.web:app --host 0.0.0.0 --port 8000 --workers 1
+RELOAD_FLAG=""
+if [ "${UVICORN_RELOAD:-1}" = "1" ]; then
+    RELOAD_FLAG="--reload --reload-dir /app/src"
+fi
+exec uvicorn src.web:app --host 0.0.0.0 --port 8000 --workers 1 ${RELOAD_FLAG}

@@ -77,14 +77,51 @@ def init_db(target_engine=None) -> None:
     if "sqlite" in url_str:
         with active_engine.connect() as conn:
             try:
-                res = conn.execute(text("PRAGMA table_info(scripts)")).fetchall()
-                if res:
-                    col_names = [r[1] for r in res]
+                res_scripts = conn.execute(text("PRAGMA table_info(scripts)")).fetchall()
+                if res_scripts:
+                    col_names = [r[1] for r in res_scripts]
                     if "cluster_ids" not in col_names:
                         conn.execute(
                             text("ALTER TABLE scripts ADD COLUMN cluster_ids JSON DEFAULT '[]'")
                         )
                         conn.commit()
+
+                res_clusters = conn.execute(text("PRAGMA table_info(story_clusters)")).fetchall()
+                if res_clusters:
+                    cluster_cols = [r[1] for r in res_clusters]
+                    if "cluster_run_id" not in cluster_cols:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE story_clusters "
+                                "ADD COLUMN cluster_run_id VARCHAR(64) DEFAULT 'run_default'"
+                            )
+                        )
+                    if "run_cluster_index" not in cluster_cols:
+                        conn.execute(
+                            text(
+                                "ALTER TABLE story_clusters "
+                                "ADD COLUMN run_cluster_index INTEGER DEFAULT 1"
+                            )
+                        )
+                    conn.commit()
+            except Exception:
+                pass
+    elif "postgresql" in url_str:
+        with active_engine.connect() as conn:
+            try:
+                conn.execute(
+                    text(
+                        "ALTER TABLE story_clusters "
+                        "ADD COLUMN IF NOT EXISTS cluster_run_id VARCHAR(64) DEFAULT 'run_default'"
+                    )
+                )
+                conn.execute(
+                    text(
+                        "ALTER TABLE story_clusters "
+                        "ADD COLUMN IF NOT EXISTS run_cluster_index INTEGER DEFAULT 1"
+                    )
+                )
+                conn.commit()
             except Exception:
                 pass
 

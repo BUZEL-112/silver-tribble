@@ -471,10 +471,14 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
     # 15. Budget section
     if "budget" in data and isinstance(data["budget"], dict):
         bg = data["budget"]
-        if "daily_usd" in bg:
+        if "daily_usd" in bg and bg["daily_usd"] is not None:
             flat["cost_daily_budget_usd"] = float(bg["daily_usd"])
-        if "monthly_usd" in bg:
+        elif "daily_budget_usd" in bg and bg["daily_budget_usd"] is not None:
+            flat["cost_daily_budget_usd"] = float(bg["daily_budget_usd"])
+        if "monthly_usd" in bg and bg["monthly_usd"] is not None:
             flat["cost_monthly_budget_usd"] = float(bg["monthly_usd"])
+        elif "monthly_budget_usd" in bg and bg["monthly_budget_usd"] is not None:
+            flat["cost_monthly_budget_usd"] = float(bg["monthly_budget_usd"])
 
     # 16. YouTube section
     if "youtube" in data and isinstance(data["youtube"], dict):

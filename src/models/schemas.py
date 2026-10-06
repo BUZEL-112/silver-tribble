@@ -462,3 +462,116 @@ class RoleMappingsConfig(BaseModel):
         default_factory=list,
         description="Ordered model aliases for visual candidate inspection",
     )
+
+
+class ClusterRunResponse(BaseModel):
+    """Cluster execution run summary."""
+
+    run_id: str
+    cluster_count: int = 0
+    article_count: int = 0
+    threshold: float = 0.82
+    created_at: datetime
+
+
+class ArticleSummary(BaseModel):
+    """Article metadata summary for UI selection."""
+
+    id: int
+    title: str
+    link: str
+    source: str
+    summary: str
+    published_at: datetime | None = None
+    created_at: datetime | None = None
+    has_embedding: bool = False
+
+
+class ClusterTriggerRequest(BaseModel):
+    """Payload to trigger news clustering."""
+
+    threshold: float | None = Field(default=None, ge=0.0, le=1.0)
+    model: str | None = None
+    article_ids: list[int] | None = None
+    hours_back: float | None = None
+    cluster_run_id: str | None = None
+
+
+class ModelDefinitionResponse(BaseModel):
+    """Model definition formatted for client display with masked credentials."""
+
+    name: str
+    model_name: str
+    base_url: str | None = None
+    api_key_masked: str | None = None
+    is_configured: bool = False
+    api_format: Literal["openai", "anthropic"] = "openai"
+    endpoint_type: Literal["chat", "embedding", "multimodal"] = "chat"
+    timeout: float = 30.0
+    extra_headers: dict[str, str] = Field(default_factory=dict)
+
+
+class ModelTestRequest(BaseModel):
+    """Request payload to test a registered or draft model definition."""
+
+    model_name: str = Field(..., min_length=1, description="Model alias or name to test")
+    prompt: str | None = Field(default=None, description="Optional custom test prompt")
+
+
+class ModelTestResponse(BaseModel):
+    """Result of a model endpoint connectivity test."""
+
+    model_name: str
+    status: Literal["success", "error"]
+    latency_ms: float
+    message: str
+
+
+class RoleFallbacksUpdateRequest(BaseModel):
+    """Payload to update ordered model fallback chains for pipeline roles."""
+
+    planning: list[str] | None = None
+    writing: list[str] | None = None
+    embedding: list[str] | None = None
+    vlm_inspector: list[str] | None = None
+
+
+class SystemConfigResponse(BaseModel):
+    """Full system configuration state matching current application structure."""
+
+    database: dict[str, Any]
+    litellm: dict[str, Any]
+    model_registry: list[ModelDefinitionResponse]
+    roles: RoleMappingsConfig
+    providers: dict[str, Any]
+    tts: dict[str, Any]
+    storage: dict[str, Any]
+    whisper: dict[str, Any]
+    remotion: dict[str, Any]
+    clustering: dict[str, Any]
+    video: dict[str, Any]
+    media: dict[str, Any]
+    timing: dict[str, Any]
+    budget: dict[str, Any]
+    security: dict[str, Any]
+    youtube: dict[str, Any]
+    rss_feeds: list[dict[str, str]]
+    config_source: str
+    config_path: str | None = None
+
+
+class SystemConfigUpdateRequest(BaseModel):
+    """Payload to update modular system configuration sections."""
+
+    litellm: dict[str, Any] | None = None
+    providers: dict[str, Any] | None = None
+    tts: dict[str, Any] | None = None
+    storage: dict[str, Any] | None = None
+    whisper: dict[str, Any] | None = None
+    remotion: dict[str, Any] | None = None
+    clustering: dict[str, Any] | None = None
+    video: dict[str, Any] | None = None
+    media: dict[str, Any] | None = None
+    timing: dict[str, Any] | None = None
+    budget: dict[str, Any] | None = None
+    security: dict[str, Any] | None = None

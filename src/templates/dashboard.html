@@ -115,7 +115,7 @@
               <div class="font-semibold text-white text-sm mt-1">Ingest RSS</div>
               <div class="text-xs text-zinc-400 mt-1">Scrape feeds and clean URLs</div>
             </div>
-            <button onclick="triggerStage('ingest')" class="mt-4 w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200 transition">Run Ingest</button>
+            <button onclick="triggerStage('ingest', this)" class="mt-4 w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200 transition">Run Ingest</button>
           </div>
 
           <div class="bg-black border border-zinc-800 rounded-none-none p-3.5 flex flex-col justify-between hover:border-zinc-700 transition">
@@ -125,7 +125,7 @@
               <div class="text-xs text-zinc-400 mt-1">Embeddings and velocity rank</div>
             </div>
             <div class="mt-4 space-y-1.5">
-              <button onclick="triggerStage('cluster')" class="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200 transition">Run Cluster</button>
+              <button onclick="openClusterModal()" class="w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200 transition">Run Cluster</button>
             </div>
           </div>
 
@@ -135,7 +135,7 @@
               <div class="font-semibold text-white text-sm mt-1">Write Script</div>
               <div class="text-xs text-zinc-400 mt-1">Beats, hooks, and narration</div>
             </div>
-            <button onclick="promptScriptStage()" class="mt-4 w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200 transition">Run Script</button>
+            <button onclick="openWriteScriptModal()" class="mt-4 w-full py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200 transition">Run Script</button>
           </div>
 
           <div class="bg-black border border-zinc-800 rounded-none-none p-3.5 flex flex-col justify-between hover:border-zinc-700 transition">
@@ -224,8 +224,8 @@
             <p class="text-xs text-zinc-400 mt-1">Grouped stories with article source links, velocity rankings, and direct video pipeline launch.</p>
           </div>
           <div class="flex items-center space-x-2">
-            <button onclick="triggerStage('ingest')" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition">Ingest News</button>
-            <button onclick="triggerStage('cluster')" class="px-3 py-1.5 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-700/50 text-purple-300 text-xs font-medium rounded-none transition">Run Clustering</button>
+            <button onclick="triggerStage('ingest', this)" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition">Ingest News</button>
+            <button onclick="openClusterModal()" class="px-3 py-1.5 bg-purple-950/60 hover:bg-purple-900/80 border border-purple-700/50 text-purple-300 text-xs font-medium rounded-none transition">Run Clustering</button>
             <button onclick="loadClusters()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded-none text-white transition shadow">Refresh</button>
           </div>
         </div>
@@ -238,6 +238,15 @@
               <button id="btn-view-all-clusters" onclick="setClusterView('all')" class="px-2.5 py-1 text-xs font-medium rounded-none bg-blue-600 text-white">All Clusters</button>
               <button id="btn-view-trending-clusters" onclick="setClusterView('trending')" class="px-2.5 py-1 text-xs font-medium rounded-none text-zinc-400 hover:text-white">Trending (Velocity)</button>
             </div>
+
+            <!-- Cluster Run Selector -->
+            <select
+              id="clusters-run-filter"
+              onchange="onClusterRunFilterChange()"
+              class="bg-zinc-950 border border-zinc-800 rounded-none px-2.5 py-1.5 text-xs text-zinc-300 focus:outline-none focus:border-blue-500 font-mono"
+            >
+              <option value="">All Cluster Runs</option>
+            </select>
 
             <input
               type="text"
@@ -334,6 +343,7 @@
             <input type="number" id="script-id-input" placeholder="Script ID" class="bg-black border border-zinc-800 rounded-none px-3 py-1.5 text-xs w-28 text-white focus:outline-none focus:border-blue-500">
             <button onclick="loadScript()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300 transition">Load Script</button>
             <button onclick="runScriptAudit()" class="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-500 text-xs font-semibold rounded-none text-white transition shadow">Audit Retention</button>
+            <button onclick="openBeatConfigModal()" id="btn-open-beat-config" class="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-500 text-xs font-semibold rounded-none text-black transition shadow flex items-center gap-1.5 cursor-pointer">Beat Generator Config</button>
             <button onclick="saveScript()" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-semibold rounded-none text-white transition shadow">Save & Approve</button>
           </div>
         </div>
@@ -465,6 +475,31 @@
             </div>
           </div>
           <video id="html5-video-player" controls class="max-h-80 rounded-none mx-auto bg-black shadow-lg"></video>
+
+          <!-- Resolution Conversion Controls -->
+          <div class="flex flex-wrap items-center justify-between gap-3 bg-zinc-950 border border-zinc-800 p-2.5 mt-3 text-xs">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="text-zinc-400 font-mono text-[11px] uppercase">Convert Resolution:</span>
+              <select id="video-convert-res-select" class="bg-black border border-zinc-700 text-zinc-200 text-xs px-2.5 py-1 focus:outline-none focus:border-blue-500">
+                <option value="360p">360p (Preview / Low Bandwidth)</option>
+                <option value="480p">480p (Standard Definition)</option>
+                <option value="720p" selected>720p (High Definition)</option>
+                <option value="1080p">1080p (Full HD)</option>
+              </select>
+              <button onclick="triggerConvertResolution()" id="btn-convert-resolution" class="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs rounded-none transition cursor-pointer">
+                Convert Resolution
+              </button>
+              <span id="video-convert-status" class="text-xs font-mono text-zinc-400"></span>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <span class="text-zinc-500 font-mono text-[10px] uppercase">Active Quality:</span>
+              <button type="button" onclick="switchVideoPlaybackResolution('')" id="res-btn-orig" class="px-2 py-0.5 text-[10px] font-mono border border-blue-600 bg-blue-950 text-blue-300 font-bold cursor-pointer">Original</button>
+              <button type="button" onclick="switchVideoPlaybackResolution('360p')" id="res-btn-360p" class="px-2 py-0.5 text-[10px] font-mono border border-zinc-800 bg-black text-zinc-400 hover:text-white cursor-pointer">360p</button>
+              <button type="button" onclick="switchVideoPlaybackResolution('480p')" id="res-btn-480p" class="px-2 py-0.5 text-[10px] font-mono border border-zinc-800 bg-black text-zinc-400 hover:text-white cursor-pointer">480p</button>
+              <button type="button" onclick="switchVideoPlaybackResolution('720p')" id="res-btn-720p" class="px-2 py-0.5 text-[10px] font-mono border border-zinc-800 bg-black text-zinc-400 hover:text-white cursor-pointer">720p</button>
+              <button type="button" onclick="switchVideoPlaybackResolution('1080p')" id="res-btn-1080p" class="px-2 py-0.5 text-[10px] font-mono border border-zinc-800 bg-black text-zinc-400 hover:text-white cursor-pointer">1080p</button>
+            </div>
+          </div>
         </div>
 
         <div class="flex items-center justify-between mb-3">
@@ -979,8 +1014,380 @@
         </div>
       </div>
 
+      <!-- ================================================================= -->
+      <!-- SECTION 2: PROVIDER-AGNOSTIC MODEL REGISTRY & ROLE FALLBACK CHAINS -->
+      <!-- ================================================================= -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-6">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-cyan-500 inline-block"></span>
+              <h3 class="text-base font-bold text-white tracking-tight uppercase">Provider-Agnostic Model Registry & Role Fallbacks</h3>
+            </div>
+            <p class="text-xs text-zinc-400 mt-1">Unified registry of LLM, embedding, and multimodal vision endpoints with automatic priority fallback execution.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="openAddModelModal()" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-xs font-semibold rounded-none text-white transition shadow flex items-center gap-1.5 cursor-pointer">
+              <span>+ Register New Model</span>
+            </button>
+            <button onclick="testAllModels()" id="btn-test-all-models" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium rounded-none text-zinc-200 transition cursor-pointer">
+              <span>Test All Endpoints</span>
+            </button>
+            <button onclick="loadSystemConfig()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-medium rounded-none text-zinc-400 hover:text-zinc-200 transition cursor-pointer">
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Model Registry Cards Grid -->
+        <div class="space-y-3">
+          <div class="flex items-center justify-between border-b border-zinc-800 pb-2">
+            <div class="text-xs font-mono uppercase text-zinc-300 font-bold flex items-center gap-2">
+              <span>Registered Endpoints</span>
+              <span id="models-count-badge" class="px-1.5 py-0.5 bg-cyan-950/80 border border-cyan-800/60 text-cyan-400 text-[10px]">0 Models</span>
+            </div>
+            <span class="text-[10px] font-mono text-zinc-500">OpenAI and Anthropic wire protocols</span>
+          </div>
+          <div id="models-cards-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Loading registered models...</div>
+          </div>
+        </div>
+
+        <!-- Pipeline Role Fallback Chains -->
+        <div class="space-y-4 pt-4 border-t border-zinc-800">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div class="text-xs font-mono uppercase text-zinc-300 font-bold flex items-center gap-2">
+                <span>Pipeline Role Fallback Chains</span>
+                <span class="text-[10px] text-zinc-500 font-normal">(Priority order from left to right)</span>
+              </div>
+              <p class="text-[11px] text-zinc-400 mt-0.5">When a model fails or encounters rate limits, execution seamlessly cascades to subsequent models in the chain.</p>
+            </div>
+            <button onclick="saveRoleChains()" id="btn-save-role-chains" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold text-white transition shadow cursor-pointer">
+              Save Role Fallbacks
+            </button>
+          </div>
+
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <!-- Role 1: Planning -->
+            <div class="bg-black p-4 border border-zinc-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-white font-mono uppercase">1. Planning (Beat Sheet Structuring)</div>
+                  <div class="text-[10px] text-zinc-500 font-mono">Role: planning | Stage 1 script generation</div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <select id="role-add-select-planning" class="bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 px-2 py-1 font-mono focus:outline-none focus:border-cyan-500">
+                    <option value="">Select model...</option>
+                  </select>
+                  <button type="button" onclick="addModelToRole('planning')" class="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-white font-mono cursor-pointer">+ Add</button>
+                </div>
+              </div>
+              <div id="role-chain-planning" class="flex flex-wrap items-center gap-2 min-h-[36px] p-2 bg-zinc-950/60 border border-zinc-900">
+                <span class="text-zinc-500 text-xs font-mono">No models configured.</span>
+              </div>
+            </div>
+
+            <!-- Role 2: Writing -->
+            <div class="bg-black p-4 border border-zinc-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-white font-mono uppercase">2. Writing (Host Persona Expansion)</div>
+                  <div class="text-[10px] text-zinc-500 font-mono">Role: writing | Stage 2 dialogue generation</div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <select id="role-add-select-writing" class="bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 px-2 py-1 font-mono focus:outline-none focus:border-cyan-500">
+                    <option value="">Select model...</option>
+                  </select>
+                  <button type="button" onclick="addModelToRole('writing')" class="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-white font-mono cursor-pointer">+ Add</button>
+                </div>
+              </div>
+              <div id="role-chain-writing" class="flex flex-wrap items-center gap-2 min-h-[36px] p-2 bg-zinc-950/60 border border-zinc-900">
+                <span class="text-zinc-500 text-xs font-mono">No models configured.</span>
+              </div>
+            </div>
+
+            <!-- Role 3: Embedding -->
+            <div class="bg-black p-4 border border-zinc-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-white font-mono uppercase">3. Embedding (Story Vector Clustering)</div>
+                  <div class="text-[10px] text-zinc-500 font-mono">Role: embedding | News clustering embeddings</div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <select id="role-add-select-embedding" class="bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 px-2 py-1 font-mono focus:outline-none focus:border-cyan-500">
+                    <option value="">Select model...</option>
+                  </select>
+                  <button type="button" onclick="addModelToRole('embedding')" class="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-white font-mono cursor-pointer">+ Add</button>
+                </div>
+              </div>
+              <div id="role-chain-embedding" class="flex flex-wrap items-center gap-2 min-h-[36px] p-2 bg-zinc-950/60 border border-zinc-900">
+                <span class="text-zinc-500 text-xs font-mono">No models configured.</span>
+              </div>
+            </div>
+
+            <!-- Role 4: VLM Inspector -->
+            <div class="bg-black p-4 border border-zinc-800 space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="text-xs font-bold text-white font-mono uppercase">4. VLM Inspector (Visual Media Audit)</div>
+                  <div class="text-[10px] text-zinc-500 font-mono">Role: vlm_inspector | Multimodal image inspection</div>
+                </div>
+                <div class="flex items-center gap-1.5">
+                  <select id="role-add-select-vlm_inspector" class="bg-zinc-950 border border-zinc-800 text-[11px] text-zinc-300 px-2 py-1 font-mono focus:outline-none focus:border-cyan-500">
+                    <option value="">Select model...</option>
+                  </select>
+                  <button type="button" onclick="addModelToRole('vlm_inspector')" class="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-[11px] text-white font-mono cursor-pointer">+ Add</button>
+                </div>
+              </div>
+              <div id="role-chain-vlm_inspector" class="flex flex-wrap items-center gap-2 min-h-[36px] p-2 bg-zinc-950/60 border border-zinc-900">
+                <span class="text-zinc-500 text-xs font-mono">No models configured.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- SECTION 3: CORE AI PROVIDERS & LITELLM GATEWAY CREDENTIALS        -->
+      <!-- ================================================================= -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-amber-500 inline-block"></span>
+              <h3 class="text-base font-bold text-white tracking-tight uppercase">Core AI Providers & LiteLLM Gateway</h3>
+            </div>
+            <p class="text-xs text-zinc-400 mt-1">Direct provider API credentials (BYOK) or centralized LiteLLM proxy connection.</p>
+          </div>
+          <button onclick="saveCoreProviders()" id="btn-save-core-providers" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-xs font-bold text-white transition shadow cursor-pointer">
+            Save Provider Credentials
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Gemini Key -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono font-bold text-white uppercase">Google Gemini API Key</label>
+              <span id="badge-gemini-status" class="px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-400">Checking</span>
+            </div>
+            <input type="password" id="input-gemini-key" placeholder="AIzaSy..." class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+            <p class="text-[10px] text-zinc-500">Used for Gemini Flash, Gemini VLM & Embedding</p>
+          </div>
+
+          <!-- OpenAI Key -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono font-bold text-white uppercase">OpenAI API Key</label>
+              <span id="badge-openai-status" class="px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-400">Checking</span>
+            </div>
+            <input type="password" id="input-openai-key" placeholder="sk-proj-..." class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+            <p class="text-[10px] text-zinc-500">Used for GPT-4o-mini & OpenAI embeddings</p>
+          </div>
+
+          <!-- DeepSeek Key -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono font-bold text-white uppercase">DeepSeek API Key</label>
+              <span id="badge-deepseek-status" class="px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-400">Checking</span>
+            </div>
+            <input type="password" id="input-deepseek-key" placeholder="sk-..." class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+            <p class="text-[10px] text-zinc-500">Used for DeepSeek-Chat persona writing</p>
+          </div>
+
+          <!-- LiteLLM Proxy URL -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono font-bold text-white uppercase">LiteLLM Base URL</label>
+              <span class="text-[10px] font-mono text-zinc-500">Optional Proxy</span>
+            </div>
+            <input type="text" id="input-litellm-url" placeholder="http://localhost:4000" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+            <p class="text-[10px] text-zinc-500">Centralized LiteLLM gateway or OpenRouter</p>
+          </div>
+
+          <!-- LiteLLM API Key -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono font-bold text-white uppercase">LiteLLM API Key</label>
+              <span id="badge-litellm-status" class="px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-400">Checking</span>
+            </div>
+            <input type="password" id="input-litellm-key" placeholder="sk-litellm-master-key" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+            <p class="text-[10px] text-zinc-500">Authentication bearer token for LiteLLM proxy</p>
+          </div>
+
+          <!-- Image Gen Backend & FLUX -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="text-xs font-mono font-bold text-white uppercase">Image Generation Provider</label>
+              <span id="badge-flux-status" class="px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-400">Checking</span>
+            </div>
+            <select id="select-image-gen-provider" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-amber-500">
+              <option value="flux">FLUX API</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="local">Local Diffuser</option>
+              <option value="fallback">Fallback Graphics</option>
+            </select>
+            <div class="pt-1 flex gap-2">
+              <input type="password" id="input-flux-key" placeholder="FLUX API Key..." class="flex-1 bg-zinc-950 border border-zinc-800 px-2 py-1 text-[11px] text-white font-mono">
+              <input type="text" id="input-flux-endpoint" placeholder="Endpoint URL..." class="flex-1 bg-zinc-950 border border-zinc-800 px-2 py-1 text-[11px] text-white font-mono">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- SECTION 4: AUDIO & VOICE SYNTHESIS (TTS) ENGINE                    -->
+      <!-- ================================================================= -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-indigo-500 inline-block"></span>
+              <h3 class="text-base font-bold text-white tracking-tight uppercase">Audio & Voice Synthesis (TTS) Engine</h3>
+            </div>
+            <p class="text-xs text-zinc-400 mt-1">Configure cloud and local voice synthesis, persona voices, local HTTP audio server, and timeouts.</p>
+          </div>
+          <button onclick="saveTtsSettings()" id="btn-save-tts-settings" class="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition shadow cursor-pointer">
+            Save Voice & TTS Settings
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Voice Provider Priority</label>
+            <select id="select-tts-provider" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500">
+              <option value="auto">auto (Priority: Gemini -> Edge -> Local)</option>
+              <option value="gemini">gemini (Google 2.0 Flash Audio)</option>
+              <option value="edge_tts">edge_tts (Microsoft Edge Neural Free)</option>
+              <option value="local">local (Local Kokoro / Piper HTTP)</option>
+            </select>
+            <p class="text-[10px] text-zinc-500">Auto routes to Gemini first with fallback to Edge neural</p>
+          </div>
+
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Local TTS Endpoint URL</label>
+            <input type="text" id="input-local-tts-endpoint" placeholder="http://localhost:8880/v1/audio/speech" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500">
+            <p class="text-[10px] text-zinc-500">Compatible with Kokoro-FastAPI, Speaches, and Piper HTTP</p>
+          </div>
+
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Default Voice Identifier</label>
+            <input type="text" id="input-tts-voice" placeholder="af_heart or Puck" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500">
+            <p class="text-[10px] text-zinc-500">Gemini: Puck, Charon, Kore | Kokoro: af_heart, am_adam</p>
+          </div>
+
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Local Model Architecture</label>
+            <input type="text" id="input-local-tts-model" placeholder="kokoro" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500">
+            <p class="text-[10px] text-zinc-500">Architecture name (kokoro, piper)</p>
+          </div>
+
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Model Weights / Binary Path</label>
+            <input type="text" id="input-local-tts-path" placeholder="" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500">
+            <p class="text-[10px] text-zinc-500">Optional path to local ONNX weights or binary</p>
+          </div>
+
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Request Timeout (Seconds)</label>
+            <input type="number" step="5" min="10" max="300" id="input-local-tts-timeout" value="60" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-indigo-500">
+            <p class="text-[10px] text-zinc-500">Audio synthesis socket timeout</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================================================================= -->
+      <!-- SECTION 5: INFRASTRUCTURE, ENGINE & GUARDRAIL SETTINGS            -->
+      <!-- ================================================================= -->
+      <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 bg-purple-500 inline-block"></span>
+              <h3 class="text-base font-bold text-white tracking-tight uppercase">Infrastructure, Alignment & Guardrails</h3>
+            </div>
+            <p class="text-xs text-zinc-400 mt-1">Storage backend, faster-whisper alignment, Remotion video engine, budget limits, and security auth.</p>
+          </div>
+          <button onclick="saveInfrastructureSettings()" id="btn-save-infrastructure" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-xs font-bold text-white transition shadow cursor-pointer">
+            Save Infrastructure Settings
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Storage Backend -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Storage Backend</label>
+            <select id="select-storage-backend" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-purple-500">
+              <option value="local">local (Filesystem ./data/assets)</option>
+              <option value="s3">s3 (Cloudflare R2 / AWS S3)</option>
+            </select>
+            <input type="text" id="input-storage-local-dir" placeholder="./data/assets" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-[11px] text-white font-mono">
+            <p class="text-[10px] text-zinc-500">Local asset directory or S3 sync</p>
+          </div>
+
+          <!-- Whisper Alignment -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Faster-Whisper Model & Device</label>
+            <div class="grid grid-cols-2 gap-2">
+              <select id="select-whisper-model" class="bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-purple-500">
+                <option value="tiny">tiny</option>
+                <option value="base" selected>base</option>
+                <option value="small">small</option>
+                <option value="medium">medium</option>
+              </select>
+              <select id="select-whisper-device" class="bg-zinc-950 border border-zinc-800 px-2.5 py-2 text-xs text-white font-mono focus:outline-none focus:border-purple-500">
+                <option value="cpu" selected>cpu</option>
+                <option value="cuda">cuda (GPU)</option>
+              </select>
+            </div>
+            <p class="text-[10px] text-zinc-500">Word-level kinetic timestamp alignment</p>
+          </div>
+
+          <!-- Remotion Engine -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Remotion Video Engine</label>
+            <input type="text" id="input-remotion-project" placeholder="./remotion" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-[11px] text-white font-mono">
+            <input type="text" id="input-remotion-output" placeholder="./output/videos" class="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-[11px] text-white font-mono">
+            <p class="text-[10px] text-zinc-500">Project directory and output MP4 folder</p>
+          </div>
+
+          <!-- Cost Budget Caps -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Cost Guardrails (USD)</label>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <span class="text-[10px] text-zinc-500 font-mono">Daily Cap:</span>
+                <input type="number" step="1" min="0" id="input-cost-daily-budget" placeholder="None" class="w-full bg-zinc-950 border border-zinc-800 px-2 py-1 text-xs text-white font-mono">
+              </div>
+              <div>
+                <span class="text-[10px] text-zinc-500 font-mono">Monthly Cap:</span>
+                <input type="number" step="5" min="0" id="input-cost-monthly-budget" placeholder="None" class="w-full bg-zinc-950 border border-zinc-800 px-2 py-1 text-xs text-white font-mono">
+              </div>
+            </div>
+            <p class="text-[10px] text-zinc-500">Automatic circuit breaker for automated jobs</p>
+          </div>
+
+          <!-- Security & Auth -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">Security & Access Control</label>
+            <input type="password" id="input-api-auth-token" placeholder="Bearer Token (Optional)..." class="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-[11px] text-white font-mono">
+            <input type="password" id="input-admin-password" placeholder="Dashboard Admin Password..." class="w-full bg-zinc-950 border border-zinc-800 px-3 py-1.5 text-[11px] text-white font-mono">
+            <p class="text-[10px] text-zinc-500">Secures public API endpoints and dashboard session</p>
+          </div>
+
+          <!-- YouTube Publishing Status -->
+          <div class="bg-black p-4 border border-zinc-800 space-y-2">
+            <label class="text-xs font-mono font-bold text-white uppercase">YouTube Publishing OAuth</label>
+            <div id="diag-youtube-status" class="text-xs font-mono text-zinc-400 mt-1">Checking...</div>
+            <p class="text-[10px] text-zinc-500">OAuth client ID and refresh token in config.yaml</p>
+          </div>
+        </div>
+      </div>
+
       <!-- VISUAL MEDIA AND ARTIFACT PROVIDERS HUB -->
       <div class="bg-zinc-950 border border-zinc-800 rounded-none p-6 shadow-xl space-y-5">
+
         <div class="flex flex-wrap items-center justify-between gap-4">
           <div>
             <div class="flex items-center gap-2">
@@ -1818,9 +2225,342 @@
     </div>
   </div>
 
+  <!-- ===================================================================== -->
+  <!-- MODAL 8: REPEAT STAGE RUN CONFIRMATION MODAL                           -->
+  <!-- ===================================================================== -->
+  <div id="modal-stage-confirmation" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-950 border border-zinc-800 w-full max-w-md flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-3 border-b border-zinc-800 flex items-center justify-between bg-black">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 bg-yellow-500 inline-block"></span>
+          <h3 id="stage-confirm-title" class="font-bold text-xs text-white font-mono uppercase">Confirm Stage Execution</h3>
+        </div>
+        <button type="button" onclick="closeStageConfirmModal(false)" class="text-zinc-400 hover:text-white text-xs font-mono px-2 py-0.5 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs">
+        <div class="space-y-1">
+          <p id="stage-confirm-message" class="text-zinc-200 text-sm font-semibold">You have run this step once. Do you still want to run again?</p>
+          <p id="stage-confirm-subtext" class="text-zinc-400 font-mono text-[11px] mt-1">This step was previously triggered within the last 5 minutes.</p>
+        </div>
+
+        <div class="bg-black border border-zinc-800 p-3 space-y-1 font-mono text-[11px]">
+          <div class="flex justify-between text-zinc-400">
+            <span>Stage:</span>
+            <span id="stage-confirm-name" class="text-white font-bold">-</span>
+          </div>
+          <div class="flex justify-between text-zinc-400">
+            <span>Last Executed:</span>
+            <span id="stage-confirm-elapsed" class="text-yellow-400">-</span>
+          </div>
+          <div class="flex justify-between text-zinc-400">
+            <span>Cooldown Window:</span>
+            <span id="stage-confirm-remaining" class="text-blue-400">-</span>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end space-x-2 pt-2 border-t border-zinc-800">
+          <button type="button" id="stage-confirm-btn-no" onclick="closeStageConfirmModal(false)" class="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 text-xs font-semibold rounded-none cursor-pointer transition">
+            No
+          </button>
+          <button type="button" id="stage-confirm-btn-yes" onclick="closeStageConfirmModal(true)" class="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-none shadow cursor-pointer transition">
+            Yes
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 9: ARTICLE SELECTION AND CLUSTERING MODAL                       -->
+  <!-- ===================================================================== -->
+  <div id="modal-cluster-articles" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-zinc-950 border border-zinc-800 max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl overflow-hidden my-auto">
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-black">
+        <div class="flex items-center space-x-3">
+          <span class="w-2.5 h-2.5 bg-purple-500 inline-block"></span>
+          <div>
+            <h3 class="font-bold text-sm text-white font-mono uppercase tracking-wide">Run Story Clustering</h3>
+            <p class="text-[11px] text-zinc-400 mt-0.5">Select articles or filter by recency window to discover news clusters.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeClusterModal()" class="text-zinc-400 hover:text-white text-xs font-mono px-2.5 py-1 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs overflow-y-auto">
+        <!-- Time Window Filter Bar -->
+        <div class="bg-black border border-zinc-800 p-3 space-y-2">
+          <div class="text-[11px] font-mono text-zinc-400 uppercase font-semibold">1. Filter Articles by Recency Window</div>
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" onclick="setClusterModalHours(null)" id="btn-modal-hours-all" class="px-2.5 py-1 text-xs font-medium rounded-none bg-blue-600 text-white">All Articles</button>
+            <button type="button" onclick="setClusterModalHours(1)" id="btn-modal-hours-1" class="px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800">Past 1h</button>
+            <button type="button" onclick="setClusterModalHours(6)" id="btn-modal-hours-6" class="px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800">Past 6h</button>
+            <button type="button" onclick="setClusterModalHours(12)" id="btn-modal-hours-12" class="px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800">Past 12h</button>
+            <button type="button" onclick="setClusterModalHours(24)" id="btn-modal-hours-24" class="px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800">Past 24h</button>
+            <button type="button" onclick="setClusterModalHours(48)" id="btn-modal-hours-48" class="px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800">Past 48h</button>
+            <button type="button" onclick="setClusterModalHours(72)" id="btn-modal-hours-72" class="px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800">Past 72h</button>
+            <div class="flex items-center gap-1 ml-auto">
+              <span class="text-zinc-500 font-mono text-[10px]">Custom hrs:</span>
+              <input type="number" id="input-modal-custom-hours" min="1" max="720" placeholder="e.g. 18" onchange="setClusterModalCustomHours(this.value)" class="w-16 bg-zinc-950 border border-zinc-800 rounded-none px-2 py-0.5 text-xs text-white">
+            </div>
+          </div>
+        </div>
+
+        <!-- Article Search and Selection Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+          <div class="flex items-center gap-2 flex-1 min-w-[200px]">
+            <input type="text" id="modal-article-search" oninput="filterModalArticlesList()" placeholder="Filter articles by title or source..." class="bg-black border border-zinc-800 rounded-none px-3 py-1.5 text-xs text-white placeholder-zinc-500 flex-1 focus:outline-none focus:border-blue-500">
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-zinc-500 font-mono text-[10px]">Load:</span>
+            <select id="modal-articles-limit-select" onchange="onModalArticlesLimitChange()" class="bg-black border border-zinc-800 text-xs font-mono text-zinc-300 px-2 py-1 focus:outline-none focus:border-blue-500">
+              <option value="all" selected>All</option>
+              <option value="1000">1000</option>
+              <option value="500">500</option>
+              <option value="300">300</option>
+              <option value="100">100</option>
+            </select>
+            <span id="modal-article-selection-label" class="text-xs font-mono text-zinc-400">0 of 0 selected</span>
+            <button type="button" id="btn-modal-select-all-articles" onclick="toggleModalSelectAllArticles()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 rounded-none font-medium">Select All</button>
+            <button type="button" onclick="clearModalArticleSelection()" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-400 rounded-none font-medium">Clear</button>
+          </div>
+        </div>
+
+        <!-- Scrollable Articles Table -->
+        <div class="border border-zinc-800 bg-black max-h-[300px] overflow-y-auto">
+          <table class="w-full text-left text-xs font-sans">
+            <thead class="bg-zinc-950 text-zinc-400 uppercase font-mono text-[10px] sticky top-0 border-b border-zinc-800">
+              <tr>
+                <th class="p-2.5 w-10 text-center"><input type="checkbox" id="modal-master-article-checkbox" onchange="toggleModalSelectAllArticles()" class="cursor-pointer"></th>
+                <th class="p-2.5 w-14">ID</th>
+                <th class="p-2.5 w-24">Source</th>
+                <th class="p-2.5">Title and Summary</th>
+                <th class="p-2.5 w-24">Published</th>
+              </tr>
+            </thead>
+            <tbody id="modal-articles-table-body" class="divide-y divide-zinc-900">
+              <tr><td colspan="5" class="p-6 text-center text-zinc-500">Loading articles...</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Clustering Parameters -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-zinc-950 p-3 border border-zinc-800">
+          <div>
+            <label class="block font-mono text-zinc-400 uppercase text-[11px] mb-1">Similarity Threshold: <span id="modal-threshold-display" class="text-white font-bold">0.82</span></label>
+            <input type="range" id="modal-cluster-threshold" min="0.5" max="0.95" step="0.01" value="0.82" oninput="document.getElementById('modal-threshold-display').textContent = this.value" class="w-full cursor-pointer accent-blue-500">
+            <p class="text-[10px] text-zinc-500 mt-0.5">Higher = tighter topic match; Lower = broader groupings.</p>
+          </div>
+          <div>
+            <label class="block font-mono text-zinc-400 uppercase text-[11px] mb-1">Optional Run ID</label>
+            <input type="text" id="modal-cluster-run-id-input" placeholder="Leave empty for auto-generated run ID" class="w-full bg-black border border-zinc-800 rounded-none px-2.5 py-1 text-xs text-white font-mono placeholder-zinc-600">
+            <p class="text-[10px] text-zinc-500 mt-0.5">Custom tag to organize and isolate this clustering run.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between px-5 py-3 border-t border-zinc-800 bg-black">
+        <span id="modal-cluster-status-text" class="text-xs text-zinc-400 font-mono">Ready to cluster</span>
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="closeClusterModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300">Cancel</button>
+          <button type="button" id="btn-modal-execute-cluster" onclick="executeModalClustering()" class="px-4 py-1.5 bg-purple-600 hover:bg-purple-500 text-xs font-bold rounded-none text-white shadow transition cursor-pointer">Run Clustering</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 10: WRITE SCRIPT FOR CLUSTER MODAL                              -->
+  <!-- ===================================================================== -->
+  <div id="modal-write-script" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-zinc-950 border border-zinc-800 max-w-lg w-full flex flex-col shadow-2xl overflow-hidden my-auto">
+      <div class="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-black">
+        <div class="flex items-center space-x-3">
+          <span class="w-2.5 h-2.5 bg-yellow-500 inline-block"></span>
+          <div>
+            <h3 class="font-bold text-sm text-white font-mono uppercase tracking-wide">Write Script for Cluster</h3>
+            <p class="text-[11px] text-zinc-400 mt-0.5">Select a Cluster Run and target Story Cluster to generate dialogue.</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeWriteScriptModal()" class="text-zinc-400 hover:text-white text-xs font-mono px-2.5 py-1 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-5 space-y-4 text-xs">
+        <div>
+          <label class="block font-mono text-zinc-400 uppercase text-[11px] mb-1">1. Select Cluster Run</label>
+          <select id="modal-script-run-select" onchange="onModalScriptRunChange()" class="w-full bg-black border border-zinc-800 rounded-none p-2 text-zinc-200 font-mono text-xs focus:outline-none focus:border-blue-500">
+            <option value="">Loading cluster runs...</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block font-mono text-zinc-400 uppercase text-[11px] mb-1">2. Select Story Cluster</label>
+          <select id="modal-script-cluster-select" onchange="onModalScriptClusterChange()" class="w-full bg-black border border-zinc-800 rounded-none p-2 text-zinc-200 font-mono text-xs focus:outline-none focus:border-blue-500">
+            <option value="">Select a run first</option>
+          </select>
+        </div>
+
+        <!-- Selected Cluster Preview Card -->
+        <div id="modal-script-cluster-preview" class="bg-black border border-zinc-800 p-3 space-y-1.5 hidden">
+          <div class="flex items-center justify-between">
+            <span id="preview-cluster-badge" class="px-2 py-0.5 bg-blue-950/80 border border-blue-500/40 text-blue-400 font-mono text-[10px] font-bold">Cluster #1</span>
+            <span id="preview-article-count" class="text-zinc-500 font-mono text-[10px]">0 Articles</span>
+          </div>
+          <h4 id="preview-cluster-title" class="font-bold text-white text-xs leading-snug">Cluster Headline</h4>
+          <p id="preview-cluster-summary" class="text-zinc-400 text-[11px] line-clamp-3 leading-relaxed font-sans">Summary description</p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+          <div>
+            <label class="block font-mono text-zinc-400 uppercase text-[11px] mb-1">Aspect Ratio</label>
+            <select id="modal-script-aspect-ratio" class="w-full bg-black border border-zinc-800 rounded-none p-2 text-zinc-200 text-xs">
+              <option value="9:16">9:16 (YouTube Shorts / Reels / TikTok)</option>
+              <option value="16:9">16:9 (Landscape Standard)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-mono text-zinc-400 uppercase text-[11px] mb-1">Estimated Narration</label>
+            <div class="bg-black border border-zinc-800 p-2 text-zinc-400 text-xs font-mono">~45 to 60 seconds (130-160 words)</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between px-5 py-3 border-t border-zinc-800 bg-black">
+        <span id="modal-script-status-text" class="text-xs text-zinc-400 font-mono">Ready</span>
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="closeWriteScriptModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-300">Cancel</button>
+          <button type="button" id="btn-modal-execute-script" onclick="executeModalWriteScript()" class="px-4 py-1.5 bg-yellow-600 hover:bg-yellow-500 text-xs font-bold rounded-none text-black shadow transition cursor-pointer">Generate Script</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: BEAT GENERATOR CONFIG EDITOR                                   -->
+  <!-- ===================================================================== -->
+  <div id="modal-beat-config" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm hidden flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
+    <div class="bg-zinc-950 border border-zinc-800 max-w-4xl w-full p-6 space-y-4 shadow-2xl relative">
+      <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
+        <div>
+          <div class="flex items-center gap-2">
+            <h3 class="font-bold text-sm text-white font-mono uppercase">Beat Generator Configuration</h3>
+            <span id="beat-config-badge" class="text-[10px] font-mono uppercase bg-amber-950 text-amber-300 border border-amber-800/60 px-2 py-0.5">Prompt & Structure</span>
+          </div>
+          <p class="text-xs text-zinc-400 mt-1">Configure narrative structure rules, beat durations, negative constraints, and output JSON schemas.</p>
+        </div>
+        <button onclick="closeBeatConfigModal()" class="text-zinc-500 hover:text-white text-base cursor-pointer px-2 py-1">&times;</button>
+      </div>
+
+      <div class="flex flex-wrap items-center justify-between gap-3 bg-black/70 border border-zinc-800/80 p-2.5 text-xs">
+        <div class="flex items-center gap-2">
+          <label class="font-mono text-zinc-400 text-[11px] uppercase">Active File:</label>
+          <select id="beat-config-file-select" onchange="onBeatConfigFileSelectChange()" class="bg-zinc-950 border border-zinc-800 text-xs font-mono text-zinc-200 px-2.5 py-1 focus:outline-none focus:border-amber-500">
+            <option value="beat_sheet.yaml">prompts/beat_sheet.yaml (Default)</option>
+          </select>
+          <button onclick="reloadBeatConfigFromFile()" class="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 text-[11px] font-mono text-zinc-300 border border-zinc-800 transition cursor-pointer">
+            Reload File
+          </button>
+        </div>
+        <div class="text-[11px] font-mono text-zinc-500">
+          Format: Valid YAML (system_prompt, user_prompt_template)
+        </div>
+      </div>
+
+      <div>
+        <textarea id="beat-config-yaml-editor" rows="20" class="w-full bg-black border border-zinc-800 p-3 text-xs text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-amber-500 selection:bg-amber-900/40" placeholder="Loading beat generator configuration..."></textarea>
+      </div>
+
+      <div class="flex items-center justify-between border-t border-zinc-800 pt-3">
+        <span id="beat-config-status" class="text-xs text-zinc-400 font-mono">Ready</span>
+        <div class="flex items-center space-x-2">
+          <button type="button" onclick="closeBeatConfigModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs text-zinc-300 border border-zinc-800 transition cursor-pointer">
+            Close
+          </button>
+          <button type="button" onclick="saveBeatConfigFromModal()" id="btn-save-beat-config" class="px-4 py-1.5 bg-amber-600 hover:bg-amber-500 text-xs font-bold text-black shadow transition cursor-pointer">
+            Save Config
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: MODEL REGISTRY DEFINITION EDITOR                               -->
+  <!-- ===================================================================== -->
+  <div id="modal-model-definition" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-zinc-950 border border-zinc-800 w-full max-w-lg flex flex-col shadow-2xl overflow-hidden">
+      <div class="p-4 border-b border-zinc-800 flex items-center justify-between bg-black">
+        <div class="flex items-center space-x-2">
+          <span class="w-2.5 h-2.5 bg-cyan-500 inline-block"></span>
+          <h3 id="modal-model-title" class="font-bold text-sm text-white font-mono uppercase">Register Model Definition</h3>
+        </div>
+        <button onclick="closeModelModal()" class="text-zinc-400 hover:text-white text-xs font-mono px-2 py-1 bg-zinc-900 border border-zinc-700 cursor-pointer">Close</button>
+      </div>
+
+      <div class="p-5 space-y-3.5 text-xs">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Friendly Alias / Name:</label>
+            <input type="text" id="modal-model-name" placeholder="gemini-flash" class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+            <p class="text-[10px] text-zinc-500">Used in role fallback lists</p>
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Upstream Model ID:</label>
+            <input type="text" id="modal-model-model-name" placeholder="gemini-3.5-flash-lite" class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+            <p class="text-[10px] text-zinc-500">Exact model passed to the provider API</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Endpoint Capability:</label>
+            <select id="modal-model-endpoint-type" class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+              <option value="chat">chat (Planning & Writing)</option>
+              <option value="embedding">embedding (Vector Clustering)</option>
+              <option value="multimodal">multimodal (Visual Inspector)</option>
+            </select>
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">API Wire Format:</label>
+            <select id="modal-model-api-format" class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+              <option value="openai">openai (Standard OpenAI / Gemini)</option>
+              <option value="anthropic">anthropic (Claude Messages API)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="space-y-1">
+          <label class="block font-mono text-zinc-400">Base API URL (Optional):</label>
+          <input type="text" id="modal-model-base-url" placeholder="https://generativelanguage.googleapis.com/v1beta/openai/" class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+          <p class="text-[10px] text-zinc-500">Leave blank to use default LiteLLM proxy or standard root</p>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3">
+          <div class="col-span-2 space-y-1">
+            <label class="block font-mono text-zinc-400">API Key (Optional override):</label>
+            <input type="password" id="modal-model-api-key" placeholder="Leave blank to use provider key..." class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+          </div>
+          <div class="space-y-1">
+            <label class="block font-mono text-zinc-400">Timeout (s):</label>
+            <input type="number" step="5" min="5" max="180" id="modal-model-timeout" value="30.0" class="w-full bg-black border border-zinc-800 px-3 py-2 text-white font-mono focus:outline-none focus:border-cyan-500">
+          </div>
+        </div>
+      </div>
+
+      <div class="p-4 border-t border-zinc-800 bg-black flex items-center justify-end space-x-2">
+        <button type="button" onclick="closeModelModal()" class="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs text-zinc-400 cursor-pointer">Cancel</button>
+        <button type="button" onclick="saveModelDefinition()" id="btn-save-model-def" class="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 font-bold text-xs text-white shadow cursor-pointer">
+          Save Model
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- TOAST NOTIFICATION CONTAINER -->
   <div id="toast-container" class="fixed bottom-4 right-4 z-50 space-y-2 pointer-events-none"></div>
+
 
   <!-- ===================================================================== -->
   <!-- APPLICATION LOGIC & API INTEGRATION JAVASCRIPT                        -->
@@ -1867,7 +2607,10 @@
       if (targetBtn) targetBtn.classList.add("active");
 
       if (tabId === "pipeline") loadRecentJobs();
-      if (tabId === "clusters") loadClusters();
+      if (tabId === "clusters") {
+        loadClusterRunsDropdown();
+        loadClusters();
+      }
       if (tabId === "logs") loadLogs();
       if (tabId === "media") loadAssetCatalog();
       if (tabId === "branding") loadSettings();
@@ -1876,23 +2619,65 @@
         checkActiveConfig();
         loadProviders();
         loadVisualConfig();
+        loadSystemConfig();
         const cur = document.getElementById("yaml-editor-textarea").value;
         if (!cur || cur.trim() === "") loadYamlFile();
       }
     }
 
-    // Console output helper
+
+    // =========================================================================
+    // PERSISTENT LIVE EXECUTION CONSOLE HELPER
+    // =========================================================================
+    const CONSOLE_STORAGE_KEY = "ai_video_live_console_output";
+    const CONSOLE_MAX_LINES = 250;
+
+    function loadConsoleOutput() {
+      const el = document.getElementById("console-output");
+      if (!el) return;
+      try {
+        const saved = localStorage.getItem(CONSOLE_STORAGE_KEY);
+        if (saved && saved.trim() !== "") {
+          el.textContent = saved;
+          el.scrollTop = el.scrollHeight;
+        }
+      } catch (err) {
+        // Storage access restricted
+      }
+    }
+
+    function saveConsoleOutput(text) {
+      try {
+        const lines = text.split("\n");
+        const trimmed = lines.length > CONSOLE_MAX_LINES
+          ? lines.slice(lines.length - CONSOLE_MAX_LINES).join("\n")
+          : text;
+        localStorage.setItem(CONSOLE_STORAGE_KEY, trimmed);
+      } catch (err) {
+        // Storage access restricted or quota
+      }
+    }
+
     function logToConsole(msg) {
       const el = document.getElementById("console-output");
       if (!el) return;
       const ts = new Date().toLocaleTimeString();
-      el.textContent += `\n[${ts}] ${msg}`;
+      const line = `[${ts}] ${msg}`;
+      if (!el.textContent || el.textContent.trim() === "" || el.textContent === "System initialized. Ready for operations.") {
+        el.textContent = line;
+      } else {
+        el.textContent += `\n${line}`;
+      }
+      saveConsoleOutput(el.textContent);
       el.scrollTop = el.scrollHeight;
     }
 
     function clearConsole() {
       const el = document.getElementById("console-output");
-      if (el) el.textContent = "Console cleared.";
+      if (el) {
+        el.textContent = "Console cleared.";
+        saveConsoleOutput("Console cleared.");
+      }
     }
 
     // Top KPI Ribbon statistics loader
@@ -1911,41 +2696,166 @@
       }
     }
 
+    // =========================================================================
+    // REPEAT STAGE EXECUTION CONFIRMATION GUARD (5-MINUTE TIMEOUT WINDOW)
+    // =========================================================================
+    const STAGE_CONFIRMATION_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+    const STAGE_LABELS = {
+      ingest: "Stage 1: Ingest RSS",
+      cluster: "Stage 2: Cluster Stories",
+      script: "Stage 3: Write Script",
+      voice: "Stage 4: Voice & Captions",
+      media: "Stage 5: Visual Retrieval",
+      render: "Stage 6: Render Video",
+      pipeline_full: "Full Video Pipeline",
+      roundup_script: "Multi-Cluster Script Roundup",
+      roundup_pipeline: "Multi-Cluster Pipeline Roundup"
+    };
+    let pendingStageConfirmAction = null;
+    let stageConfirmTimerInterval = null;
+
+    function getStageLastRunTimestamp(stageKey) {
+      try {
+        const val = sessionStorage.getItem("stage_last_run_" + stageKey);
+        return val ? parseInt(val, 10) : 0;
+      } catch (err) {
+        return 0;
+      }
+    }
+
+    function recordStageRunTimestamp(stageKey) {
+      try {
+        sessionStorage.setItem("stage_last_run_" + stageKey, String(Date.now()));
+      } catch (err) {
+        // Storage disabled or quota exceeded
+      }
+    }
+
+    function formatTimeDuration(ms) {
+      const totalSec = Math.max(0, Math.floor(ms / 1000));
+      const mins = Math.floor(totalSec / 60);
+      const secs = totalSec % 60;
+      if (mins > 0) {
+        return `${mins}m ${secs}s`;
+      }
+      return `${secs}s`;
+    }
+
+    function openStageConfirmModal(stageKey, stageLabel, onConfirmCallback) {
+      pendingStageConfirmAction = {
+        key: stageKey,
+        label: stageLabel,
+        callback: onConfirmCallback
+      };
+
+      const modal = document.getElementById("modal-stage-confirmation");
+      const nameEl = document.getElementById("stage-confirm-name");
+      const elapsedEl = document.getElementById("stage-confirm-elapsed");
+      const remainingEl = document.getElementById("stage-confirm-remaining");
+
+      if (nameEl) nameEl.textContent = stageLabel;
+
+      function updateCountdown() {
+        const lastRun = getStageLastRunTimestamp(stageKey);
+        const now = Date.now();
+        const elapsed = now - lastRun;
+        const remaining = STAGE_CONFIRMATION_TIMEOUT_MS - elapsed;
+
+        if (remaining <= 0) {
+          // 5-minute timeout window elapsed while modal was open
+          clearInterval(stageConfirmTimerInterval);
+          stageConfirmTimerInterval = null;
+          closeStageConfirmModal(false);
+          return;
+        }
+
+        if (elapsedEl) elapsedEl.textContent = `${formatTimeDuration(elapsed)} ago`;
+        if (remainingEl) remainingEl.textContent = `${formatTimeDuration(remaining)} remaining (out of 5 mins)`;
+      }
+
+      updateCountdown();
+      if (stageConfirmTimerInterval) clearInterval(stageConfirmTimerInterval);
+      stageConfirmTimerInterval = setInterval(updateCountdown, 1000);
+
+      if (modal) modal.classList.remove("hidden");
+    }
+
+    function closeStageConfirmModal(confirmed) {
+      if (stageConfirmTimerInterval) {
+        clearInterval(stageConfirmTimerInterval);
+        stageConfirmTimerInterval = null;
+      }
+
+      const modal = document.getElementById("modal-stage-confirmation");
+      if (modal) modal.classList.add("hidden");
+
+      const action = pendingStageConfirmAction;
+      pendingStageConfirmAction = null;
+
+      if (confirmed && action && typeof action.callback === "function") {
+        recordStageRunTimestamp(action.key);
+        action.callback();
+      }
+    }
+
+    function runStageWithConfirmation(stageKey, stageLabel, actionCallback) {
+      const lastRun = getStageLastRunTimestamp(stageKey);
+      const now = Date.now();
+      const elapsed = now - lastRun;
+
+      if (lastRun && elapsed < STAGE_CONFIRMATION_TIMEOUT_MS) {
+        openStageConfirmModal(stageKey, stageLabel, actionCallback);
+      } else {
+        recordStageRunTimestamp(stageKey);
+        actionCallback();
+      }
+    }
+
     // Pipeline stage execution triggers
-    async function triggerStage(stage) {
+    function triggerStage(stage, btnEl = null) {
+      const label = STAGE_LABELS[stage] || `Stage: ${stage}`;
+      runStageWithConfirmation(stage, label, () => executeStage(stage, btnEl));
+    }
+
+    async function executeStage(stage, btnEl = null) {
+      if (btnEl && btnEl.disabled) return;
+      const originalText = btnEl ? btnEl.textContent : "";
+      if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.textContent = `Running ${stage}...`;
+        btnEl.classList.add("opacity-50", "cursor-wait");
+      }
       logToConsole(`Triggering stage: ${stage}...`);
       try {
         const res = await fetch(`/api/pipeline/${stage}`, { method: "POST" });
         const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server returned HTTP ${res.status}`);
+        }
         logToConsole(`[${stage.toUpperCase()}] Result: ` + JSON.stringify(data));
         showToast(`Stage ${stage} executed successfully`, "success");
         refreshPlatformStats();
       } catch (err) {
         logToConsole(`[${stage.toUpperCase()}] Error: ` + err.message);
         showToast(`Stage ${stage} error: ` + err.message, "error");
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.textContent = originalText;
+          btnEl.classList.remove("opacity-50", "cursor-wait");
+        }
       }
     }
 
-    async function promptScriptStage() {
-      const clusterId = prompt("Enter Story Cluster ID:", "1");
-      if (!clusterId) return;
-      logToConsole(`Generating script for cluster ${clusterId}...`);
-      try {
-        const res = await fetch("/api/pipeline/script", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cluster_id: parseInt(clusterId, 10), aspect_ratio: "9:16" })
-        });
-        const data = await res.json();
-        logToConsole("[SCRIPT] Result: " + JSON.stringify(data));
-        showToast(`Script generated #${data.script_id}`, "success");
-        refreshPlatformStats();
-      } catch (err) {
-        logToConsole("[SCRIPT] Error: " + err.message);
-      }
+    function promptScriptStage() {
+      openWriteScriptModal();
     }
 
-    async function promptVoiceStage() {
+    function promptVoiceStage() {
+      runStageWithConfirmation("voice", "Stage 4: Voice & Captions", executePromptVoiceStage);
+    }
+
+    async function executePromptVoiceStage() {
       const scriptId = prompt("Enter Script ID:", "1");
       if (!scriptId) return;
       logToConsole(`Synthesizing voice for script ${scriptId}...`);
@@ -1956,16 +2866,24 @@
           body: JSON.stringify({ script_id: parseInt(scriptId, 10), aspect_ratio: "9:16" })
         });
         const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server returned HTTP ${res.status}`);
+        }
         logToConsole("[VOICE] Result: " + JSON.stringify(data));
         showToast(`Voice synthesized for Job #${data.job_id}`, "success");
         refreshPlatformStats();
         loadRecentJobs();
       } catch (err) {
         logToConsole("[VOICE] Error: " + err.message);
+        showToast("Voice synthesis error: " + err.message, "error");
       }
     }
 
-    async function promptMediaStage() {
+    function promptMediaStage() {
+      runStageWithConfirmation("media", "Stage 5: Visual Retrieval", executePromptMediaStage);
+    }
+
+    async function executePromptMediaStage() {
       const jobId = prompt("Enter Job ID:", "1");
       if (!jobId) return;
       logToConsole(`Retrieving media for job ${jobId}...`);
@@ -1976,15 +2894,23 @@
           body: JSON.stringify({ job_id: parseInt(jobId, 10) })
         });
         const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server returned HTTP ${res.status}`);
+        }
         logToConsole("[MEDIA] Result: " + JSON.stringify(data));
         showToast(`Media retrieved for Job #${jobId}`, "success");
         refreshPlatformStats();
       } catch (err) {
         logToConsole("[MEDIA] Error: " + err.message);
+        showToast("Media retrieval error: " + err.message, "error");
       }
     }
 
-    async function promptRenderStage() {
+    function promptRenderStage() {
+      runStageWithConfirmation("render", "Stage 6: Render Video", executePromptRenderStage);
+    }
+
+    async function executePromptRenderStage() {
       const jobId = prompt("Enter Job ID to Render:", "1");
       if (!jobId) return;
       logToConsole(`Executing Remotion render for job ${jobId}...`);
@@ -1995,12 +2921,16 @@
           body: JSON.stringify({ job_id: parseInt(jobId, 10), dry_run: false })
         });
         const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server returned HTTP ${res.status}`);
+        }
         logToConsole("[RENDER] Result: " + JSON.stringify(data));
         showToast(`Render finished for Job #${jobId}`, "success");
         refreshPlatformStats();
         loadRecentJobs();
       } catch (err) {
         logToConsole("[RENDER] Error: " + err.message);
+        showToast("Render error: " + err.message, "error");
       }
     }
 
@@ -2018,12 +2948,16 @@
       document.getElementById("modal-cluster-id-row").classList.toggle("hidden", !isSingle);
     });
 
-    async function executeModalPipeline() {
+    function executeModalPipeline() {
+      closePipelineModal();
+      runStageWithConfirmation("pipeline_full", "Full Video Pipeline", executeModalPipelineAction);
+    }
+
+    async function executeModalPipelineAction() {
       const mode = document.getElementById("modal-pipeline-mode").value;
       const aspect = document.getElementById("modal-aspect-ratio").value;
       const dryRun = document.getElementById("modal-dry-run").checked;
 
-      closePipelineModal();
       logToConsole(`Launching ${mode} video pipeline (${aspect}, dry_run=${dryRun})...`);
       showToast("Starting pipeline execution...", "info");
 
@@ -2283,6 +3217,468 @@
       copyTextToClipboard(bundle);
     }
 
+    // =========================================================================
+    // MODAL 9: CLUSTER ARTICLES STATE & CONTROLS
+    // =========================================================================
+    let modalSelectedArticleIds = new Set();
+    let modalArticlesCache = [];
+    let modalCurrentHours = 48;
+
+    function openClusterModal() {
+      const modal = document.getElementById("modal-cluster-articles");
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      setClusterModalHours(modalCurrentHours);
+    }
+
+    function closeClusterModal() {
+      const modal = document.getElementById("modal-cluster-articles");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function setClusterModalHours(hours) {
+      modalCurrentHours = hours;
+      const hourBtns = [
+        { id: "btn-modal-hours-all", h: null },
+        { id: "btn-modal-hours-12", h: 12 },
+        { id: "btn-modal-hours-24", h: 24 },
+        { id: "btn-modal-hours-48", h: 48 },
+        { id: "btn-modal-hours-72", h: 72 }
+      ];
+      hourBtns.forEach(b => {
+        const el = document.getElementById(b.id);
+        if (!el) return;
+        if (b.h === hours) {
+          el.className = "px-2.5 py-1 text-xs font-medium rounded-none bg-blue-600 text-white";
+        } else {
+          el.className = "px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800";
+        }
+      });
+      const customInput = document.getElementById("input-modal-custom-hours");
+      if (customInput && hours !== null && hours !== parseInt(customInput.value, 10)) {
+        customInput.value = "";
+      }
+      loadModalArticles(hours);
+    }
+
+    function setClusterModalCustomHours(val) {
+      const hours = parseInt(val, 10);
+      if (isNaN(hours) || hours <= 0) return;
+      modalCurrentHours = hours;
+      const hourBtnIds = ["btn-modal-hours-all", "btn-modal-hours-12", "btn-modal-hours-24", "btn-modal-hours-48", "btn-modal-hours-72"];
+      hourBtnIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.className = "px-2.5 py-1 text-xs font-medium rounded-none bg-zinc-900 text-zinc-300 hover:bg-zinc-800";
+      });
+      loadModalArticles(hours);
+    }
+
+    function onModalArticlesLimitChange() {
+      loadModalArticles(modalCurrentHours);
+    }
+
+    async function loadModalArticles(hours = null) {
+      const tbody = document.getElementById("modal-articles-table-body");
+      if (!tbody) return;
+      tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-zinc-500 font-mono text-xs">Loading articles...</td></tr>';
+
+      try {
+        const limitVal = document.getElementById("modal-articles-limit-select")?.value || "all";
+        const params = new URLSearchParams();
+        if (limitVal !== "all" && parseInt(limitVal, 10) > 0) {
+          params.set("limit", limitVal);
+        }
+        if (hours !== null && hours > 0) {
+          params.set("hours_back", hours);
+        }
+        const queryString = params.toString();
+        const url = "/api/articles" + (queryString ? `?${queryString}` : "");
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const articles = await res.json();
+        modalArticlesCache = Array.isArray(articles) ? articles : [];
+        renderModalArticlesTable(modalArticlesCache);
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-6 text-center text-red-400 font-mono text-xs">Failed to load articles: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+
+    function filterModalArticlesList() {
+      const query = (document.getElementById("modal-article-search")?.value || "").toLowerCase().trim();
+      if (!query) {
+        renderModalArticlesTable(modalArticlesCache);
+        return;
+      }
+      const filtered = modalArticlesCache.filter(a =>
+        (a.title && a.title.toLowerCase().includes(query)) ||
+        (a.source && a.source.toLowerCase().includes(query)) ||
+        (a.summary && a.summary.toLowerCase().includes(query))
+      );
+      renderModalArticlesTable(filtered);
+    }
+
+    function renderModalArticlesTable(articles) {
+      const tbody = document.getElementById("modal-articles-table-body");
+      if (!tbody) return;
+
+      if (!articles || articles.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-zinc-500 font-mono text-xs">No articles found matching criteria.</td></tr>';
+        updateModalArticleSelectionUI();
+        return;
+      }
+
+      tbody.innerHTML = articles.map(a => {
+        const isChecked = modalSelectedArticleIds.has(a.id) ? "checked" : "";
+        const pubDate = a.published_at ? new Date(a.published_at).toLocaleString() : "--";
+        return `
+          <tr class="hover:bg-zinc-900/50 transition">
+            <td class="p-2.5 text-center">
+              <input type="checkbox" data-article-id="${a.id}" ${isChecked} onchange="toggleModalArticleSelect(${a.id})" class="cursor-pointer rounded-none bg-black border-zinc-700 text-blue-600 focus:ring-0">
+            </td>
+            <td class="p-2.5 font-mono text-cyan-400 font-semibold text-xs">#${a.id}</td>
+            <td class="p-2.5">
+              <span class="px-1.5 py-0.5 bg-zinc-900 text-zinc-300 font-mono text-[10px] rounded-none">${escapeHtml(a.source || "RSS")}</span>
+            </td>
+            <td class="p-2.5 max-w-md">
+              <div class="font-medium text-white text-xs truncate">${escapeHtml(a.title || "")}</div>
+              ${a.summary ? `<div class="text-[11px] text-zinc-500 truncate mt-0.5">${escapeHtml(a.summary)}</div>` : ""}
+            </td>
+            <td class="p-2.5 font-mono text-zinc-500 text-[10px] whitespace-nowrap">${pubDate}</td>
+          </tr>
+        `;
+      }).join("");
+
+      updateModalArticleSelectionUI();
+    }
+
+    function toggleModalArticleSelect(articleId) {
+      if (modalSelectedArticleIds.has(articleId)) {
+        modalSelectedArticleIds.delete(articleId);
+      } else {
+        modalSelectedArticleIds.add(articleId);
+      }
+      updateModalArticleSelectionUI();
+    }
+
+    function toggleModalSelectAllArticles() {
+      const query = (document.getElementById("modal-article-search")?.value || "").toLowerCase().trim();
+      const visibleArticles = query
+        ? modalArticlesCache.filter(a =>
+            (a.title && a.title.toLowerCase().includes(query)) ||
+            (a.source && a.source.toLowerCase().includes(query)) ||
+            (a.summary && a.summary.toLowerCase().includes(query))
+          )
+        : modalArticlesCache;
+
+      const visibleIds = visibleArticles.map(a => a.id);
+      const allSelected = visibleIds.length > 0 && visibleIds.every(id => modalSelectedArticleIds.has(id));
+
+      if (allSelected) {
+        visibleIds.forEach(id => modalSelectedArticleIds.delete(id));
+      } else {
+        visibleIds.forEach(id => modalSelectedArticleIds.add(id));
+      }
+
+      renderModalArticlesTable(visibleArticles);
+    }
+
+    function clearModalArticleSelection() {
+      modalSelectedArticleIds.clear();
+      renderModalArticlesTable(modalArticlesCache);
+    }
+
+    function updateModalArticleSelectionUI() {
+      const label = document.getElementById("modal-article-selection-label");
+      const masterCheckbox = document.getElementById("modal-master-article-checkbox");
+      const btnSelectAll = document.getElementById("btn-modal-select-all-articles");
+
+      const count = modalSelectedArticleIds.size;
+      const total = modalArticlesCache.length;
+
+      if (label) {
+        if (count === 0) {
+          label.textContent = `0 of ${total} selected (All ${total} will be clustered)`;
+        } else {
+          label.textContent = `${count} of ${total} selected`;
+        }
+      }
+
+      if (masterCheckbox && total > 0) {
+        masterCheckbox.checked = count === total;
+        masterCheckbox.indeterminate = count > 0 && count < total;
+      }
+
+      if (btnSelectAll && total > 0) {
+        btnSelectAll.textContent = count === total ? "Deselect All" : "Select All";
+      }
+    }
+
+    async function executeModalClustering() {
+      const btn = document.getElementById("btn-modal-execute-cluster");
+      const statusEl = document.getElementById("modal-cluster-status-text");
+      const threshold = parseFloat(document.getElementById("modal-cluster-threshold")?.value) || 0.82;
+      const customRunId = (document.getElementById("modal-cluster-run-id-input")?.value || "").trim();
+
+      const selectedIds = Array.from(modalSelectedArticleIds);
+
+      const payload = {
+        threshold: threshold
+      };
+      if (selectedIds.length > 0) {
+        payload.article_ids = selectedIds;
+      } else if (modalCurrentHours !== null && modalCurrentHours > 0) {
+        payload.hours_back = modalCurrentHours;
+      }
+      if (customRunId) {
+        payload.cluster_run_id = customRunId;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Clustering...";
+        btn.classList.add("opacity-50", "cursor-wait");
+      }
+      if (statusEl) statusEl.textContent = "Running clustering algorithm...";
+
+      logToConsole("Triggering story clustering with custom parameters...");
+      try {
+        const res = await fetch("/api/pipeline/cluster", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server returned HTTP ${res.status}`);
+        }
+
+        logToConsole(`[CLUSTER] Created ${data.clusters_count} clusters in run ${data.cluster_run_id}`);
+        showToast(`Clustered ${data.articles_count} articles into ${data.clusters_count} clusters (Run: ${data.cluster_run_id})`, "success");
+        closeClusterModal();
+        refreshPlatformStats();
+        await loadClusterRunsDropdown();
+        const runDropdown = document.getElementById("clusters-run-filter");
+        if (runDropdown && data.cluster_run_id) {
+          runDropdown.value = data.cluster_run_id;
+        }
+        loadClusters(1);
+      } catch (err) {
+        logToConsole(`[CLUSTER] Error: ${err.message}`);
+        showToast(`Clustering error: ${err.message}`, "error");
+        if (statusEl) statusEl.textContent = "Error: " + err.message;
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Run Clustering";
+          btn.classList.remove("opacity-50", "cursor-wait");
+        }
+      }
+    }
+
+    // =========================================================================
+    // MODAL 10: WRITE SCRIPT FOR CLUSTER STATE & CONTROLS
+    // =========================================================================
+    let writeScriptModalRuns = [];
+    let writeScriptModalClusters = [];
+    let pendingScriptTargetClusterId = null;
+
+    async function openWriteScriptModal(targetClusterId = null, targetRunId = null, targetRunIndex = null) {
+      pendingScriptTargetClusterId = targetClusterId;
+      const modal = document.getElementById("modal-write-script");
+      if (!modal) return;
+      modal.classList.remove("hidden");
+      const statusEl = document.getElementById("modal-script-status-text");
+      if (statusEl) statusEl.textContent = "Ready";
+
+      await loadWriteScriptModalRuns(targetRunId);
+    }
+
+    function closeWriteScriptModal() {
+      const modal = document.getElementById("modal-write-script");
+      if (modal) modal.classList.add("hidden");
+      pendingScriptTargetClusterId = null;
+    }
+
+    async function loadWriteScriptModalRuns(preselectedRunId = null) {
+      const select = document.getElementById("modal-script-run-select");
+      if (!select) return;
+      try {
+        const res = await fetch("/api/cluster-runs?limit=50");
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const runs = await res.json();
+        writeScriptModalRuns = Array.isArray(runs) ? runs : [];
+
+        select.innerHTML = '<option value="">All Runs (Latest)</option>';
+        writeScriptModalRuns.forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r.run_id;
+          opt.textContent = `${r.run_id} (${r.cluster_count} clusters, ${r.article_count} articles)`;
+          select.appendChild(opt);
+        });
+
+        if (preselectedRunId) {
+          select.value = preselectedRunId;
+        }
+        await onModalScriptRunChange();
+      } catch (err) {
+        select.innerHTML = '<option value="">All Runs (Latest)</option>';
+        await onModalScriptRunChange();
+      }
+    }
+
+    async function onModalScriptRunChange() {
+      const runSelect = document.getElementById("modal-script-run-select");
+      const clusterSelect = document.getElementById("modal-script-cluster-select");
+      if (!clusterSelect) return;
+
+      const runId = runSelect?.value || "";
+      clusterSelect.innerHTML = '<option value="">Loading clusters...</option>';
+
+      try {
+        const url = runId
+          ? `/api/clusters?cluster_run_id=${encodeURIComponent(runId)}&page_size=100`
+          : `/api/clusters?page_size=100`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const data = await res.json();
+        writeScriptModalClusters = Array.isArray(data) ? data : (data.items || []);
+
+        if (writeScriptModalClusters.length === 0) {
+          clusterSelect.innerHTML = '<option value="">No clusters found for selected run</option>';
+          onModalScriptClusterChange();
+          return;
+        }
+
+        clusterSelect.innerHTML = '<option value="">-- Choose a Story Cluster --</option>';
+        writeScriptModalClusters.forEach(c => {
+          const opt = document.createElement("option");
+          opt.value = c.id;
+          const clusterNum = c.run_cluster_index || c.id;
+          const titleShort = (c.title || "Untitled Story").substring(0, 50);
+          opt.textContent = `Cluster #${clusterNum} (DB #${c.id}): ${titleShort}`;
+          clusterSelect.appendChild(opt);
+        });
+
+        if (pendingScriptTargetClusterId) {
+          clusterSelect.value = String(pendingScriptTargetClusterId);
+          pendingScriptTargetClusterId = null;
+        } else if (writeScriptModalClusters.length > 0) {
+          clusterSelect.value = String(writeScriptModalClusters[0].id);
+        }
+        onModalScriptClusterChange();
+      } catch (err) {
+        clusterSelect.innerHTML = '<option value="">Failed to load clusters</option>';
+        onModalScriptClusterChange();
+      }
+    }
+
+    function onModalScriptClusterChange() {
+      const clusterSelect = document.getElementById("modal-script-cluster-select");
+      const previewCard = document.getElementById("modal-script-cluster-preview");
+      const badgeEl = document.getElementById("preview-cluster-badge");
+      const countEl = document.getElementById("preview-article-count");
+      const titleEl = document.getElementById("preview-cluster-title");
+      const summaryEl = document.getElementById("preview-cluster-summary");
+
+      const clusterId = parseInt(clusterSelect?.value, 10);
+      const cluster = writeScriptModalClusters.find(c => c.id === clusterId);
+
+      if (!cluster || !previewCard) {
+        if (previewCard) previewCard.classList.add("hidden");
+        return;
+      }
+
+      previewCard.classList.remove("hidden");
+      if (badgeEl) badgeEl.textContent = `Cluster #${cluster.run_cluster_index || cluster.id} (Run: ${cluster.cluster_run_id || "run_default"})`;
+      if (countEl) countEl.textContent = `${cluster.article_count || (cluster.articles ? cluster.articles.length : 0)} Articles`;
+      if (titleEl) titleEl.textContent = cluster.title || "Untitled Story";
+      if (summaryEl) summaryEl.textContent = cluster.summary || "No summary available.";
+    }
+
+    async function executeModalWriteScript() {
+      const clusterSelect = document.getElementById("modal-script-cluster-select");
+      const clusterId = parseInt(clusterSelect?.value, 10);
+      const aspect = document.getElementById("modal-script-aspect-ratio")?.value || "9:16";
+      const btn = document.getElementById("btn-modal-execute-script");
+      const statusEl = document.getElementById("modal-script-status-text");
+
+      if (!clusterId || isNaN(clusterId)) {
+        showToast("Please select a story cluster first", "error");
+        return;
+      }
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Generating...";
+        btn.classList.add("opacity-50", "cursor-wait");
+      }
+      if (statusEl) statusEl.textContent = `Generating script for Cluster #${clusterId}...`;
+
+      logToConsole(`Generating dialogue script for Cluster #${clusterId} (${aspect})...`);
+      try {
+        const res = await fetch("/api/pipeline/script", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cluster_id: clusterId, aspect_ratio: aspect })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.detail || `Server returned HTTP ${res.status}`);
+        }
+
+        logToConsole(`[SCRIPT] Created script #${data.script_id}: ` + JSON.stringify(data));
+        showToast(`Script #${data.script_id} created`, "success");
+        closeWriteScriptModal();
+        if (data.script_id) {
+          document.getElementById("script-id-input").value = data.script_id;
+          switchTab("script");
+          loadScript();
+        }
+      } catch (err) {
+        logToConsole(`[SCRIPT] Error: ${err.message}`);
+        showToast("Script generation error: " + err.message, "error");
+        if (statusEl) statusEl.textContent = "Error: " + err.message;
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Generate Script";
+          btn.classList.remove("opacity-50", "cursor-wait");
+        }
+      }
+    }
+
+    // =========================================================================
+    // CLUSTER RUNS DROPDOWN SELECTOR
+    // =========================================================================
+    async function loadClusterRunsDropdown() {
+      const select = document.getElementById("clusters-run-filter");
+      if (!select) return;
+      const currentVal = select.value;
+      try {
+        const res = await fetch("/api/cluster-runs?limit=50");
+        if (!res.ok) return;
+        const runs = await res.json();
+        if (!runs || !Array.isArray(runs)) return;
+
+        select.innerHTML = '<option value="">All Cluster Runs</option>';
+        runs.forEach(r => {
+          const opt = document.createElement("option");
+          opt.value = r.run_id;
+          opt.textContent = `${r.run_id} (${r.cluster_count} clusters)`;
+          select.appendChild(opt);
+        });
+        if (currentVal) {
+          select.value = currentVal;
+        }
+      } catch (err) {
+        // Keep default
+      }
+    }
+
+    function onClusterRunFilterChange() {
+      loadClusters(1);
+    }
+
     // Story Clusters and Articles Intelligence Logic
     function setClusterView(view) {
       currentClusterView = view;
@@ -2325,10 +3721,13 @@
       currentClusterPage = page;
       const query = (document.getElementById("clusters-search-input")?.value || "").trim();
       const statusFilter = (document.getElementById("clusters-status-filter")?.value || "").trim();
+      const runFilter = (document.getElementById("clusters-run-filter")?.value || "").trim();
 
       try {
         if (currentClusterView === "trending") {
-          const res = await fetch("/api/clusters/trending?limit=25&hours_back=72");
+          let trendUrl = "/api/clusters/trending?limit=25&hours_back=72";
+          if (runFilter) trendUrl += `&cluster_run_id=${encodeURIComponent(runFilter)}`;
+          const res = await fetch(trendUrl);
           if (!res.ok) throw new Error("HTTP " + res.status);
           const trendingData = await res.json();
           currentClusterItems = trendingData;
@@ -2343,6 +3742,7 @@
           });
           if (query) params.set("search", query);
           if (statusFilter) params.set("status", statusFilter);
+          if (runFilter) params.set("cluster_run_id", runFilter);
 
           const res = await fetch("/api/clusters?" + params.toString());
           if (!res.ok) throw new Error("HTTP " + res.status);
@@ -2446,14 +3846,17 @@
                   onchange="toggleClusterSelect(${c.id})"
                   class="rounded-none bg-black border-zinc-700 text-blue-600 focus:ring-0 w-4 h-4 cursor-pointer"
                 >
-                <span class="px-2 py-0.5 bg-blue-950/80 border border-blue-500/40 text-blue-400 font-mono font-bold text-xs rounded-none">Cluster #${c.id}</span>
+                <span class="px-2 py-0.5 bg-blue-950/80 border border-blue-500/40 text-blue-400 font-mono font-bold text-xs rounded-none" title="Database ID: #${c.id}">
+                  ${c.run_cluster_index ? `Cluster #${c.run_cluster_index}` : `Cluster #${c.id}`}
+                  ${c.cluster_run_id ? `<span class="text-zinc-500 font-normal ml-1">(${escapeHtml(c.cluster_run_id)})</span>` : ""}
+                </span>
                 <span class="px-2 py-0.5 text-xs font-mono font-medium rounded-none border ${statusColor}">${escapeHtml(c.status || "pending")}</span>
                 <span class="px-2 py-0.5 bg-zinc-900 text-purple-300 text-xs font-mono rounded-none">${articleCount} Articles</span>
                 ${velocityBadge}
               </div>
               <div class="flex items-center space-x-2">
                 <span class="text-[10px] text-zinc-500 font-mono mr-1">${dateStr}</span>
-                <button onclick="scriptSingleCluster(${c.id})" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-xs font-medium rounded-none text-white shadow">Script</button>
+                <button onclick="openWriteScriptModal(${c.id}, '${escapeHtml(c.cluster_run_id || "")}', ${c.run_cluster_index || c.id})" class="px-3 py-1 bg-blue-600 hover:bg-blue-500 text-xs font-medium rounded-none text-white shadow">Script</button>
                 <button onclick="runPipelineSingleCluster(${c.id})" class="px-3 py-1 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none text-zinc-200">Run Video</button>
               </div>
             </div>
@@ -2539,29 +3942,15 @@
       }
     }
 
-    async function scriptSingleCluster(clusterId) {
-      logToConsole(`Generating single-story script for Cluster #${clusterId}...`);
-      try {
-        const res = await fetch("/api/pipeline/script", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ cluster_id: clusterId, aspect_ratio: "9:16" })
-        });
-        const data = await res.json();
-        logToConsole(`[SCRIPT] Created script #${data.script_id}: ` + JSON.stringify(data));
-        showToast(`Script #${data.script_id} created`, "success");
-        if (data.script_id) {
-          document.getElementById("script-id-input").value = data.script_id;
-          switchTab("script");
-          loadScript();
-        }
-      } catch (err) {
-        logToConsole(`[SCRIPT] Error: ` + err.message);
-      }
+    function scriptSingleCluster(clusterId) {
+      openWriteScriptModal(clusterId);
     }
 
-    async function runPipelineSingleCluster(clusterId) {
-      if (!confirm(`Run full video pipeline for Cluster #${clusterId}?`)) return;
+    function runPipelineSingleCluster(clusterId) {
+      runStageWithConfirmation(`pipeline_cluster_${clusterId}`, `Pipeline Cluster #${clusterId}`, () => executeRunPipelineSingleCluster(clusterId));
+    }
+
+    async function executeRunPipelineSingleCluster(clusterId) {
       logToConsole(`Starting video pipeline for Cluster #${clusterId}...`);
       showToast(`Running video pipeline for Cluster #${clusterId}...`, "info");
       try {
@@ -2581,11 +3970,15 @@
       }
     }
 
-    async function generateScriptForSelected() {
+    function generateScriptForSelected() {
       const ids = Array.from(selectedClusterIds).sort((a, b) => a - b);
       if (ids.length === 0) return;
       if (ids.length === 1) return scriptSingleCluster(ids[0]);
 
+      runStageWithConfirmation("roundup_script", "Multi-Cluster Script Roundup", () => executeGenerateScriptForSelected(ids));
+    }
+
+    async function executeGenerateScriptForSelected(ids) {
       logToConsole(`Generating multi-cluster roundup script for Clusters: ${ids.join(", ")}...`);
       try {
         const res = await fetch("/api/pipeline/roundup-script", {
@@ -2606,12 +3999,15 @@
       }
     }
 
-    async function runPipelineForSelected() {
+    function runPipelineForSelected() {
       const ids = Array.from(selectedClusterIds).sort((a, b) => a - b);
       if (ids.length === 0) return;
       const desc = ids.length === 1 ? `Cluster #${ids[0]}` : `Multi-Cluster Roundup (${ids.join(", ")})`;
-      if (!confirm(`Run video pipeline for ${desc}?`)) return;
 
+      runStageWithConfirmation("roundup_pipeline", desc, () => executeRunPipelineForSelected(ids, desc));
+    }
+
+    async function executeRunPipelineForSelected(ids, desc) {
       logToConsole(`Starting video pipeline for ${desc}...`);
       try {
         const payload = ids.length === 1
@@ -2733,6 +4129,113 @@
         showToast("Retention audit completed", "success");
       } catch (err) {
         showToast("Audit error: " + err.message, "error");
+      }
+    }
+
+    // Beat Generator Config Modal Logic
+    async function openBeatConfigModal() {
+      const modal = document.getElementById("modal-beat-config");
+      const editor = document.getElementById("beat-config-yaml-editor");
+      const statusEl = document.getElementById("beat-config-status");
+      const fileSelect = document.getElementById("beat-config-file-select");
+
+      modal.classList.remove("hidden");
+      statusEl.textContent = "Loading beat generator configuration...";
+
+      try {
+        const res = await fetch("/api/config/beat-generator");
+        if (!res.ok) throw new Error("Failed to load beat generator configuration");
+        const data = await res.json();
+
+        editor.value = data.content || "";
+        statusEl.textContent = `Loaded ${data.filename}`;
+
+        if (data.available_files && Array.isArray(data.available_files)) {
+          fileSelect.innerHTML = "";
+          data.available_files.forEach(f => {
+            const opt = document.createElement("option");
+            opt.value = f;
+            opt.textContent = `prompts/${f}`;
+            if (f === data.filename) opt.selected = true;
+            fileSelect.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        showToast("Error loading beat generator config: " + err.message, "error");
+      }
+    }
+
+    function closeBeatConfigModal() {
+      const modal = document.getElementById("modal-beat-config");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    async function onBeatConfigFileSelectChange() {
+      const fileSelect = document.getElementById("beat-config-file-select");
+      const filename = fileSelect ? fileSelect.value : null;
+      await loadBeatConfigFile(filename);
+    }
+
+    async function reloadBeatConfigFromFile() {
+      const fileSelect = document.getElementById("beat-config-file-select");
+      const filename = fileSelect ? fileSelect.value : null;
+      await loadBeatConfigFile(filename);
+    }
+
+    async function loadBeatConfigFile(filename) {
+      const editor = document.getElementById("beat-config-yaml-editor");
+      const statusEl = document.getElementById("beat-config-status");
+      statusEl.textContent = `Loading ${filename || "config"}...`;
+
+      try {
+        const url = filename ? `/api/config/beat-generator?filename=${encodeURIComponent(filename)}` : "/api/config/beat-generator";
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Failed to load configuration file");
+        const data = await res.json();
+        editor.value = data.content || "";
+        statusEl.textContent = `Loaded ${data.filename}`;
+      } catch (err) {
+        statusEl.textContent = `Error: ${err.message}`;
+        showToast("Error loading file: " + err.message, "error");
+      }
+    }
+
+    async function saveBeatConfigFromModal() {
+      const editor = document.getElementById("beat-config-yaml-editor");
+      const statusEl = document.getElementById("beat-config-status");
+      const saveBtn = document.getElementById("btn-save-beat-config");
+      const fileSelect = document.getElementById("beat-config-file-select");
+
+      const content = editor.value;
+      const filename = fileSelect ? fileSelect.value : null;
+
+      if (!content || !content.trim()) {
+        showToast("YAML configuration content cannot be empty", "error");
+        return;
+      }
+
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving...";
+      statusEl.textContent = "Validating and saving YAML configuration...";
+
+      try {
+        const res = await fetch("/api/config/beat-generator", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content, filename })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Failed to save configuration");
+
+        statusEl.textContent = `Saved ${data.filename} successfully`;
+        showToast("Beat generator configuration saved successfully", "success");
+      } catch (err) {
+        statusEl.textContent = `Save error: ${err.message}`;
+        showToast("Save error: " + err.message, "error");
+      } finally {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save Config";
       }
     }
 
@@ -2960,6 +4463,83 @@
         btn.disabled = false;
         btn.textContent = "Re-Render Video";
       }
+    }
+
+    // Video Resolution Conversion Logic
+    let activeVideoResolution = "";
+
+    async function triggerConvertResolution() {
+      const jobId = document.getElementById("gallery-job-id").value;
+      if (!jobId) {
+        showToast("Enter a Job ID first", "error");
+        return;
+      }
+      const select = document.getElementById("video-convert-res-select");
+      const resolution = select ? select.value : "720p";
+      const btn = document.getElementById("btn-convert-resolution");
+      const statusEl = document.getElementById("video-convert-status");
+
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Converting...";
+      }
+      if (statusEl) {
+        statusEl.textContent = `Converting to ${resolution}...`;
+      }
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/convert-resolution`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resolution })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Conversion failed");
+
+        if (statusEl) {
+          statusEl.textContent = `Converted: ${resolution}`;
+        }
+        showToast(`Video successfully converted to ${resolution}`, "success");
+
+        switchVideoPlaybackResolution(resolution);
+      } catch (err) {
+        if (statusEl) {
+          statusEl.textContent = `Conversion error: ${err.message}`;
+        }
+        showToast("Resolution conversion error: " + err.message, "error");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Convert Resolution";
+        }
+      }
+    }
+
+    function switchVideoPlaybackResolution(res) {
+      const jobId = document.getElementById("gallery-job-id").value;
+      if (!jobId) return;
+      const videoPlayer = document.getElementById("html5-video-player");
+      if (!videoPlayer) return;
+
+      activeVideoResolution = res || "";
+      const url = res ? `/api/jobs/${jobId}/video?resolution=${encodeURIComponent(res)}&t=${Date.now()}` : `/api/jobs/${jobId}/video?t=${Date.now()}`;
+      const curTime = videoPlayer.currentTime;
+      videoPlayer.src = url;
+      videoPlayer.currentTime = curTime;
+      videoPlayer.load();
+
+      const allBtns = ["", "360p", "480p", "720p", "1080p"];
+      allBtns.forEach(r => {
+        const btnId = r ? `res-btn-${r}` : "res-btn-orig";
+        const b = document.getElementById(btnId);
+        if (b) {
+          if (r === activeVideoResolution) {
+            b.className = "px-2 py-0.5 text-[10px] font-mono border border-blue-600 bg-blue-950 text-blue-300 font-bold cursor-pointer";
+          } else {
+            b.className = "px-2 py-0.5 text-[10px] font-mono border border-zinc-800 bg-black text-zinc-400 hover:text-white cursor-pointer";
+          }
+        }
+      });
     }
 
     // Asset Library Catalog
@@ -3295,6 +4875,50 @@
       }
     }
 
+    async function searchProviderHubInspectorCandidates() {
+      const provider = document.getElementById("ins-hub-provider-select").value || "pexels";
+      const q = document.getElementById("ins-hub-query").value.trim();
+      const grid = document.getElementById("ins-hub-grid");
+      if (!q) {
+        grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">Enter a search keyword for provider query.</div>';
+        return;
+      }
+
+      grid.innerHTML = `<div class="col-span-full text-center py-6 text-zinc-400 font-mono text-xs">Searching ${escapeHtml(provider)} for "${escapeHtml(q)}"...</div>`;
+
+      try {
+        const res = await fetch(`/api/media/search?query=${encodeURIComponent(q)}&provider=${encodeURIComponent(provider)}&limit=12`);
+        if (!res.ok) throw new Error(`Search failed for provider ${provider}`);
+        const candidates = await res.json();
+
+        if (!candidates || candidates.length === 0) {
+          grid.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">No media assets found. Try another query.</div>';
+          return;
+        }
+
+        grid.innerHTML = "";
+        candidates.forEach(c => {
+          const card = document.createElement("div");
+          card.className = "cursor-pointer border border-zinc-800 hover:border-blue-500 transition p-1 bg-black flex flex-col justify-between group";
+          card.onclick = () => selectInspectorCandidate(c, card);
+          const isVideo = c.media_type === "video";
+          const mediaElem = isVideo
+            ? `<video src="${c.preview_url}" class="w-full h-20 object-cover bg-zinc-950 mb-1 pointer-events-none" muted></video>`
+            : `<img src="${c.preview_url}" class="w-full h-20 object-cover bg-zinc-950 mb-1" alt="${escapeHtml(c.title || 'Candidate')}">`;
+
+          card.innerHTML = `
+            ${mediaElem}
+            <div class="text-[10px] text-zinc-400 truncate font-mono">${escapeHtml(c.title || c.query || "Media Asset")}</div>
+            <div class="text-[9px] text-blue-400 font-mono flex justify-between mt-0.5">
+              <span>${escapeHtml(c.provider || provider).toUpperCase()}</span>
+              <span class="group-hover:text-white">Click to Select</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      } catch (err) {
+        grid.innerHTML = `<div class="col-span-full text-center py-6 text-red-400 font-mono text-xs">Error: ${escapeHtml(err.message)}</div>`;
+      }
     }
 
     async function loadInspectorLibrary() {
@@ -3965,51 +5589,660 @@
         if (!res.ok) return;
         const data = await res.json();
 
+        const comps = {};
+        if (Array.isArray(data.components)) {
+          data.components.forEach(c => {
+            comps[c.name] = c;
+          });
+        }
+
+        // Database
         const dbEl = document.getElementById("diag-db-status");
         const dbLat = document.getElementById("diag-db-latency");
-        dbEl.textContent = data.database.status;
-        dbEl.className = data.database.status === "healthy" ? "text-sm font-bold text-emerald-400 mt-1" : "text-sm font-bold text-red-400 mt-1";
-        dbLat.textContent = `${(data.database.latency_ms || 0).toFixed(1)} ms latency`;
+        if (comps.database) {
+          dbEl.textContent = comps.database.status;
+          dbEl.className = comps.database.status === "healthy" ? "text-sm font-bold text-emerald-400 mt-1" : (comps.database.status === "degraded" ? "text-sm font-bold text-yellow-400 mt-1" : "text-sm font-bold text-red-400 mt-1");
+          dbLat.textContent = comps.database.details || "Connected";
+        }
 
+        // Storage
         const stEl = document.getElementById("diag-storage-status");
         const stSp = document.getElementById("diag-storage-space");
-        stEl.textContent = data.storage.status;
-        stEl.className = data.storage.status === "healthy" ? "text-sm font-bold text-emerald-400 mt-1" : "text-sm font-bold text-red-400 mt-1";
-        stSp.textContent = `${data.storage.free_space_gb} GB free`;
+        if (comps.storage) {
+          stEl.textContent = comps.storage.status;
+          stEl.className = comps.storage.status === "healthy" ? "text-sm font-bold text-emerald-400 mt-1" : "text-sm font-bold text-red-400 mt-1";
+          stSp.textContent = comps.storage.details || "Storage Ready";
+        }
 
+        // Remotion & FFmpeg
         const tlEl = document.getElementById("diag-tools-status");
         const tlInfo = document.getElementById("diag-tools-info");
-        const ffmpegOk = data.tools.ffmpeg_installed;
-        const remotionOk = data.tools.remotion_installed;
-        tlEl.textContent = (ffmpegOk && remotionOk) ? "Operational" : "Partial Tools";
-        tlEl.className = (ffmpegOk && remotionOk) ? "text-sm font-bold text-emerald-400 mt-1" : "text-sm font-bold text-yellow-400 mt-1";
-        tlInfo.textContent = `FFmpeg: ${ffmpegOk ? 'OK' : 'Missing'} | Remotion: ${remotionOk ? 'OK' : 'Missing'}`;
+        const ffmpegComp = comps.ffmpeg;
+        const remotionComp = comps.remotion;
+        const toolsOk = (!ffmpegComp || ffmpegComp.status === "healthy") && (!remotionComp || remotionComp.status === "healthy");
+        tlEl.textContent = toolsOk ? "Operational" : "Partial Tools";
+        tlEl.className = toolsOk ? "text-sm font-bold text-emerald-400 mt-1" : "text-sm font-bold text-yellow-400 mt-1";
+        tlInfo.textContent = `FFmpeg: ${ffmpegComp ? ffmpegComp.status : 'OK'} | Remotion: ${remotionComp ? remotionComp.status : 'OK'}`;
 
+        // Providers
         const pvEl = document.getElementById("diag-providers-status");
         const pvInfo = document.getElementById("diag-providers-info");
-        pvEl.textContent = "Checked";
-        pvInfo.textContent = `Pexels: ${data.providers.pexels_configured ? 'OK' : 'Unset'} | Giphy: ${data.providers.giphy_configured ? 'OK' : 'Unset'}`;
+        if (comps.providers) {
+          pvEl.textContent = comps.providers.status;
+          pvEl.className = comps.providers.status === "healthy" ? "text-sm font-bold text-emerald-400 mt-1" : "text-sm font-bold text-yellow-400 mt-1";
+          pvInfo.textContent = comps.providers.details || "Checked";
+        }
 
         // Top health indicator pill
         const pill = document.getElementById("header-health-pill");
         const dot = document.getElementById("live-status-dot");
+        const kpi = document.getElementById("kpi-health");
         if (data.status === "healthy") {
-          pill.textContent = "Healthy";
-          pill.className = "hidden sm:inline-flex items-center px-2 py-0.5 rounded-none-none text-xs font-mono bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 cursor-pointer";
-          dot.className = "w-3 h-3 rounded-none-none bg-emerald-500 animate-pulse";
-          document.getElementById("kpi-health").textContent = "Healthy";
-          document.getElementById("kpi-health").className = "text-xl font-bold text-emerald-200 mt-0.5";
+          if (pill) {
+            pill.textContent = "Healthy";
+            pill.className = "hidden sm:inline-flex items-center px-2 py-0.5 rounded-none-none text-xs font-mono bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 cursor-pointer";
+          }
+          if (dot) dot.className = "w-3 h-3 rounded-none-none bg-emerald-500 animate-pulse";
+          if (kpi) {
+            kpi.textContent = "Healthy";
+            kpi.className = "text-xl font-bold text-emerald-200 mt-0.5";
+          }
         } else {
-          pill.textContent = "Degraded";
-          pill.className = "hidden sm:inline-flex items-center px-2 py-0.5 rounded-none-none text-xs font-mono bg-yellow-950/60 border border-yellow-800/50 text-yellow-400 cursor-pointer";
-          dot.className = "w-3 h-3 rounded-none-none bg-yellow-500 animate-pulse";
-          document.getElementById("kpi-health").textContent = "Degraded";
-          document.getElementById("kpi-health").className = "text-xl font-bold text-yellow-200 mt-0.5";
+          const label = data.status === "degraded" ? "Degraded" : "Unhealthy";
+          if (pill) {
+            pill.textContent = label;
+            pill.className = "hidden sm:inline-flex items-center px-2 py-0.5 rounded-none-none text-xs font-mono bg-yellow-950/60 border border-yellow-800/50 text-yellow-400 cursor-pointer";
+          }
+          if (dot) dot.className = "w-3 h-3 rounded-none-none bg-yellow-500 animate-pulse";
+          if (kpi) {
+            kpi.textContent = label;
+            kpi.className = "text-xl font-bold text-yellow-200 mt-0.5";
+          }
         }
       } catch (err) {
         console.error("Health check error:", err);
       }
     }
+
+    // =========================================================================
+    // SYSTEM CONFIGURATION, MODEL REGISTRY & ROLE FALLBACK LOGIC
+    // =========================================================================
+    let currentSystemConfig = null;
+    let currentModelRegistry = [];
+    let currentRoleMappings = { planning: [], writing: [], embedding: [], vlm_inspector: [] };
+
+    async function loadSystemConfig() {
+      try {
+        const res = await fetch("/api/config/system");
+        if (!res.ok) return;
+        const data = await res.json();
+        currentSystemConfig = data;
+        currentModelRegistry = data.model_registry || [];
+        currentRoleMappings = data.roles || { planning: [], writing: [], embedding: [], vlm_inspector: [] };
+
+        renderModelRegistryUI();
+        renderRoleMappingsUI();
+        renderCoreProvidersUI();
+        renderTtsSettingsUI();
+        renderInfrastructureUI();
+      } catch (err) {
+        console.error("Failed to load system configuration:", err);
+      }
+    }
+
+    function renderModelRegistryUI() {
+      const container = document.getElementById("models-cards-grid");
+      const countBadge = document.getElementById("models-count-badge");
+      if (!container) return;
+
+      if (countBadge) {
+        countBadge.textContent = `${currentModelRegistry.length} Model${currentModelRegistry.length === 1 ? "" : "s"}`;
+      }
+
+      if (currentModelRegistry.length === 0) {
+        container.innerHTML = '<div class="col-span-full text-center py-6 text-zinc-500 font-mono text-xs">No models registered yet. Click "+ Register New Model" to add one.</div>';
+        return;
+      }
+
+      container.innerHTML = "";
+      currentModelRegistry.forEach(m => {
+        const card = document.createElement("div");
+        card.className = "bg-black border border-zinc-800 p-4 space-y-3 flex flex-col justify-between";
+
+        const typeColor = m.endpoint_type === "embedding" ? "text-purple-400 border-purple-800/60 bg-purple-950/40" : (m.endpoint_type === "multimodal" ? "text-emerald-400 border-emerald-800/60 bg-emerald-950/40" : "text-blue-400 border-blue-800/60 bg-blue-950/40");
+        const keyPill = m.is_configured ? '<span class="text-[10px] font-mono text-emerald-400 bg-emerald-950/60 border border-emerald-800/50 px-1.5 py-0.5">Configured</span>' : '<span class="text-[10px] font-mono text-yellow-400 bg-yellow-950/60 border border-yellow-800/50 px-1.5 py-0.5">Key Unset</span>';
+
+        card.innerHTML = `
+          <div class="space-y-2">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="text-sm font-bold text-white font-mono">${escapeHtml(m.name)}</div>
+                <div class="text-xs text-zinc-400 font-mono mt-0.5">${escapeHtml(m.model_name)}</div>
+              </div>
+              ${keyPill}
+            </div>
+
+            <div class="flex flex-wrap items-center gap-1.5 text-[10px] font-mono">
+              <span class="px-1.5 py-0.5 border ${typeColor} uppercase font-semibold">${escapeHtml(m.endpoint_type)}</span>
+              <span class="px-1.5 py-0.5 border border-zinc-800 text-zinc-400 bg-zinc-950 uppercase">${escapeHtml(m.api_format)}</span>
+              <span class="px-1.5 py-0.5 border border-zinc-800 text-zinc-400 bg-zinc-950">${m.timeout}s</span>
+            </div>
+
+            <div class="text-[11px] font-mono text-zinc-500 truncate" title="${escapeHtml(m.base_url || 'Default Endpoint')}">
+              Base: ${escapeHtml(m.base_url ? m.base_url.replace(/^https?:\/\//, '') : 'Default / LiteLLM')}
+            </div>
+
+            <div id="model-test-result-${escapeHtml(m.name)}" class="text-[11px] font-mono text-zinc-400 hidden p-1.5 bg-zinc-950 border border-zinc-800"></div>
+          </div>
+
+          <div class="flex items-center justify-between pt-2 border-t border-zinc-900 gap-2">
+            <button onclick="testModelEndpoint('${escapeHtml(m.name)}')" id="btn-test-model-${escapeHtml(m.name)}" class="px-2.5 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-xs font-mono text-zinc-300 transition cursor-pointer">
+              Test
+            </button>
+            <div class="flex items-center space-x-1.5">
+              <button onclick="openEditModelModal('${escapeHtml(m.name)}')" class="px-2 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-xs text-zinc-400 hover:text-white font-mono cursor-pointer">
+                Edit
+              </button>
+              <button onclick="deleteModelEntry('${escapeHtml(m.name)}')" class="px-2 py-1 bg-red-950/40 hover:bg-red-900/60 border border-red-800/50 text-xs text-red-400 font-mono cursor-pointer">
+                Delete
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      populateRoleDropdowns();
+    }
+
+    function populateRoleDropdowns() {
+      const roles = ["planning", "writing", "embedding", "vlm_inspector"];
+      roles.forEach(r => {
+        const sel = document.getElementById("role-add-select-" + r);
+        if (!sel) return;
+        const curVal = sel.value;
+        sel.innerHTML = '<option value="">Select model...</option>';
+        currentModelRegistry.forEach(m => {
+          if (r === "embedding" && m.endpoint_type !== "embedding") return;
+          if (r === "vlm_inspector" && m.endpoint_type === "embedding") return;
+          const opt = document.createElement("option");
+          opt.value = m.name;
+          opt.textContent = `${m.name} (${m.model_name})`;
+          sel.appendChild(opt);
+        });
+        if (curVal) sel.value = curVal;
+      });
+    }
+
+    function renderRoleMappingsUI() {
+      const roles = ["planning", "writing", "embedding", "vlm_inspector"];
+      roles.forEach(r => {
+        const container = document.getElementById("role-chain-" + r);
+        if (!container) return;
+        const chain = currentRoleMappings[r] || [];
+        container.innerHTML = "";
+
+        if (chain.length === 0) {
+          container.innerHTML = '<span class="text-zinc-500 text-xs font-mono">No models configured for this role.</span>';
+          return;
+        }
+
+        chain.forEach((modelName, idx) => {
+          const pill = document.createElement("div");
+          pill.className = "flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-700 text-xs font-mono text-zinc-200";
+
+          const rankBadge = `<span class="text-[10px] text-cyan-400 font-bold">#${idx + 1}</span>`;
+          const leftBtn = idx > 0 ? `<button type="button" onclick="moveRoleModel('${r}', ${idx}, -1)" class="text-zinc-400 hover:text-white px-0.5 cursor-pointer">&larr;</button>` : '';
+          const rightBtn = idx < chain.length - 1 ? `<button type="button" onclick="moveRoleModel('${r}', ${idx}, 1)" class="text-zinc-400 hover:text-white px-0.5 cursor-pointer">&rarr;</button>` : '';
+          const removeBtn = `<button type="button" onclick="removeRoleModel('${r}', ${idx})" class="text-red-400 hover:text-red-300 ml-1 font-bold cursor-pointer">&times;</button>`;
+
+          pill.innerHTML = `
+            ${rankBadge}
+            <span class="font-semibold text-white">${escapeHtml(modelName)}</span>
+            <div class="flex items-center ml-1 space-x-0.5">
+              ${leftBtn}
+              ${rightBtn}
+              ${removeBtn}
+            </div>
+          `;
+          container.appendChild(pill);
+        });
+      });
+    }
+
+    function moveRoleModel(role, index, dir) {
+      const chain = currentRoleMappings[role] || [];
+      const newIdx = index + dir;
+      if (newIdx < 0 || newIdx >= chain.length) return;
+      const temp = chain[index];
+      chain[index] = chain[newIdx];
+      chain[newIdx] = temp;
+      renderRoleMappingsUI();
+    }
+
+    function removeRoleModel(role, index) {
+      const chain = currentRoleMappings[role] || [];
+      chain.splice(index, 1);
+      renderRoleMappingsUI();
+    }
+
+    function addModelToRole(role) {
+      const sel = document.getElementById("role-add-select-" + role);
+      if (!sel || !sel.value) {
+        showToast("Select a model from dropdown first", "info");
+        return;
+      }
+      const modelName = sel.value;
+      if (!currentRoleMappings[role]) currentRoleMappings[role] = [];
+      if (!currentRoleMappings[role].includes(modelName)) {
+        currentRoleMappings[role].push(modelName);
+        renderRoleMappingsUI();
+        sel.value = "";
+      } else {
+        showToast(`Model '${modelName}' is already in this fallback chain`, "info");
+      }
+    }
+
+    async function saveRoleChains() {
+      const btn = document.getElementById("btn-save-role-chains");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+      try {
+        const res = await fetch("/api/config/roles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(currentRoleMappings)
+        });
+        if (!res.ok) throw new Error("Failed to save role mappings");
+        const updated = await res.json();
+        currentRoleMappings = updated;
+        renderRoleMappingsUI();
+        showToast("Role fallback chains saved and hot-reloaded", "success");
+        checkActiveConfig();
+      } catch (err) {
+        showToast("Error saving role fallbacks: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Role Fallbacks";
+      }
+    }
+
+    async function testModelEndpoint(name) {
+      const btn = document.getElementById("btn-test-model-" + name);
+      const resBox = document.getElementById("model-test-result-" + name);
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Pinging...";
+      }
+      if (resBox) {
+        resBox.classList.remove("hidden");
+        resBox.textContent = "Testing connection...";
+        resBox.className = "text-[11px] font-mono text-zinc-400 p-1.5 bg-zinc-950 border border-zinc-800";
+      }
+
+      try {
+        const res = await fetch("/api/config/models/test", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ model_name: name })
+        });
+        const data = await res.json();
+        if (data.status === "success") {
+          if (resBox) {
+            resBox.className = "text-[11px] font-mono text-emerald-400 p-1.5 bg-emerald-950/40 border border-emerald-800/60";
+            resBox.textContent = `OK (${data.latency_ms}ms): ${data.message}`;
+          }
+          showToast(`Model ${name} responded in ${data.latency_ms}ms`, "success");
+        } else {
+          if (resBox) {
+            resBox.className = "text-[11px] font-mono text-red-400 p-1.5 bg-red-950/40 border border-red-800/60";
+            resBox.textContent = `Error: ${data.message}`;
+          }
+          showToast(`Model ${name} failed: ${data.message}`, "error");
+        }
+      } catch (err) {
+        if (resBox) {
+          resBox.className = "text-[11px] font-mono text-red-400 p-1.5 bg-red-950/40 border border-red-800/60";
+          resBox.textContent = "Request error: " + err.message;
+        }
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Test";
+        }
+      }
+    }
+
+    async function testAllModels() {
+      const btn = document.getElementById("btn-test-all-models");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Testing...";
+      }
+      for (const m of currentModelRegistry) {
+        await testModelEndpoint(m.name);
+      }
+      if (btn) {
+        btn.disabled = false;
+        btn.textContent = "Test All Endpoints";
+      }
+    }
+
+    function openAddModelModal() {
+      document.getElementById("modal-model-title").textContent = "Register Model Definition";
+      document.getElementById("modal-model-name").value = "";
+      document.getElementById("modal-model-name").readOnly = false;
+      document.getElementById("modal-model-model-name").value = "";
+      document.getElementById("modal-model-endpoint-type").value = "chat";
+      document.getElementById("modal-model-api-format").value = "openai";
+      document.getElementById("modal-model-base-url").value = "";
+      document.getElementById("modal-model-api-key").value = "";
+      document.getElementById("modal-model-timeout").value = "30.0";
+      document.getElementById("modal-model-definition").classList.remove("hidden");
+    }
+
+    function openEditModelModal(name) {
+      const model = currentModelRegistry.find(m => m.name === name);
+      if (!model) return;
+      document.getElementById("modal-model-title").textContent = "Edit Model: " + name;
+      document.getElementById("modal-model-name").value = model.name;
+      document.getElementById("modal-model-name").readOnly = true;
+      document.getElementById("modal-model-model-name").value = model.model_name;
+      document.getElementById("modal-model-endpoint-type").value = model.endpoint_type || "chat";
+      document.getElementById("modal-model-api-format").value = model.api_format || "openai";
+      document.getElementById("modal-model-base-url").value = model.base_url || "";
+      document.getElementById("modal-model-api-key").value = "";
+      document.getElementById("modal-model-timeout").value = model.timeout || 30.0;
+      document.getElementById("modal-model-definition").classList.remove("hidden");
+    }
+
+    function closeModelModal() {
+      document.getElementById("modal-model-definition").classList.add("hidden");
+    }
+
+    async function saveModelDefinition() {
+      const name = document.getElementById("modal-model-name").value.trim();
+      const modelName = document.getElementById("modal-model-model-name").value.trim();
+      if (!name || !modelName) {
+        showToast("Alias and Upstream Model ID are required", "error");
+        return;
+      }
+
+      const payload = {
+        name,
+        model_name: modelName,
+        endpoint_type: document.getElementById("modal-model-endpoint-type").value,
+        api_format: document.getElementById("modal-model-api-format").value,
+        base_url: document.getElementById("modal-model-base-url").value.trim() || null,
+        api_key: document.getElementById("modal-model-api-key").value.trim() || null,
+        timeout: parseFloat(document.getElementById("modal-model-timeout").value) || 30.0
+      };
+
+      const btn = document.getElementById("btn-save-model-def");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      try {
+        const res = await fetch("/api/config/models", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || "Failed to save model definition");
+        }
+        closeModelModal();
+        showToast(`Model '${name}' registered successfully`, "success");
+        await loadSystemConfig();
+      } catch (err) {
+        showToast("Error saving model: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Model";
+      }
+    }
+
+    async function deleteModelEntry(name) {
+      if (!confirm(`Delete model definition '${name}' from registry?`)) return;
+      try {
+        const res = await fetch(`/api/config/models/${encodeURIComponent(name)}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("Failed to delete model");
+        showToast(`Model '${name}' removed`, "info");
+        await loadSystemConfig();
+      } catch (err) {
+        showToast("Error: " + err.message, "error");
+      }
+    }
+
+    function renderCoreProvidersUI() {
+      if (!currentSystemConfig) return;
+      const p = currentSystemConfig.providers || {};
+      const lt = currentSystemConfig.litellm || {};
+
+      const bGem = document.getElementById("badge-gemini-status");
+      if (bGem) {
+        bGem.textContent = p.gemini_configured ? "Configured" : "Unset";
+        bGem.className = p.gemini_configured ? "px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50" : "px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-500 border border-zinc-800";
+      }
+
+      const bOai = document.getElementById("badge-openai-status");
+      if (bOai) {
+        bOai.textContent = p.openai_configured ? "Configured" : "Unset";
+        bOai.className = p.openai_configured ? "px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50" : "px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-500 border border-zinc-800";
+      }
+
+      const bDs = document.getElementById("badge-deepseek-status");
+      if (bDs) {
+        bDs.textContent = p.deepseek_configured ? "Configured" : "Unset";
+        bDs.className = p.deepseek_configured ? "px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50" : "px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-500 border border-zinc-800";
+      }
+
+      const bFlux = document.getElementById("badge-flux-status");
+      if (bFlux) {
+        bFlux.textContent = p.flux_configured ? "Configured" : "Unset";
+        bFlux.className = p.flux_configured ? "px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50" : "px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-500 border border-zinc-800";
+      }
+
+      const bLt = document.getElementById("badge-litellm-status");
+      if (bLt) {
+        bLt.textContent = lt.api_key_configured ? "Configured" : "Unset";
+        bLt.className = lt.api_key_configured ? "px-1.5 py-0.5 text-[10px] font-mono bg-emerald-950/60 text-emerald-400 border border-emerald-800/50" : "px-1.5 py-0.5 text-[10px] font-mono bg-zinc-900 text-zinc-500 border border-zinc-800";
+      }
+
+      if (document.getElementById("input-litellm-url")) {
+        document.getElementById("input-litellm-url").value = lt.base_url || "";
+      }
+      if (document.getElementById("select-image-gen-provider") && p.image_generation_provider) {
+        document.getElementById("select-image-gen-provider").value = p.image_generation_provider;
+      }
+      if (document.getElementById("input-flux-endpoint") && p.flux_endpoint) {
+        document.getElementById("input-flux-endpoint").value = p.flux_endpoint;
+      }
+    }
+
+    async function saveCoreProviders() {
+      const btn = document.getElementById("btn-save-core-providers");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      const providers = {};
+      const gemKey = document.getElementById("input-gemini-key").value.trim();
+      if (gemKey) providers.gemini_api_key = gemKey;
+      const oaiKey = document.getElementById("input-openai-key").value.trim();
+      if (oaiKey) providers.openai_api_key = oaiKey;
+      const dsKey = document.getElementById("input-deepseek-key").value.trim();
+      if (dsKey) providers.deepseek_api_key = dsKey;
+      const fluxKey = document.getElementById("input-flux-key").value.trim();
+      if (fluxKey) providers.flux_api_key = fluxKey;
+      const fluxEp = document.getElementById("input-flux-endpoint").value.trim();
+      if (fluxEp) providers.flux_endpoint = fluxEp;
+      const imgProv = document.getElementById("select-image-gen-provider").value;
+      if (imgProv) providers.image_generation_provider = imgProv;
+
+      const litellm = {};
+      const ltUrl = document.getElementById("input-litellm-url").value.trim();
+      if (ltUrl) litellm.base_url = ltUrl;
+      const ltKey = document.getElementById("input-litellm-key").value.trim();
+      if (ltKey) litellm.api_key = ltKey;
+
+      try {
+        const res = await fetch("/api/config/system", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ providers, litellm })
+        });
+        if (!res.ok) throw new Error("Failed to save provider credentials");
+        showToast("Provider credentials and LiteLLM settings updated", "success");
+        await loadSystemConfig();
+      } catch (err) {
+        showToast("Error saving credentials: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Provider Credentials";
+      }
+    }
+
+    function renderTtsSettingsUI() {
+      if (!currentSystemConfig || !currentSystemConfig.tts) return;
+      const t = currentSystemConfig.tts;
+      if (document.getElementById("select-tts-provider")) {
+        document.getElementById("select-tts-provider").value = t.provider || "auto";
+      }
+      if (document.getElementById("input-local-tts-endpoint")) {
+        document.getElementById("input-local-tts-endpoint").value = t.endpoint || "";
+      }
+      if (document.getElementById("input-tts-voice")) {
+        document.getElementById("input-tts-voice").value = t.voice || "";
+      }
+      if (document.getElementById("input-local-tts-model")) {
+        document.getElementById("input-local-tts-model").value = t.model || "";
+      }
+      if (document.getElementById("input-local-tts-path")) {
+        document.getElementById("input-local-tts-path").value = t.path || "";
+      }
+      if (document.getElementById("input-local-tts-timeout")) {
+        document.getElementById("input-local-tts-timeout").value = t.timeout || 60;
+      }
+    }
+
+    async function saveTtsSettings() {
+      const btn = document.getElementById("btn-save-tts-settings");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      const tts = {
+        provider: document.getElementById("select-tts-provider").value,
+        endpoint: document.getElementById("input-local-tts-endpoint").value.trim(),
+        voice: document.getElementById("input-tts-voice").value.trim(),
+        model: document.getElementById("input-local-tts-model").value.trim(),
+        path: document.getElementById("input-local-tts-path").value.trim(),
+        timeout: parseFloat(document.getElementById("input-local-tts-timeout").value) || 60.0
+      };
+
+      try {
+        const res = await fetch("/api/config/system", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tts })
+        });
+        if (!res.ok) throw new Error("Failed to save TTS settings");
+        showToast("Audio and TTS configuration saved", "success");
+        await loadSystemConfig();
+      } catch (err) {
+        showToast("Error saving TTS settings: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Voice & TTS Settings";
+      }
+    }
+
+    function renderInfrastructureUI() {
+      if (!currentSystemConfig) return;
+      const st = currentSystemConfig.storage || {};
+      const wh = currentSystemConfig.whisper || {};
+      const rm = currentSystemConfig.remotion || {};
+      const bg = currentSystemConfig.budget || {};
+      const sec = currentSystemConfig.security || {};
+      const yt = currentSystemConfig.youtube || {};
+
+      if (document.getElementById("select-storage-backend")) {
+        document.getElementById("select-storage-backend").value = st.backend || "local";
+      }
+      if (document.getElementById("input-storage-local-dir")) {
+        document.getElementById("input-storage-local-dir").value = st.local_dir || "";
+      }
+      if (document.getElementById("select-whisper-model")) {
+        document.getElementById("select-whisper-model").value = wh.model_size || "base";
+      }
+      if (document.getElementById("select-whisper-device")) {
+        document.getElementById("select-whisper-device").value = wh.device || "cpu";
+      }
+      if (document.getElementById("input-remotion-project")) {
+        document.getElementById("input-remotion-project").value = rm.project_dir || "";
+      }
+      if (document.getElementById("input-remotion-output")) {
+        document.getElementById("input-remotion-output").value = rm.output_dir || "";
+      }
+      if (document.getElementById("input-cost-daily-budget")) {
+        document.getElementById("input-cost-daily-budget").value = bg.daily_budget_usd || "";
+      }
+      if (document.getElementById("input-cost-monthly-budget")) {
+        document.getElementById("input-cost-monthly-budget").value = bg.monthly_budget_usd || "";
+      }
+      const ytEl = document.getElementById("diag-youtube-status");
+      if (ytEl) {
+        ytEl.textContent = yt.configured ? "OAuth Configured" : "Not Configured";
+        ytEl.className = yt.configured ? "text-xs font-mono text-emerald-400 mt-1" : "text-xs font-mono text-zinc-500 mt-1";
+      }
+    }
+
+    async function saveInfrastructureSettings() {
+      const btn = document.getElementById("btn-save-infrastructure");
+      btn.disabled = true;
+      btn.textContent = "Saving...";
+
+      const storage = {
+        backend: document.getElementById("select-storage-backend").value,
+        local_dir: document.getElementById("input-storage-local-dir").value.trim()
+      };
+      const whisper = {
+        model_size: document.getElementById("select-whisper-model").value,
+        device: document.getElementById("select-whisper-device").value
+      };
+      const remotion = {
+        project_dir: document.getElementById("input-remotion-project").value.trim(),
+        output_dir: document.getElementById("input-remotion-output").value.trim()
+      };
+      const budget = {};
+      const dBud = parseFloat(document.getElementById("input-cost-daily-budget").value);
+      if (!isNaN(dBud)) budget.daily_budget_usd = dBud;
+      const mBud = parseFloat(document.getElementById("input-cost-monthly-budget").value);
+      if (!isNaN(mBud)) budget.monthly_budget_usd = mBud;
+
+      const security = {};
+      const tok = document.getElementById("input-api-auth-token").value.trim();
+      if (tok) security.api_auth_token = tok;
+      const pwd = document.getElementById("input-admin-password").value.trim();
+      if (pwd) security.admin_password = pwd;
+
+      try {
+        const res = await fetch("/api/config/system", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ storage, whisper, remotion, budget, security })
+        });
+        if (!res.ok) throw new Error("Failed to save infrastructure settings");
+        showToast("Infrastructure and engine settings saved", "success");
+        await loadSystemConfig();
+      } catch (err) {
+        showToast("Error saving infrastructure: " + err.message, "error");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Save Infrastructure Settings";
+      }
+    }
+
 
     async function runCachePrune() {
       const hours = parseInt(document.getElementById("prune-hours-select").value, 10) || 24;
@@ -4774,8 +7007,10 @@
 
     // Initial page bootstrapping
     document.addEventListener("DOMContentLoaded", () => {
+      loadConsoleOutput();
       refreshPlatformStats();
       loadRecentJobs();
+      loadClusterRunsDropdown();
       runHealthCheck();
       loadProviders();
       loadVisualConfig();

@@ -40,6 +40,7 @@ class ClusteringService:
         self.model_registry_service = model_registry_service or ModelRegistryService(
             cost_repo=self.cost_repo
         )
+        self.last_run_id: str | None = None
 
     @staticmethod
     def is_local_model(model: str) -> bool:
@@ -129,9 +130,18 @@ class ClusteringService:
         effective_key = self.api_key or settings.litellm_api_key or "sk-litellm-master-key"
         return OpenAI(base_url=effective_base_url, api_key=effective_key, timeout=10.0)
 
-    def generate_embeddings_for_new_articles(self, model: str | None = None) -> int:
+    def generate_embeddings_for_new_articles(
+        self,
+        model: str | None = None,
+        article_ids: list[int] | None = None,
+    ) -> int:
         """Fetch unembedded articles, compute embedding vectors, and persist."""
-        articles = self.article_repo.get_articles_without_embeddings(limit=50)
+        if article_ids:
+            all_articles = self.article_repo.get_articles_by_ids(article_ids)
+            articles = [a for a in all_articles if not a.embedding]
+        else:
+            articles = self.article_repo.get_articles_without_embeddings(limit=None)
+
         if not articles:
             return 0
 
@@ -187,11 +197,37 @@ class ClusteringService:
     def cluster_recent_articles(
         self,
         threshold: float | None = None,
+        article_ids: list[int] | None = None,
+        hours_back: float | None = None,
+        cluster_run_id: str | None = None,
     ) -> list[StoryCluster]:
-        """Group embedded articles using cosine similarity cutoff."""
+        """Group embedded articles using cosine similarity cutoff with cluster run tracking."""
+        import uuid
+        from datetime import UTC, datetime
+
+        run_id = (
+            cluster_run_id
+            or f"run_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:6]}"
+        )
+        self.last_run_id = run_id
         cutoff = threshold or settings.similarity_threshold
-        articles = self.article_repo.get_all_embedded_articles(limit=100)
+
+        if article_ids:
+            self.generate_embeddings_for_new_articles(article_ids=article_ids)
+            articles = self.article_repo.get_articles_by_ids(article_ids)
+        elif hours_back is not None and hours_back > 0:
+            articles = self.article_repo.get_articles(hours_back=hours_back, limit=None)
+            unembedded_ids = [a.id for a in articles if not a.embedding]
+            if unembedded_ids:
+                self.generate_embeddings_for_new_articles(article_ids=unembedded_ids)
+                articles = self.article_repo.get_articles_by_ids([a.id for a in articles])
+        else:
+            articles = self.article_repo.get_all_embedded_articles(limit=None)
+
         if not articles:
+            self.article_repo.save_cluster_run(
+                run_id=run_id, cluster_count=0, article_count=0, threshold=cutoff
+            )
             return []
 
         embedded = [
@@ -200,12 +236,18 @@ class ClusteringService:
             if a.embedding and isinstance(a.embedding, list) and len(a.embedding) > 0
         ]
         if not embedded:
+            self.article_repo.save_cluster_run(
+                run_id=run_id, cluster_count=0, article_count=0, threshold=cutoff
+            )
             return []
 
         # Ensure consistent vector dimension across articles
         target_dim = len(embedded[0].embedding or [])
         valid_articles = [a for a in embedded if a.embedding and len(a.embedding) == target_dim]
         if not valid_articles:
+            self.article_repo.save_cluster_run(
+                run_id=run_id, cluster_count=0, article_count=0, threshold=cutoff
+            )
             return []
 
         vectors = np.array([a.embedding for a in valid_articles], dtype=np.float32)
@@ -233,11 +275,11 @@ class ClusteringService:
                     visited.add(j)
 
             cluster_articles = [valid_articles[idx] for idx in cluster_indices]
-            article_ids = sorted([a.id for a in cluster_articles])
+            art_ids = sorted([a.id for a in cluster_articles])
 
-            # Deterministic hash of member IDs
-            ids_str = ",".join(map(str, article_ids))
-            cluster_hash = hashlib.sha256(ids_str.encode("utf-8")).hexdigest()[:16]
+            # Deterministic hash of member IDs scoped to cluster_run_id
+            ids_str = f"{run_id}:" + ",".join(map(str, art_ids))
+            cluster_hash = hashlib.sha256(ids_str.encode("utf-8")).hexdigest()[:24]
 
             # Primary headline is the longest or earliest title
             primary_article = max(cluster_articles, key=lambda a: len(a.title))
@@ -246,12 +288,27 @@ class ClusteringService:
                 [f"[{a.source}] {a.title}: {a.summary[:200]}" for a in cluster_articles]
             )
 
+            run_index = len(clusters) + 1
             cluster = self.article_repo.save_story_cluster(
                 cluster_hash=cluster_hash,
                 title=title,
                 summary=summary,
-                article_ids=article_ids,
+                article_ids=art_ids,
+                cluster_run_id=run_id,
+                run_cluster_index=run_index,
             )
             clusters.append(cluster)
 
-        return sorted(clusters, key=lambda c: c.article_count, reverse=True)
+        sorted_clusters = sorted(clusters, key=lambda c: c.article_count, reverse=True)
+        for idx, c in enumerate(sorted_clusters):
+            c.run_cluster_index = idx + 1
+        self.article_repo.session.flush()
+
+        self.article_repo.save_cluster_run(
+            run_id=run_id,
+            cluster_count=len(sorted_clusters),
+            article_count=len(valid_articles),
+            threshold=cutoff,
+        )
+
+        return sorted_clusters

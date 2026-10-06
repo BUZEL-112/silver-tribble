@@ -37,6 +37,19 @@ class Article(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
 
 
+class ClusterRun(Base):
+    """Execution run grouping story clusters generated together."""
+
+    __tablename__ = "cluster_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    cluster_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    article_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    threshold: Mapped[float] = mapped_column(Float, nullable=False, default=0.82)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now, nullable=False)
+
+
 class StoryCluster(Base):
     """Cluster of closely related articles representing a single unified news story."""
 
@@ -44,6 +57,10 @@ class StoryCluster(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     cluster_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    cluster_run_id: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="run_default", index=True
+    )
+    run_cluster_index: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     article_ids: Mapped[list[int]] = mapped_column(JSON, nullable=False, default=list)

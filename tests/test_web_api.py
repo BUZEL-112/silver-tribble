@@ -17,6 +17,252 @@ def test_get_dashboard_root() -> None:
     assert "AI Video Studio" in response.text
 
 
+def test_dashboard_javascript_syntax() -> None:
+    """Verify inline JavaScript in dashboard HTML has valid syntax without parsing errors."""
+    import re
+    import shutil
+    import subprocess
+    import tempfile
+
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    scripts = re.findall(r"<script(?![^>]*src=)[^>]*>(.*?)</script>", html, re.DOTALL)
+    assert len(scripts) > 0
+
+    node_bin = shutil.which("node")
+    if node_bin:
+        for idx, script in enumerate(scripts):
+            with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as f:
+                f.write(script)
+                temp_path = f.name
+            try:
+                proc = subprocess.run(
+                    [node_bin, "--check", temp_path],
+                    capture_output=True,
+                    text=True,
+                )
+                assert proc.returncode == 0, f"Script block {idx} syntax error: {proc.stderr}"
+            finally:
+                Path(temp_path).unlink(missing_ok=True)
+
+
+def test_stage_run_confirmation_modal_and_logic() -> None:
+    """Verify repeat stage run confirmation modal markup, Yes/No buttons, and 5-minute guard."""
+    import shutil
+    import subprocess
+
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    # Verify modal DOM elements and text
+    assert 'id="modal-stage-confirmation"' in html
+    assert "You have run this step once. Do you still want to run again?" in html
+    assert 'id="stage-confirm-btn-yes"' in html
+    assert 'id="stage-confirm-btn-no"' in html
+    assert 'id="stage-confirm-elapsed"' in html
+    assert 'id="stage-confirm-remaining"' in html
+
+    # Verify JavaScript confirmation functions and 5-minute timeout constant
+    assert "STAGE_CONFIRMATION_TIMEOUT_MS = 5 * 60 * 1000" in html
+    assert "function runStageWithConfirmation(" in html
+    assert "function openStageConfirmModal(" in html
+    assert "function closeStageConfirmModal(" in html
+
+    node_bin = shutil.which("node")
+    if node_bin:
+        verify_script = """
+const fs = require("fs");
+const vm = require("vm");
+const html = fs.readFileSync("src/templates/dashboard.html", "utf-8");
+
+const storage = {};
+const elements = {};
+function createMockEl(id) {
+  return {
+    id,
+    classList: {
+      classes: new Set(["hidden"]),
+      add(c) { this.classes.add(c); },
+      remove(c) { this.classes.delete(c); },
+      contains(c) { return this.classes.has(c); }
+    },
+    textContent: "",
+    innerHTML: "",
+    addEventListener: () => {}
+  };
+}
+
+const context = {
+  console,
+  sessionStorage: {
+    getItem: (k) => storage[k] || null,
+    setItem: (k, v) => { storage[k] = String(v); },
+    removeItem: (k) => { delete storage[k]; }
+  },
+  document: {
+    getElementById: (id) => {
+      if (!elements[id]) elements[id] = createMockEl(id);
+      return elements[id];
+    },
+    addEventListener: () => {}
+  },
+  setInterval: () => 123,
+  clearInterval: () => {}
+};
+context.window = context;
+
+const m = html.match(/<script(?![^>]*src=)[^>]*>([\\s\\S]*?)<\\/script>/);
+vm.runInNewContext(m[1], context);
+
+let calledCount = 0;
+// 1. First tap executes immediately
+context.runStageWithConfirmation("ingest", "Stage 1: Ingest RSS", () => {
+  calledCount++;
+});
+if (calledCount !== 1) process.exit(1);
+
+// 2. Second tap within 5 mins opens modal and does not run immediately
+context.runStageWithConfirmation("ingest", "Stage 1: Ingest RSS", () => {
+  calledCount++;
+});
+if (calledCount !== 1) process.exit(2);
+const modal = context.document.getElementById("modal-stage-confirmation");
+if (modal.classList.contains("hidden")) process.exit(3);
+
+// 3. Clicking No dismisses without running
+context.closeStageConfirmModal(false);
+if (!modal.classList.contains("hidden")) process.exit(4);
+if (calledCount !== 1) process.exit(5);
+
+// 4. Second tap again and clicking Yes executes callback
+context.runStageWithConfirmation("ingest", "Stage 1: Ingest RSS", () => {
+  calledCount++;
+});
+context.closeStageConfirmModal(true);
+if (calledCount !== 2) process.exit(6);
+
+// 5. Tap after 5 minutes runs immediately
+context.sessionStorage.setItem("stage_last_run_ingest", String(Date.now() - 6 * 60 * 1000));
+context.runStageWithConfirmation("ingest", "Stage 1: Ingest RSS", () => {
+  calledCount++;
+});
+if (calledCount !== 3) process.exit(7);
+"""
+        proc = subprocess.run([node_bin, "-e", verify_script], capture_output=True, text=True)
+        assert proc.returncode == 0, f"Node verification failed: {proc.stderr}"
+
+
+def test_live_execution_output_persists_on_reload() -> None:
+    """Verify live execution output console persists across reloads in localStorage."""
+    import shutil
+    import subprocess
+
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    assert 'id="console-output"' in html
+    assert "Live Execution Output" in html
+    assert "CONSOLE_STORAGE_KEY" in html
+    assert "function loadConsoleOutput(" in html
+    assert "function saveConsoleOutput(" in html
+    assert "function logToConsole(" in html
+    assert "function clearConsole(" in html
+
+    node_bin = shutil.which("node")
+    if node_bin:
+        verify_script = """
+const fs = require("fs");
+const vm = require("vm");
+const html = fs.readFileSync("src/templates/dashboard.html", "utf-8");
+
+const localStore = {};
+function createEnv() {
+  const elements = {};
+  function createMockEl(id) {
+    return {
+      id,
+      classList: {
+        classes: new Set(),
+        add(c) { this.classes.add(c); },
+        remove(c) { this.classes.delete(c); },
+        contains(c) { return this.classes.has(c); }
+      },
+      textContent: id === "console-output" ? "System initialized. Ready for operations." : "",
+      innerHTML: "",
+      addEventListener: () => {}
+    };
+  }
+
+  const context = {
+    console,
+    localStorage: {
+      getItem: (k) => localStore[k] || null,
+      setItem: (k, v) => { localStore[k] = String(v); },
+      removeItem: (k) => { delete localStore[k]; }
+    },
+    sessionStorage: {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {}
+    },
+    document: {
+      getElementById: (id) => {
+        if (!elements[id]) elements[id] = createMockEl(id);
+        return elements[id];
+      },
+      addEventListener: () => {}
+    },
+    setInterval: () => 123,
+    clearInterval: () => {}
+  };
+  context.window = context;
+
+  const m = html.match(/<script(?![^>]*src=)[^>]*>([\\s\\S]*?)<\\/script>/);
+  vm.runInNewContext(m[1], context);
+  return context;
+}
+
+// 1. Initial run: log messages
+const env1 = createEnv();
+env1.logToConsole("Triggering stage: ingest...");
+env1.logToConsole("[INGEST] Articles fetched: 12");
+
+const pre1 = env1.document.getElementById("console-output");
+if (!pre1.textContent.includes("Triggering stage: ingest...")) process.exit(1);
+if (!localStore["ai_video_live_console_output"]) process.exit(2);
+
+// 2. Simulate reload: create a new environment (new DOM with default placeholder text)
+const env2 = createEnv();
+const pre2 = env2.document.getElementById("console-output");
+// Before loadConsoleOutput, it has the default placeholder
+if (pre2.textContent !== "System initialized. Ready for operations.") process.exit(3);
+
+// Execute loadConsoleOutput on reload
+env2.loadConsoleOutput();
+
+// Now pre2 must have restored previous logs instead of resetting
+if (!pre2.textContent.includes("Triggering stage: ingest...")) process.exit(4);
+if (!pre2.textContent.includes("[INGEST] Articles fetched: 12")) process.exit(5);
+
+// 3. Log additional message after reload
+env2.logToConsole("[CLUSTER] Clusters created: 3");
+if (!pre2.textContent.includes("[CLUSTER] Clusters created: 3")) process.exit(6);
+const savedLog = localStore["ai_video_live_console_output"];
+if (!savedLog || !savedLog.includes("[CLUSTER] Clusters created: 3")) process.exit(7);
+
+// 4. Test clear console
+env2.clearConsole();
+if (pre2.textContent !== "Console cleared.") process.exit(8);
+if (localStore["ai_video_live_console_output"] !== "Console cleared.") process.exit(9);
+"""
+        proc = subprocess.run([node_bin, "-e", verify_script], capture_output=True, text=True)
+        assert proc.returncode == 0, f"Console persistence node verification failed: {proc.stderr}"
+
+
 def test_settings_api() -> None:
     """Verify reading and updating watermark and timing settings."""
     res_get = client.get("/api/settings")
@@ -448,3 +694,289 @@ def test_visual_config_api_endpoints() -> None:
     assert updated["target_beats"] == 7
     assert updated["max_clusters"] == 4
     assert updated["tts_voice"] == "Charon"
+
+
+def test_articles_api_listing_and_filtering() -> None:
+    """Verify GET /api/articles returns articles with search, source, and limit filters."""
+    import uuid
+
+    init_db()
+    uid = uuid.uuid4().hex[:8]
+
+    with get_session() as session:
+        art1 = Article(
+            title=f"Article Neural Network {uid}",
+            link=f"https://example.com/art-neural-{uid}",
+            source=f"SourceNeural_{uid}",
+            summary="Neural networks research breakdown.",
+        )
+        art2 = Article(
+            title=f"Article Database Scaling {uid}",
+            link=f"https://example.com/art-db-{uid}",
+            source=f"SourceDB_{uid}",
+            summary="Postgres scaling strategies.",
+        )
+        session.add(art1)
+        session.add(art2)
+        session.commit()
+        art1_id = art1.id
+        art2_id = art2.id
+
+    # 1. Test basic fetch
+    res = client.get("/api/articles?limit=50")
+    assert res.status_code == 200
+    articles = res.json()
+    assert isinstance(articles, list)
+
+    # 2. Test search filter
+    res_search = client.get("/api/articles", params={"search": f"Neural Network {uid}"})
+    assert res_search.status_code == 200
+    search_data = res_search.json()
+    assert any(a["id"] == art1_id for a in search_data)
+    assert not any(a["id"] == art2_id for a in search_data)
+
+    # 3. Test source filter
+    res_source = client.get(f"/api/articles?source=SourceDB_{uid}")
+    assert res_source.status_code == 200
+    source_data = res_source.json()
+    assert any(a["id"] == art2_id for a in source_data)
+    assert not any(a["id"] == art1_id for a in source_data)
+
+    # 4. Test fetch without limit returns all articles
+    res_all = client.get("/api/articles")
+    assert res_all.status_code == 200
+    all_articles = res_all.json()
+    assert any(a["id"] == art1_id for a in all_articles)
+    assert any(a["id"] == art2_id for a in all_articles)
+
+    # 5. Test limit can exceed 500 without validation error
+    res_large = client.get("/api/articles?limit=1000")
+    assert res_large.status_code == 200
+
+
+def test_cluster_runs_and_clusters_by_run_id_api() -> None:
+    """Verify GET /api/cluster-runs, cluster run id filtering, and run_cluster_index."""
+    import uuid
+
+    init_db()
+    uid = uuid.uuid4().hex[:8]
+    run_id_a = f"run_{uid}_a"
+    run_id_b = f"run_{uid}_b"
+
+    with get_session() as session:
+        c1 = StoryCluster(
+            cluster_hash=f"{run_id_a}:1",
+            title=f"Story Run A First {uid}",
+            summary="Summary A1",
+            article_ids=[1],
+            article_count=1,
+            cluster_run_id=run_id_a,
+            run_cluster_index=1,
+        )
+        c2 = StoryCluster(
+            cluster_hash=f"{run_id_a}:2",
+            title=f"Story Run A Second {uid}",
+            summary="Summary A2",
+            article_ids=[2],
+            article_count=1,
+            cluster_run_id=run_id_a,
+            run_cluster_index=2,
+        )
+        c3 = StoryCluster(
+            cluster_hash=f"{run_id_b}:1",
+            title=f"Story Run B First {uid}",
+            summary="Summary B1",
+            article_ids=[3],
+            article_count=1,
+            cluster_run_id=run_id_b,
+            run_cluster_index=1,
+        )
+        session.add_all([c1, c2, c3])
+        session.commit()
+        c1_id = c1.id
+        c2_id = c2.id
+        c3_id = c3.id
+
+    # 1. Test GET /api/cluster-runs
+    res_runs = client.get("/api/cluster-runs")
+    assert res_runs.status_code == 200
+    runs = res_runs.json()
+    assert isinstance(runs, list)
+    assert any(r["run_id"] == run_id_a for r in runs)
+    assert any(r["run_id"] == run_id_b for r in runs)
+
+    # 2. Test GET /api/clusters?cluster_run_id=run_id_a
+    res_clusters_a = client.get(f"/api/clusters?cluster_run_id={run_id_a}")
+    assert res_clusters_a.status_code == 200
+    clusters_a_data = res_clusters_a.json()
+    items_a = (
+        clusters_a_data.get("items", clusters_a_data)
+        if isinstance(clusters_a_data, dict)
+        else clusters_a_data
+    )
+    items_a_ids = [item["id"] for item in items_a]
+    assert c1_id in items_a_ids
+    assert c2_id in items_a_ids
+    assert c3_id not in items_a_ids
+
+    # Verify run_cluster_index is present
+    for item in items_a:
+        if item["id"] == c1_id:
+            assert item["run_cluster_index"] == 1
+            assert item["cluster_run_id"] == run_id_a
+        elif item["id"] == c2_id:
+            assert item["run_cluster_index"] == 2
+            assert item["cluster_run_id"] == run_id_a
+
+
+def test_cluster_trigger_with_request_body() -> None:
+    """Verify POST /api/pipeline/cluster accepts json payload with article_ids and threshold."""
+    from unittest.mock import MagicMock, patch
+
+    mock_cluster_result = MagicMock()
+    mock_cluster_result.id = 999
+    mock_cluster_result.title = "Mock Cluster"
+    mock_cluster_result.cluster_hash = "mock:1"
+    mock_cluster_result.article_count = 2
+    mock_cluster_result.cluster_run_id = "run_mock_123"
+    mock_cluster_result.run_cluster_index = 1
+    mock_cluster_result.created_at = None
+
+    with patch("src.web.ClusteringService") as mock_cls:
+        service_instance = MagicMock()
+        service_instance.last_run_id = "run_mock_123"
+        service_instance.cluster_recent_articles.return_value = [mock_cluster_result]
+        mock_cls.return_value = service_instance
+
+        res = client.post(
+            "/api/pipeline/cluster",
+            json={
+                "threshold": 0.88,
+                "article_ids": [10, 20],
+                "hours_back": 12,
+                "cluster_run_id": "run_mock_123",
+            },
+        )
+        assert res.status_code == 200
+        data = res.json()
+        assert data["cluster_run_id"] == "run_mock_123"
+        assert data["clusters_count"] == 1
+        assert len(data["clusters"]) == 1
+        assert data["clusters"][0]["cluster_run_id"] == "run_mock_123"
+        assert data["clusters"][0]["run_cluster_index"] == 1
+
+        service_instance.cluster_recent_articles.assert_called_once_with(
+            threshold=0.88,
+            article_ids=[10, 20],
+            hours_back=12,
+            cluster_run_id="run_mock_123",
+        )
+
+
+def test_clustering_and_script_modals_markup_and_js() -> None:
+    """Verify Modal 9 (cluster articles), Modal 10 (write script), and their JS handlers."""
+    import shutil
+    import subprocess
+
+    response = client.get("/")
+    assert response.status_code == 200
+    html = response.text
+
+    # Modal 9 markup
+    assert 'id="modal-cluster-articles"' in html
+    assert 'id="modal-articles-table-body"' in html
+    assert 'id="modal-article-search"' in html
+    assert 'id="modal-cluster-threshold"' in html
+    assert 'id="modal-cluster-run-id-input"' in html
+    assert 'id="btn-modal-execute-cluster"' in html
+
+    # Modal 10 markup
+    assert 'id="modal-write-script"' in html
+    assert 'id="modal-script-run-select"' in html
+    assert 'id="modal-script-cluster-select"' in html
+    assert 'id="modal-script-cluster-preview"' in html
+    assert 'id="btn-modal-execute-script"' in html
+
+    # Story Intelligence run filter
+    assert 'id="clusters-run-filter"' in html
+
+    # JS functions
+    assert "function openClusterModal(" in html
+    assert "function closeClusterModal(" in html
+    assert "function setClusterModalHours(" in html
+    assert "function executeModalClustering(" in html
+    assert "function openWriteScriptModal(" in html
+    assert "function closeWriteScriptModal(" in html
+    assert "function loadWriteScriptModalRuns(" in html
+    assert "function onModalScriptRunChange(" in html
+    assert "function onModalScriptClusterChange(" in html
+    assert "function executeModalWriteScript(" in html
+    assert "function loadClusterRunsDropdown(" in html
+    assert "function onClusterRunFilterChange(" in html
+
+    node_bin = shutil.which("node")
+    if node_bin:
+        verify_script = """
+const fs = require("fs");
+const vm = require("vm");
+const html = fs.readFileSync("src/templates/dashboard.html", "utf-8");
+
+const elements = {};
+function createMockEl(id) {
+  return {
+    id,
+    classList: {
+      classes: new Set(["hidden"]),
+      add(c) { this.classes.add(c); },
+      remove(c) { this.classes.delete(c); },
+      contains(c) { return this.classes.has(c); }
+    },
+    textContent: "",
+    innerHTML: "",
+    value: "",
+    disabled: false,
+    checked: false,
+    addEventListener: () => {}
+  };
+}
+
+const context = {
+  console,
+  document: {
+    getElementById: (id) => {
+      if (!elements[id]) elements[id] = createMockEl(id);
+      return elements[id];
+    },
+    addEventListener: () => {}
+  },
+  fetch: async () => ({
+    ok: true,
+    json: async () => []
+  }),
+  setInterval: () => 1,
+  setTimeout: (cb) => cb(),
+  clearTimeout: () => {}
+};
+context.window = context;
+
+const m = html.match(/<script(?![^>]*src=)[^>]*>([\\s\\S]*?)<\\/script>/);
+vm.runInNewContext(m[1], context);
+
+// Test Modal 9 open and close
+context.openClusterModal();
+const modalCluster = context.document.getElementById("modal-cluster-articles");
+if (modalCluster.classList.contains("hidden")) process.exit(1);
+
+context.closeClusterModal();
+if (!modalCluster.classList.contains("hidden")) process.exit(2);
+
+// Test Modal 10 open and close
+context.openWriteScriptModal(5);
+const modalScript = context.document.getElementById("modal-write-script");
+if (modalScript.classList.contains("hidden")) process.exit(3);
+
+context.closeWriteScriptModal();
+if (!modalScript.classList.contains("hidden")) process.exit(4);
+"""
+        proc = subprocess.run([node_bin, "-e", verify_script], capture_output=True, text=True)
+        assert proc.returncode == 0, f"Node verification failed: {proc.stderr}"

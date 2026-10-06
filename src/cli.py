@@ -496,6 +496,22 @@ def cluster(
         str | None,
         typer.Option("--gemini-key", help="Direct Google Gemini / AI Studio API key"),
     ] = None,
+    hours: Annotated[
+        float | None,
+        typer.Option("--hours", "-H", help="Filter articles fetched in the past X hours"),
+    ] = None,
+    article_ids: Annotated[
+        str | None,
+        typer.Option(
+            "--article-ids",
+            "-a",
+            help="Comma-separated article IDs to cluster (e.g. 1,2,5)",
+        ),
+    ] = None,
+    cluster_run_id: Annotated[
+        str | None,
+        typer.Option("--run-id", "-r", help="Explicit cluster run ID"),
+    ] = None,
     as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
     actor: Annotated[
         str, typer.Option("--actor", help="Actor identifier for action logging")
@@ -524,39 +540,81 @@ def cluster(
         if not as_json:
             console.print(f"[cyan]Generating embeddings using '{effective_emb}'...[/cyan]")
 
+        parsed_article_ids = (
+            [int(x.strip()) for x in article_ids.split(",") if x.strip()] if article_ids else None
+        )
+
         with action_repo.track_operation(
             stage="cluster",
             action="cluster_articles",
             actor=actor,
-            details={"threshold": threshold, "model": effective_emb},
+            details={
+                "threshold": threshold,
+                "model": effective_emb,
+                "article_ids": parsed_article_ids,
+                "hours": hours,
+                "cluster_run_id": cluster_run_id,
+            },
         ):
-            embedded_count = service.generate_embeddings_for_new_articles(model=embedding_model)
-            clusters = service.cluster_recent_articles(threshold=threshold)
+            embedded_count = service.generate_embeddings_for_new_articles(
+                model=embedding_model,
+                article_ids=parsed_article_ids,
+            )
+            clusters = service.cluster_recent_articles(
+                threshold=threshold,
+                article_ids=parsed_article_ids,
+                hours_back=hours,
+                cluster_run_id=cluster_run_id,
+            )
 
         top_id = clusters[0].id if clusters else None
+        run_id = getattr(service, "last_run_id", None) or (
+            getattr(clusters[0], "cluster_run_id", "run_default") if clusters else "run_default"
+        )
         if as_json:
             print(
                 json.dumps(
                     {
                         "status": "success",
+                        "cluster_run_id": run_id,
                         "clusters_created": len(clusters),
                         "top_cluster_id": top_id,
+                        "clusters": [
+                            {
+                                "id": c.id,
+                                "cluster_run_id": getattr(c, "cluster_run_id", run_id),
+                                "run_cluster_index": getattr(c, "run_cluster_index", idx + 1),
+                                "title": c.title,
+                                "article_count": c.article_count,
+                            }
+                            for idx, c in enumerate(clusters)
+                        ],
                     }
                 )
             )
             return
 
         console.print(f"[green]Embedded {embedded_count} articles.[/green]")
+        console.print(f"[bold cyan]Cluster Run ID:[/bold cyan] [bold white]{run_id}[/bold white]")
         console.print(f"[cyan]Clustering stories with threshold {threshold}...[/cyan]")
 
-        table = Table(title="Detected AI Story Clusters")
-        table.add_column("ID", style="cyan", justify="right")
+        table = Table(title=f"Detected AI Story Clusters (Run: {run_id})")
+        table.add_column("Run ID", style="dim")
+        table.add_column("Cluster #", style="cyan", justify="right")
+        table.add_column("DB ID", style="blue", justify="right")
         table.add_column("Articles", justify="right", style="magenta")
         table.add_column("Primary Headline", style="white")
         table.add_column("Status", style="yellow")
 
         for c in clusters:
-            table.add_row(str(c.id), str(c.article_count), c.title[:75], c.status)
+            table.add_row(
+                getattr(c, "cluster_run_id", run_id),
+                f"#{getattr(c, 'run_cluster_index', c.id)}",
+                str(c.id),
+                str(c.article_count),
+                c.title[:70],
+                c.status,
+            )
 
         console.print(table)
 
@@ -566,6 +624,10 @@ def list_clusters(
     cluster_id: Annotated[
         int | None,
         typer.Option("--cluster-id", "-c", help="Inspect single cluster and its articles"),
+    ] = None,
+    cluster_run_id: Annotated[
+        str | None,
+        typer.Option("--run-id", "-r", help="Filter clusters by cluster run ID"),
     ] = None,
     limit: Annotated[int, typer.Option("--limit", "-l", help="Number of clusters to list")] = 20,
     as_json: Annotated[bool, typer.Option("--json", help="Output machine-readable JSON")] = False,
@@ -590,6 +652,8 @@ def list_clusters(
                     json.dumps(
                         {
                             "id": cluster.id,
+                            "cluster_run_id": getattr(cluster, "cluster_run_id", "run_default"),
+                            "run_cluster_index": getattr(cluster, "run_cluster_index", 1),
                             "title": cluster.title,
                             "summary": cluster.summary,
                             "status": cluster.status,
@@ -609,8 +673,11 @@ def list_clusters(
                 )
                 return
 
+            idx_label = getattr(cluster, "run_cluster_index", cluster.id)
+            c_run_id = getattr(cluster, "cluster_run_id", "run_default")
             console.print(
-                f"\n[bold cyan]Story Cluster #{cluster.id}[/bold cyan]: "
+                f"\n[bold cyan]Story Cluster #{idx_label}[/bold cyan] "
+                f"(DB #{cluster.id}, Run: {c_run_id}): "
                 f"[bold white]{cluster.title}[/bold white]"
             )
             console.print(
@@ -631,13 +698,15 @@ def list_clusters(
             console.print(table)
             return
 
-        clusters = art_repo.get_recent_clusters(limit=limit)
+        clusters = art_repo.get_recent_clusters(limit=limit, cluster_run_id=cluster_run_id)
         if as_json:
             print(
                 json.dumps(
                     [
                         {
                             "id": c.id,
+                            "cluster_run_id": getattr(c, "cluster_run_id", "run_default"),
+                            "run_cluster_index": getattr(c, "run_cluster_index", 1),
                             "title": c.title,
                             "article_count": c.article_count,
                             "status": c.status,
@@ -655,8 +724,11 @@ def list_clusters(
             )
             return
 
-        table = Table(title=f"Available Story Clusters ({len(clusters)} items)")
-        table.add_column("Cluster ID", justify="right", style="cyan")
+        title_suffix = f" (Run: {cluster_run_id})" if cluster_run_id else ""
+        table = Table(title=f"Available Story Clusters{title_suffix} ({len(clusters)} items)")
+        table.add_column("Run ID", style="dim")
+        table.add_column("Cluster #", justify="right", style="cyan")
+        table.add_column("DB ID", justify="right", style="blue")
         table.add_column("Articles", justify="right", style="magenta")
         table.add_column("Primary Headline", style="white")
         table.add_column("Status", style="yellow")
@@ -665,9 +737,11 @@ def list_clusters(
         for c in clusters:
             created_str = c.created_at.strftime("%Y-%m-%d %H:%M") if c.created_at else "N/A"
             table.add_row(
+                getattr(c, "cluster_run_id", "run_default"),
+                f"#{getattr(c, 'run_cluster_index', c.id)}",
                 str(c.id),
                 str(c.article_count),
-                c.title[:70],
+                c.title[:65],
                 c.status,
                 created_str,
             )

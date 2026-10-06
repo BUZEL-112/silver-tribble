@@ -697,3 +697,67 @@ class ScriptService:
             self.article_repo.update_cluster_status(c.id, "scripted")
 
         return script_record
+
+    def get_beat_generator_config(self, filename: str | None = None) -> dict[str, Any]:
+        """Load beat generator prompt configuration YAML content."""
+        default_file = settings.prompts_planning_file or "beat_sheet.yaml"
+        target_name = Path(filename).name if filename else Path(default_file).name
+        file_path = self.prompts_dir / target_name
+        if not file_path.exists():
+            fallback = Path("prompts") / target_name
+            if fallback.exists():
+                file_path = fallback
+            else:
+                raise FileNotFoundError(
+                    f"Beat generator configuration file '{target_name}' not found"
+                )
+
+        raw_yaml = file_path.read_text(encoding="utf-8")
+        parsed = yaml.safe_load(raw_yaml)
+        if not isinstance(parsed, dict):
+            raise ValueError(
+                f"Beat generator configuration file '{target_name}' is not a valid YAML dictionary"
+            )
+
+        return {
+            "filename": file_path.name,
+            "file_path": str(file_path.resolve()),
+            "content": raw_yaml,
+            "parsed": parsed,
+        }
+
+    def update_beat_generator_config(
+        self,
+        content: str,
+        filename: str | None = None,
+    ) -> dict[str, Any]:
+        """Validate and persist updated beat generator prompt configuration YAML."""
+        if not content or not content.strip():
+            raise ValueError("Beat generator configuration content cannot be empty")
+
+        try:
+            parsed = yaml.safe_load(content)
+        except Exception as exc:
+            raise ValueError(f"Invalid YAML syntax: {exc}") from exc
+
+        if not isinstance(parsed, dict):
+            raise ValueError("Configuration content must be a valid YAML dictionary")
+
+        default_file = settings.prompts_planning_file or "beat_sheet.yaml"
+        target_name = Path(filename).name if filename else Path(default_file).name
+        file_path = self.prompts_dir / target_name
+        self.prompts_dir.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content, encoding="utf-8")
+
+        return {
+            "filename": file_path.name,
+            "file_path": str(file_path.resolve()),
+            "content": content,
+            "parsed": parsed,
+        }
+
+    def list_beat_generator_configs(self) -> list[str]:
+        """List available prompt configuration YAML files in prompts directory."""
+        if not self.prompts_dir.exists():
+            return []
+        return sorted([f.name for f in self.prompts_dir.glob("*.yaml")])

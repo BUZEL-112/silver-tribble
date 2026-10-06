@@ -24,8 +24,13 @@ from src.core.security import (
 )
 from src.flows.video_pipeline_flow import run_roundup_pipeline, run_video_pipeline
 from src.models.schemas import (
+    ClusterTriggerRequest,
     CustomProviderConfig,
     HealthStatus,
+    ModelDefinition,
+    ModelDefinitionResponse,
+    ModelTestRequest,
+    ModelTestResponse,
     ProviderCredentialsRequest,
     ProviderInfo,
     ProviderPriorityRequest,
@@ -33,8 +38,12 @@ from src.models.schemas import (
     ProviderTestResponse,
     ProviderToggleRequest,
     PruneResult,
+    RoleFallbacksUpdateRequest,
+    RoleMappingsConfig,
     ScriptAuditReport,
     SentenceMediaPlacement,
+    SystemConfigResponse,
+    SystemConfigUpdateRequest,
     VisualAssetResponse,
     VisualConfigSchema,
     VisualConfigUpdateRequest,
@@ -63,6 +72,7 @@ from src.services.script_auditor_service import ScriptAuditorService
 from src.services.script_service import ScriptService
 from src.services.storage_service import get_storage_service
 from src.services.subtitle_service import SubtitleService
+from src.services.system_config_service import SystemConfigService
 from src.services.tts_service import TtsService
 from src.services.visual_config_service import VisualConfigService
 from src.services.youtube_metadata_service import YouTubeMetadataService
@@ -150,6 +160,25 @@ class MediaPlacementUpdateRequest(BaseModel):
 class JobReRenderRequest(BaseModel):
     dry_run: bool = False
     show_material_indices: bool = False
+
+
+class VideoResolutionConvertRequest(BaseModel):
+    resolution: Literal["360p", "480p", "720p", "1080p"] = Field(
+        default="720p",
+        description="Target video resolution spec (360p, 480p, 720p, 1080p)",
+    )
+
+
+class BeatConfigUpdateRequest(BaseModel):
+    content: str = Field(
+        ...,
+        min_length=10,
+        description="YAML content for beat generator prompt configuration",
+    )
+    filename: str | None = Field(
+        default=None,
+        description="Optional prompt filename in prompts directory",
+    )
 
 
 class PipelineRunRequest(BaseModel):
@@ -332,11 +361,23 @@ def trigger_ingest() -> dict[str, Any]:
 
 @app.post("/api/pipeline/cluster")
 def trigger_cluster(
-    threshold: float = Query(0.82),
+    req: ClusterTriggerRequest | None = None,
+    threshold: float | None = Query(None),
     model: str | None = Query(None),
 ) -> dict[str, Any]:
     """Trigger embeddings generation and story clustering."""
     try:
+        eff_threshold = 0.82
+        if req and req.threshold is not None:
+            eff_threshold = req.threshold
+        elif threshold is not None:
+            eff_threshold = threshold
+
+        eff_model = req.model if req and req.model else model
+        eff_article_ids = req.article_ids if req else None
+        eff_hours_back = req.hours_back if req else None
+        eff_run_id = req.cluster_run_id if req else None
+
         with get_session() as session:
             art_repo = ArticleRepository(session)
             cost_repo = CostRepository(session)
@@ -347,19 +388,51 @@ def trigger_cluster(
                 stage="cluster",
                 action="cluster_articles",
                 actor="web",
-                details={"threshold": threshold, "model": model},
+                details={
+                    "threshold": eff_threshold,
+                    "model": eff_model,
+                    "article_ids": eff_article_ids,
+                    "hours_back": eff_hours_back,
+                    "cluster_run_id": eff_run_id,
+                },
             ):
-                embedded_count = service.generate_embeddings_for_new_articles(model=model)
-                clusters = service.cluster_recent_articles(threshold=threshold)
+                embedded_count = service.generate_embeddings_for_new_articles(
+                    model=eff_model,
+                    article_ids=eff_article_ids,
+                )
+                if eff_article_ids is None and eff_hours_back is None and eff_run_id is None:
+                    clusters = service.cluster_recent_articles(threshold=eff_threshold)
+                else:
+                    clusters = service.cluster_recent_articles(
+                        threshold=eff_threshold,
+                        article_ids=eff_article_ids,
+                        hours_back=eff_hours_back,
+                        cluster_run_id=eff_run_id,
+                    )
 
             top_id = clusters[0].id if clusters else None
             clusters_count = len(clusters)
+            cluster_run_id = getattr(service, "last_run_id", None) or (
+                getattr(clusters[0], "cluster_run_id", "run_default") if clusters else None
+            )
 
         return {
             "status": "success",
             "articles_embedded": embedded_count,
             "clusters_created": clusters_count,
+            "clusters_count": clusters_count,
             "top_cluster_id": top_id,
+            "cluster_run_id": cluster_run_id,
+            "clusters": [
+                {
+                    "id": c.id,
+                    "cluster_run_id": getattr(c, "cluster_run_id", cluster_run_id or "run_default"),
+                    "run_cluster_index": getattr(c, "run_cluster_index", idx + 1),
+                    "title": c.title,
+                    "article_count": c.article_count,
+                }
+                for idx, c in enumerate(clusters)
+            ],
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -843,6 +916,59 @@ def get_logs(
         ]
 
 
+@app.get("/api/articles")
+def get_articles_list(
+    hours_back: float | None = Query(None, ge=0.1, description="Articles from past X hours"),
+    limit: int | None = Query(
+        None, ge=1, description="Max articles to return (optional, defaults to all if omitted)"
+    ),
+    search: str | None = Query(None, description="Keyword search in title or summary"),
+    source: str | None = Query(None, description="Filter by RSS source"),
+) -> list[dict[str, Any]]:
+    """Retrieve articles with optional recency window and keyword filtering."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        articles = art_repo.get_articles(
+            hours_back=hours_back,
+            limit=limit,
+            search=search,
+            source=source,
+        )
+        return [
+            {
+                "id": a.id,
+                "title": a.title,
+                "link": a.link,
+                "source": a.source,
+                "summary": a.summary,
+                "published_at": a.published_at.isoformat() if a.published_at else None,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+                "has_embedding": bool(a.embedding),
+            }
+            for a in articles
+        ]
+
+
+@app.get("/api/cluster-runs")
+def get_cluster_runs(
+    limit: int = Query(50, ge=1, le=200, description="Max cluster runs to return"),
+) -> list[dict[str, Any]]:
+    """List cluster execution runs with timestamps and counts."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        runs = art_repo.list_cluster_runs(limit=limit)
+        return [
+            {
+                "run_id": r["run_id"],
+                "cluster_count": r["cluster_count"],
+                "article_count": r["article_count"],
+                "threshold": r["threshold"],
+                "created_at": r["created_at"].isoformat() if r.get("created_at") else None,
+            }
+            for r in runs
+        ]
+
+
 @app.get("/api/clusters")
 def get_clusters(
     response: Response,
@@ -851,9 +977,10 @@ def get_clusters(
     limit: int | None = Query(None, ge=1, le=200, description="Legacy limit parameter"),
     status: str | None = Query(None, description="Filter by status (pending, completed)"),
     search: str | None = Query(None, description="Search keyword in title or summary"),
+    cluster_run_id: str | None = Query(None, description="Filter by cluster run ID"),
     include_articles: bool = Query(True, description="Whether to include member articles"),
 ) -> Any:
-    """List story clusters with support for pagination, search, and constituent articles."""
+    """List story clusters with pagination, search, run filtering, and articles."""
     with get_session() as session:
         art_repo = ArticleRepository(session)
 
@@ -861,14 +988,19 @@ def get_clusters(
             clusters, total = art_repo.list_story_clusters_paginated(
                 status=status,
                 search=search,
+                cluster_run_id=cluster_run_id,
                 page=page,
                 page_size=page_size,
             )
             total_pages = math.ceil(total / page_size) if page_size > 0 else 1
         else:
             effective_limit = limit or 50
-            clusters = art_repo.get_recent_clusters(limit=effective_limit)
-            total = art_repo.count_story_clusters(status=status, search=search)
+            clusters = art_repo.get_recent_clusters(
+                limit=effective_limit, cluster_run_id=cluster_run_id
+            )
+            total = art_repo.count_story_clusters(
+                status=status, search=search, cluster_run_id=cluster_run_id
+            )
             total_pages = 1
 
         if response is not None:
@@ -915,6 +1047,8 @@ def get_clusters(
                 {
                     "id": c.id,
                     "cluster_hash": c.cluster_hash,
+                    "cluster_run_id": getattr(c, "cluster_run_id", "run_default"),
+                    "run_cluster_index": getattr(c, "run_cluster_index", 1),
                     "title": c.title,
                     "summary": c.summary,
                     "article_count": c.article_count,
@@ -1005,6 +1139,8 @@ def get_trending_clusters(
             {
                 "id": c.id,
                 "cluster_hash": c.cluster_hash,
+                "cluster_run_id": getattr(c, "cluster_run_id", "run_default"),
+                "run_cluster_index": getattr(c, "run_cluster_index", 1),
                 "title": c.title,
                 "summary": c.summary,
                 "article_count": c.article_count,
@@ -1043,6 +1179,8 @@ def get_cluster(cluster_id: int) -> dict[str, Any]:
         return {
             "id": cluster.id,
             "cluster_hash": cluster.cluster_hash,
+            "cluster_run_id": getattr(cluster, "cluster_run_id", "run_default"),
+            "run_cluster_index": getattr(cluster, "run_cluster_index", 1),
             "title": cluster.title,
             "summary": cluster.summary,
             "article_count": cluster.article_count,
@@ -1419,8 +1557,61 @@ def trigger_job_re_render(job_id: int, req: JobReRenderRequest) -> dict[str, Any
         }
 
 
+@app.post("/api/jobs/{job_id}/convert-resolution")
+def convert_job_video_resolution(
+    job_id: int,
+    req: VideoResolutionConvertRequest,
+) -> dict[str, Any]:
+    """Convert finalized video to different resolution spec (360p, 480p, 720p, 1080p)."""
+    storage = get_storage_service()
+    with get_session() as session:
+        render_repo = RenderRepository(session)
+        cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
+
+        job = render_repo.get_job_by_id(job_id)
+        if not job:
+            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+        if not job.output_video_path:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Job {job_id} has no completed video. Render the video first.",
+            )
+
+        render_svc = RenderService(render_repo, cost_repo, storage)
+        with action_repo.track_operation(
+            stage="render",
+            action="convert_resolution",
+            actor="web",
+            job_id=job.id,
+            details={"resolution": req.resolution},
+        ):
+            try:
+                out_path = render_svc.convert_resolution(job_id=job.id, resolution=req.resolution)
+            except ValueError as ve:
+                raise HTTPException(status_code=400, detail=str(ve)) from ve
+            except FileNotFoundError as fnf:
+                raise HTTPException(status_code=404, detail=str(fnf)) from fnf
+            except RuntimeError as re_err:
+                raise HTTPException(status_code=500, detail=str(re_err)) from re_err
+
+        return {
+            "status": "success",
+            "job_id": job.id,
+            "resolution": req.resolution,
+            "output_video_path": str(out_path.resolve()),
+            "video_url": f"/static/videos/{out_path.name}",
+        }
+
+
 @app.get("/api/jobs/{job_id}/video")
-def stream_job_video(job_id: int) -> FileResponse:
+def stream_job_video(
+    job_id: int,
+    resolution: str | None = Query(
+        None,
+        description="Optional resolution variant e.g. 360p, 480p, 720p, 1080p",
+    ),
+) -> FileResponse:
     """Stream rendered MP4 video for in-browser playback."""
     storage = get_storage_service()
     with get_session() as session:
@@ -1434,6 +1625,17 @@ def stream_job_video(job_id: int) -> FileResponse:
             )
 
         local_path = storage.get_local_path(job.output_video_path)
+        if resolution:
+            res_key = resolution.strip().lower()
+            stem = local_path.stem
+            for k in ["360p", "480p", "720p", "1080p"]:
+                if stem.endswith(f"_{k}"):
+                    stem = stem[: -len(f"_{k}")]
+                    break
+            variant = local_path.parent / f"{stem}_{res_key}.mp4"
+            if variant.exists():
+                local_path = variant
+
         if not local_path.exists():
             raise HTTPException(
                 status_code=404, detail=f"Video file for job {job_id} not found on disk"
@@ -1447,7 +1649,13 @@ def stream_job_video(job_id: int) -> FileResponse:
 
 
 @app.get("/api/jobs/{job_id}/download")
-def download_job_video(job_id: int) -> FileResponse:
+def download_job_video(
+    job_id: int,
+    resolution: str | None = Query(
+        None,
+        description="Optional resolution variant e.g. 360p, 480p, 720p, 1080p",
+    ),
+) -> FileResponse:
     """Download the finalized rendered video file with attachment disposition."""
     storage = get_storage_service()
     with get_session() as session:
@@ -1461,6 +1669,17 @@ def download_job_video(job_id: int) -> FileResponse:
             )
 
         local_path = storage.get_local_path(job.output_video_path)
+        if resolution:
+            res_key = resolution.strip().lower()
+            stem = local_path.stem
+            for k in ["360p", "480p", "720p", "1080p"]:
+                if stem.endswith(f"_{k}"):
+                    stem = stem[: -len(f"_{k}")]
+                    break
+            variant = local_path.parent / f"{stem}_{res_key}.mp4"
+            if variant.exists():
+                local_path = variant
+
         if not local_path.exists():
             raise HTTPException(
                 status_code=404, detail=f"Video file for job {job_id} not found on disk"
@@ -1778,6 +1997,122 @@ def save_config_yaml(req: ConfigSaveRequest) -> dict[str, Any]:
         "config_source": settings.config_source_label,
         "settings": get_settings(),
     }
+
+
+@app.get("/api/config/beat-generator")
+def get_beat_generator_config(
+    filename: str | None = Query(default=None, description="Optional prompt config filename"),
+) -> dict[str, Any]:
+    """Fetch beat generator prompt configuration YAML."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        scr_repo = ScriptRepository(session)
+        cost_repo = CostRepository(session)
+        script_svc = ScriptService(art_repo, scr_repo, cost_repo)
+        try:
+            data = script_svc.get_beat_generator_config(filename=filename)
+            available = script_svc.list_beat_generator_configs()
+            data["available_files"] = available
+            return data
+        except FileNotFoundError as fnf:
+            raise HTTPException(status_code=404, detail=str(fnf)) from fnf
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve)) from ve
+
+
+@app.post("/api/config/beat-generator")
+def update_beat_generator_config(
+    req: BeatConfigUpdateRequest,
+) -> dict[str, Any]:
+    """Update beat generator prompt configuration YAML."""
+    with get_session() as session:
+        art_repo = ArticleRepository(session)
+        scr_repo = ScriptRepository(session)
+        cost_repo = CostRepository(session)
+        action_repo = ActionLogRepository(session)
+        script_svc = ScriptService(art_repo, scr_repo, cost_repo)
+
+        with action_repo.track_operation(
+            stage="config",
+            action="update_beat_generator_config",
+            actor="web",
+            details={"filename": req.filename or "beat_sheet.yaml"},
+        ):
+            try:
+                data = script_svc.update_beat_generator_config(
+                    content=req.content,
+                    filename=req.filename,
+                )
+                return {
+                    "status": "success",
+                    **data,
+                }
+            except ValueError as ve:
+                raise HTTPException(status_code=400, detail=str(ve)) from ve
+
+
+# ---------------------------------------------------------------------------
+# System Configuration and Model Registry Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/api/config/system", response_model=SystemConfigResponse)
+def get_system_configuration() -> SystemConfigResponse:
+    """Retrieve full system configuration structured per current application architecture."""
+    service = SystemConfigService()
+    return service.get_system_config()
+
+
+@app.post("/api/config/system", response_model=SystemConfigResponse)
+def update_system_configuration(req: SystemConfigUpdateRequest) -> SystemConfigResponse:
+    """Update modular system configuration sections and hot-reload runtime settings."""
+    service = SystemConfigService()
+    return service.update_system_config(req)
+
+
+@app.get("/api/config/models", response_model=list[ModelDefinitionResponse])
+def get_registered_models() -> list[ModelDefinitionResponse]:
+    """List all model definitions in the unified provider-agnostic model registry."""
+    service = SystemConfigService()
+    return service.list_models()
+
+
+@app.post("/api/config/models", response_model=ModelDefinitionResponse)
+def register_or_update_model(model_def: ModelDefinition) -> ModelDefinitionResponse:
+    """Register a new model definition or update existing entry in config.yaml."""
+    service = SystemConfigService()
+    return service.add_or_update_model(model_def)
+
+
+@app.delete("/api/config/models/{model_name}")
+def delete_registered_model(model_name: str) -> dict[str, Any]:
+    """Delete a model definition from the registry and remove from role fallback chains."""
+    service = SystemConfigService()
+    deleted = service.delete_model(model_name)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Model '{model_name}' not found in registry")
+    return {"status": "success", "message": f"Deleted model '{model_name}' from registry"}
+
+
+@app.get("/api/config/roles", response_model=RoleMappingsConfig)
+def get_role_fallback_chains() -> RoleMappingsConfig:
+    """Retrieve ordered model fallback priority lists for all pipeline roles."""
+    service = SystemConfigService()
+    return service.get_role_mappings()
+
+
+@app.post("/api/config/roles", response_model=RoleMappingsConfig)
+def update_role_fallback_chains(req: RoleFallbacksUpdateRequest) -> RoleMappingsConfig:
+    """Update ordered model fallback priority lists for pipeline roles."""
+    service = SystemConfigService()
+    return service.update_role_mappings(req)
+
+
+@app.post("/api/config/models/test", response_model=ModelTestResponse)
+def test_registered_model(req: ModelTestRequest) -> ModelTestResponse:
+    """Execute live latency and capability ping test against a registered model."""
+    service = SystemConfigService()
+    return service.test_model_connection(req.model_name, req.prompt)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,56 @@
+{
+  "title": "Next-Gen AI Reasoning: Scaling Laws Rewritten",
+  "total_target_duration_seconds": 50.0,
+  "beats": [
+    {
+      "beat_number": 1,
+      "beat_type": "hook",
+      "core_point": "A fundamental shift in AI architecture has broken the parameter scaling race.",
+      "visual_direction": "Fast macro zoom into glowing silicon wafer die with pulsing cyan circuit traces",
+      "on_screen_text": "SCALING LAWS BROKEN",
+      "target_duration_seconds": 6.5,
+      "emotion": "alarm",
+      "shot_type": "macro"
+    },
+    {
+      "beat_number": 2,
+      "beat_type": "context",
+      "core_point": "Frontier labs confirmed test-time search loops allow compact 8B models to beat 70B giants.",
+      "visual_direction": "Aisle of high-density data center server racks illuminated by neon blue status indicators",
+      "on_screen_text": "8B BEATS 70B",
+      "target_duration_seconds": 11.0,
+      "emotion": "technical_focus",
+      "shot_type": "wide"
+    },
+    {
+      "beat_number": 3,
+      "beat_type": "breakthrough",
+      "core_point": "Instead of bigger weights, models generate internal reasoning trees and verify logic before answering.",
+      "visual_direction": "3D motion graphic showing branching decision tree with green verification nodes",
+      "on_screen_text": "VERIFIED SEARCH TREES",
+      "target_duration_seconds": 13.5,
+      "emotion": "awe",
+      "shot_type": "graphic"
+    },
+    {
+      "beat_number": 4,
+      "beat_type": "skepticism",
+      "core_point": "Engineers warn that twenty-fold inference latency and token costs make real-time chat prohibitive.",
+      "visual_direction": "Software developer shaking head while terminal charts display skyrocketing inference costs",
+      "on_screen_text": "20X LATENCY SURGE",
+      "target_duration_seconds": 11.0,
+      "emotion": "skepticism",
+      "shot_type": "medium"
+    },
+    {
+      "beat_number": 5,
+      "beat_type": "outro",
+      "core_point": "The parameter war is officially over. The real battleground has moved to runtime compute.",
+      "visual_direction": "Pull-out camera move revealing modern studio workspace with glowing animated channel card",
+      "on_screen_text": "THE RUNTIME REVOLUTION",
+      "target_duration_seconds": 8.0,
+      "emotion": "neutral",
+      "shot_type": "close_up"
+    }
+  ]
+}

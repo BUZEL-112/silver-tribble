@@ -1,6 +1,8 @@
 """Remotion video rendering bridge utilizing subprocess execution."""
 
 import base64
+import os
+import platform
 import shutil
 import subprocess
 import time
@@ -38,6 +40,18 @@ class RenderService:
         self.remotion_dir = remotion_dir or settings.remotion_project_dir
         self.output_dir = output_dir or settings.remotion_output_dir
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    @staticmethod
+    def get_chromium_headless_flags() -> list[str]:
+        """Return Chromium headless flags for Linux and container environments."""
+        is_linux_or_docker = (
+            platform.system().lower() == "linux"
+            or Path("/.dockerenv").exists()
+            or bool(os.environ.get("PORT"))
+        )
+        if is_linux_or_docker:
+            return ["--no-sandbox", "--disable-setuid-sandbox"]
+        return []
 
     def prepare_render_props(
         self,
@@ -252,6 +266,7 @@ class RenderService:
             f"--props={props_file.resolve()}",
             "--overwrite",
         ]
+        cmd.extend(self.get_chromium_headless_flags())
 
         try:
             subprocess.run(

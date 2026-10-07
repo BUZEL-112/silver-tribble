@@ -78,3 +78,25 @@ def action_repo(db_session: Session) -> ActionLogRepository:
 @pytest.fixture
 def asset_repo(db_session: Session) -> AssetRepository:
     return AssetRepository(db_session)
+
+
+@pytest.fixture(autouse=True)
+def _reset_web_state_between_tests() -> Generator[None, None, None]:
+    """Reset web rate limiters, locks, and metrics to prevent state leakage between tests."""
+    from src.web import pipeline_metrics, rate_limiter, render_lock
+
+    rate_limiter.reset()
+    pipeline_metrics.reset()
+    if render_lock.locked():
+        try:
+            render_lock.release()
+        except RuntimeError:
+            pass
+    yield
+    rate_limiter.reset()
+    pipeline_metrics.reset()
+    if render_lock.locked():
+        try:
+            render_lock.release()
+        except RuntimeError:
+            pass

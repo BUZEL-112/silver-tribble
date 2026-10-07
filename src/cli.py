@@ -13,7 +13,11 @@ from rich.table import Table
 from src.core.config import settings
 from src.core.database import get_session, init_db
 from src.flows.video_pipeline_flow import run_roundup_pipeline, run_video_pipeline
-from src.models.schemas import SentenceMediaPlacement, WordCaption, YouTubeUploadRequest
+from src.models.schemas import (
+    SentenceMediaPlacement,
+    WordCaption,
+    YouTubeUploadRequest,
+)
 from src.repositories.action_log_repository import ActionLogRepository
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.asset_repository import AssetRepository
@@ -24,6 +28,7 @@ from src.services.cache_pruning_service import CachePruningService
 from src.services.caption_service import CaptionService
 from src.services.cluster_review_service import ClusterReviewService
 from src.services.clustering_service import ClusteringService
+from src.services.demo_service import DemoService
 from src.services.health_service import HealthService
 from src.services.job_queue_service import JobQueueService
 from src.services.media_service import MediaService
@@ -2708,6 +2713,142 @@ def publish_to_youtube(
         else:
             console.print(f"[bold red]YouTube upload failed:[/bold red] {exc}")
         raise typer.Exit(code=1)
+
+
+@app.command(name="demo")
+def demo_pipeline(
+    aspect_ratio: Annotated[
+        str,
+        typer.Option("--aspect-ratio", "-a", help="Aspect ratio (9:16 or 16:9)"),
+    ] = "9:16",
+    dry_run: Annotated[
+        bool,
+        typer.Option("--dry-run", help="Force mock render without Remotion CLI"),
+    ] = False,
+    as_json: Annotated[
+        bool,
+        typer.Option("--json", help="Output machine-readable JSON result"),
+    ] = False,
+) -> None:
+    """Run zero-API-key local sandbox demo pipeline without external credentials."""
+
+    def on_progress(stage: str, details: dict[str, Any]) -> None:
+        if as_json:
+            return
+        if stage == "ingestion":
+            console.print(
+                Panel(
+                    f"[bold green]Seeded Mock Article[/bold green]\n"
+                    f"Title: {details.get('title')}\n"
+                    f"Source: {details.get('source')}\n"
+                    f"Link: {details.get('link')}\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 1: News Ingestion",
+                    border_style="cyan",
+                )
+            )
+        elif stage == "clustering":
+            console.print(
+                Panel(
+                    f"[bold green]Clustered Story[/bold green]\n"
+                    f"Cluster ID: #{details.get('cluster_id')}\n"
+                    f"Cluster Hash: {details.get('cluster_hash')}\n"
+                    f"Articles: {details.get('article_count')}\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 2: FastEmbed / Local Clustering",
+                    border_style="magenta",
+                )
+            )
+        elif stage == "scripting":
+            console.print(
+                Panel(
+                    f"[bold green]Generated Script Outline[/bold green]\n"
+                    f"Script ID: #{details.get('script_id')}\n"
+                    f"Title: {details.get('title')}\n"
+                    f"Beats: {details.get('beats_count')} structured beats\n"
+                    f"Aspect Ratio: {details.get('aspect_ratio')}\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 3: 5-Beat Comedic Script",
+                    border_style="yellow",
+                )
+            )
+        elif stage == "tts":
+            console.print(
+                Panel(
+                    f"[bold green]Synthesized Voice Narration[/bold green]\n"
+                    f"Job ID: #{details.get('job_id')}\n"
+                    f"Audio File: {details.get('audio_path')}\n"
+                    f"Audio Duration: {details.get('duration_seconds')}s\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 4: Edge-TTS / Local Audio Synthesis",
+                    border_style="blue",
+                )
+            )
+        elif stage == "alignment":
+            console.print(
+                Panel(
+                    f"[bold green]Aligned Word Captions[/bold green]\n"
+                    f"Captions Path: {details.get('captions_path')}\n"
+                    f"Timed Words: {details.get('captions_count')} tokens\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 5: Whisper / Synthetic Alignment",
+                    border_style="cyan",
+                )
+            )
+        elif stage == "render":
+            render_type = "Mock Render" if details.get("is_mock_render") else "Remotion MP4 Render"
+            console.print(
+                Panel(
+                    f"[bold green]Video Render Complete[/bold green]\n"
+                    f"Engine: {render_type}\n"
+                    f"Output: {details.get('video_path')}\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 6: Motion Graphics Rendering",
+                    border_style="green",
+                )
+            )
+
+    if not as_json:
+        console.print(
+            Panel(
+                "[bold blue]Starting Zero-API-Key Local Sandbox Demo[/bold blue]\n"
+                "Demonstrating end-to-end video pipeline using local fallbacks.",
+                title="AI Video Studio Demo",
+                border_style="bright_blue",
+            )
+        )
+
+    with get_session() as session:
+        service = DemoService(session=session)
+        result = service.run_demo(
+            aspect_ratio=aspect_ratio,
+            dry_run=dry_run,
+            progress_callback=on_progress,
+        )
+
+    if as_json:
+        typer.echo(json.dumps(result.to_dict(), indent=2))
+        return
+
+    summary_table = Table(title="Demo Pipeline Execution Summary", border_style="green")
+    summary_table.add_column("Stage", style="bold")
+    summary_table.add_column("Duration (s)", justify="right")
+    for stg, dur in result.stage_durations.items():
+        summary_table.add_row(stg.capitalize(), f"{dur:.3f}")
+    console.print(summary_table)
+
+    engine_label = "Mock Engine" if result.is_mock_render else "Remotion Rendered"
+    console.print(
+        Panel(
+            f"[bold green]Demo Completed Successfully[/bold green]\n"
+            f"Title: {result.title}\n"
+            f"Duration: {result.duration_seconds:.2f}s\n"
+            f"Video: {result.video_path}\n"
+            f"Engine: {engine_label}\n"
+            f"Status: Zero external API keys used (Sandbox Verified)",
+            border_style="green",
+        )
+    )
 
 
 if __name__ == "__main__":

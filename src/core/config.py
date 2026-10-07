@@ -490,6 +490,16 @@ def flatten_yaml_data(data: dict[str, Any]) -> dict[str, Any]:
         if "refresh_token" in yt:
             flat["youtube_refresh_token"] = yt["refresh_token"]
 
+    # 17. Rate Limiting section
+    if "rate_limit" in data and isinstance(data["rate_limit"], dict):
+        rl = data["rate_limit"]
+        if "heavy_runs_per_hour" in rl and rl["heavy_runs_per_hour"] is not None:
+            flat["rate_limit_heavy_runs_per_hour"] = int(rl["heavy_runs_per_hour"])
+        if "read_req_per_minute" in rl and rl["read_req_per_minute"] is not None:
+            flat["rate_limit_read_req_per_minute"] = int(rl["read_req_per_minute"])
+        if "enabled" in rl and rl["enabled"] is not None:
+            flat["rate_limit_enabled"] = bool(rl["enabled"])
+
     return {k: v for k, v in flat.items() if v is not None}
 
 
@@ -927,6 +937,20 @@ class Settings(BaseSettings):
     cost_monthly_budget_usd: float | None = Field(
         default=None,
         description="Optional monthly cost cap in USD to halt automated runs",
+    )
+
+    # Rate Limiting
+    rate_limit_heavy_runs_per_hour: int = Field(
+        default=5,
+        description="Maximum allowed heavy pipeline execution runs per hour per client IP",
+    )
+    rate_limit_read_req_per_minute: int = Field(
+        default=120,
+        description="Maximum allowed read requests per minute per client IP",
+    )
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Flag to toggle in-memory rate limiting enforcement",
     )
 
     # YouTube Direct Publishing OAuth

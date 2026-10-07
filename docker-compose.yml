@@ -27,6 +27,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
+      PORT: 8000
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-ai_news_video}
       APP_CONFIG_FILE: /data/config.yaml
       DATA_DIR: /data

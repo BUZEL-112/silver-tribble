@@ -41,6 +41,9 @@ RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Create non-root user with UID 1000 for Hugging Face Spaces compliance
+RUN useradd -m -u 1000 user || true
+
 WORKDIR /app
 
 # Install Python project dependencies
@@ -61,12 +64,19 @@ COPY remotion/ /app/remotion/
 COPY scripts/ /app/scripts/
 COPY config_example.yaml /app/config_example.yaml
 
-# Create persistent storage directories
-RUN mkdir -p /data/assets /data/media /data/audio /data/captions /data/render_props /app/output/videos \
+# Create persistent storage directories and assign permissions for UID 1000
+RUN mkdir -p /data/assets /data/media /data/audio /data/captions /data/render_props /app/output/videos /app/artifacts/media \
+    && chown -R 1000:1000 /app /data /home/user \
+    && chmod -R 777 /data /app/output /app/artifacts \
     && chmod +x /app/scripts/docker_entrypoint.sh
 
-EXPOSE 8000
+# Expose default Hugging Face Spaces port (7860)
+EXPOSE 7860
 
 VOLUME ["/data", "/app/output"]
+
+USER 1000
+ENV HOME=/home/user \
+    PORT=7860
 
 ENTRYPOINT ["/app/scripts/docker_entrypoint.sh"]

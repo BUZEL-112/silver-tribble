@@ -24,8 +24,11 @@ def build_engine(database_url: str | None = None):
     """
     url = database_url or settings.database_url
     # SQLAlchemy 2.x defaults bare "postgresql://" to psycopg (v3).
+    # Also handle "postgres://" schemes commonly provided by Supabase.
     # This project ships psycopg2-binary, so pin the dialect explicitly.
-    if url.startswith("postgresql://"):
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
     connect_args: dict[str, Any] = {}
     if url.startswith("sqlite"):
@@ -48,6 +51,7 @@ def build_engine(database_url: str | None = None):
     return create_engine(
         url,
         pool_pre_ping=True,
+        pool_recycle=300,
         pool_size=10,
         max_overflow=20,
         echo=False,
@@ -69,8 +73,11 @@ def init_db(target_engine=None) -> None:
 
     if "postgresql" in url_str:
         with active_engine.connect() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-            conn.commit()
+            try:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+                conn.commit()
+            except Exception:
+                pass
 
     Base.metadata.create_all(bind=active_engine)
 

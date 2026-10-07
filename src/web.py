@@ -3,13 +3,15 @@
 import hmac
 import json
 import math
+import threading
+import time
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
 from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -62,6 +64,8 @@ from src.repositories.script_repository import ScriptRepository
 from src.services.cache_pruning_service import CachePruningService
 from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
+from src.services.cost_guardrail_service import CostGuardrailService
+from src.services.demo_service import DemoService
 from src.services.health_service import HealthService
 from src.services.job_queue_service import JobQueueService
 from src.services.media_service import MediaService
@@ -107,6 +111,230 @@ if settings.remotion_output_dir.exists():
 if (settings.storage_local_dir / "audio").exists():
     audio_dir = str((settings.storage_local_dir / "audio").resolve())
     app.mount("/static/audio", StaticFiles(directory=audio_dir), name="audio")
+
+
+class InMemoryRateLimiter:
+    """Thread-safe in-memory sliding window rate limiter."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._records: dict[str, list[float]] = {}
+
+    def is_allowed(
+        self,
+        key: str,
+        limit: int,
+        window_seconds: float,
+    ) -> tuple[bool, dict[str, Any]]:
+        """Evaluate if request for key is permitted under limit within window_seconds.
+
+        Returns:
+            Tuple of (allowed, metadata) containing limit, window, retry_after, and remaining count.
+        """
+        now = time.time()
+        cutoff = now - window_seconds
+        with self._lock:
+            timestamps = self._records.get(key, [])
+            timestamps = [ts for ts in timestamps if ts > cutoff]
+            if len(timestamps) >= limit:
+                retry_after = int(math.ceil(timestamps[0] + window_seconds - now))
+                self._records[key] = timestamps
+                return False, {
+                    "limit": limit,
+                    "window_seconds": window_seconds,
+                    "retry_after": max(1, retry_after),
+                    "remaining": 0,
+                }
+            timestamps.append(now)
+            self._records[key] = timestamps
+            remaining = max(0, limit - len(timestamps))
+            return True, {
+                "limit": limit,
+                "window_seconds": window_seconds,
+                "retry_after": 0,
+                "remaining": remaining,
+            }
+
+    def reset(self) -> None:
+        """Clear all rate limit tracking records."""
+        with self._lock:
+            self._records.clear()
+
+
+class PipelineMetrics:
+    """Thread-safe Prometheus metrics collector for pipeline telemetry."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self.runs_success: int = 0
+        self.runs_failure: int = 0
+        self.stage_durations: dict[str, float] = {
+            "ingestion": 0.0,
+            "clustering": 0.0,
+            "script": 0.0,
+            "tts": 0.0,
+            "caption": 0.0,
+            "render": 0.0,
+        }
+        self.active_render_jobs: int = 0
+
+    def record_run(self, success: bool) -> None:
+        """Increment success or failure count for pipeline runs."""
+        with self._lock:
+            if success:
+                self.runs_success += 1
+            else:
+                self.runs_failure += 1
+
+    def record_stage_duration(self, stage: str, duration: float) -> None:
+        """Record latest execution duration for a specific pipeline stage."""
+        with self._lock:
+            self.stage_durations[stage] = max(0.0, float(duration))
+
+    def set_active_render_jobs(self, count: int) -> None:
+        """Set gauge count for active video render jobs."""
+        with self._lock:
+            self.active_render_jobs = max(0, count)
+
+    def reset(self) -> None:
+        """Reset counters and gauge metrics to initial zero values."""
+        with self._lock:
+            self.runs_success = 0
+            self.runs_failure = 0
+            for stage in self.stage_durations:
+                self.stage_durations[stage] = 0.0
+            self.active_render_jobs = 0
+
+    def generate_prometheus_text(
+        self,
+        total_spend: float,
+        daily_budget: float,
+        active_render_jobs: int | None = None,
+    ) -> str:
+        """Format tracked telemetry into Prometheus text format."""
+        with self._lock:
+            active_jobs = (
+                self.active_render_jobs if active_render_jobs is None else active_render_jobs
+            )
+            lines = [
+                "# HELP ai_video_pipeline_runs_total Total number of pipeline execution runs.",
+                "# TYPE ai_video_pipeline_runs_total counter",
+                f'ai_video_pipeline_runs_total{{status="success"}} {self.runs_success}',
+                f'ai_video_pipeline_runs_total{{status="failure"}} {self.runs_failure}',
+                "",
+                "# HELP ai_video_pipeline_duration_seconds Stage duration in seconds.",
+                "# TYPE ai_video_pipeline_duration_seconds gauge",
+            ]
+            for stage in ["ingestion", "clustering", "script", "tts", "caption", "render"]:
+                duration = self.stage_durations.get(stage, 0.0)
+                m_key = f'ai_video_pipeline_duration_seconds{{stage="{stage}"}}'
+                lines.append(f"{m_key} {duration:.4f}")
+
+            lines.extend(
+                [
+                    "",
+                    "# HELP ai_video_total_spend_usd Cumulative AI API expenditure in USD.",
+                    "# TYPE ai_video_total_spend_usd gauge",
+                    f"ai_video_total_spend_usd {total_spend:.4f}",
+                    "",
+                    "# HELP ai_video_daily_budget_usd Configured daily budget cap in USD.",
+                    "# TYPE ai_video_daily_budget_usd gauge",
+                    f"ai_video_daily_budget_usd {daily_budget:.4f}",
+                    "",
+                    "# HELP ai_video_active_render_jobs Current number of active render jobs.",
+                    "# TYPE ai_video_active_render_jobs gauge",
+                    f"ai_video_active_render_jobs {active_jobs}",
+                    "",
+                ]
+            )
+            return "\n".join(lines)
+
+
+# Operational singletons for rate limiting, budget guardrails, concurrency, and metrics
+cost_guardrail = CostGuardrailService()
+render_lock = threading.Lock()
+rate_limiter = InMemoryRateLimiter()
+pipeline_metrics = PipelineMetrics()
+
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP address from proxy headers or connection info."""
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "127.0.0.1"
+
+
+def enforce_heavy_rate_limit(request: Request) -> None:
+    """Validate client request against heavy pipeline execution rate limit."""
+    if not settings.rate_limit_enabled:
+        return
+
+    client_ip = get_client_ip(request)
+    key = f"heavy:{client_ip}"
+    allowed, meta = rate_limiter.is_allowed(
+        key=key,
+        limit=settings.rate_limit_heavy_runs_per_hour,
+        window_seconds=3600.0,
+    )
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=(
+                f"Rate limit exceeded for heavy execution endpoints: "
+                f"{meta['limit']} runs per hour allowed. "
+                f"Retry after {meta['retry_after']} seconds."
+            ),
+            headers={"Retry-After": str(meta["retry_after"])},
+        )
+
+
+def enforce_cost_guardrail() -> None:
+    """Validate current spending against budget caps before running heavy operations."""
+    proceed_result = cost_guardrail.can_proceed()
+    if isinstance(proceed_result, tuple):
+        can_proceed, message = proceed_result
+    else:
+        can_proceed, message = bool(proceed_result), "Cost guardrail budget exceeded"
+
+    if not can_proceed:
+        raise HTTPException(
+            status_code=429,
+            detail=message or "Cost guardrail budget exceeded",
+        )
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next: Any) -> Response:
+    """Middleware enforcing general rate limits on read requests."""
+    if settings.rate_limit_enabled and request.method in ("GET", "HEAD"):
+        path = request.url.path
+        if path != "/metrics" and not path.startswith("/static"):
+            client_ip = get_client_ip(request)
+            key = f"read:{client_ip}"
+            allowed, meta = rate_limiter.is_allowed(
+                key=key,
+                limit=settings.rate_limit_read_req_per_minute,
+                window_seconds=60.0,
+            )
+            if not allowed:
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": (
+                            f"Rate limit exceeded for read endpoints: "
+                            f"{meta['limit']} requests per minute allowed. "
+                            f"Retry after {meta['retry_after']} seconds."
+                        )
+                    },
+                    headers={"Retry-After": str(meta["retry_after"])},
+                )
+    return await call_next(request)
 
 
 class ScriptCreateRequest(BaseModel):
@@ -187,6 +415,11 @@ class PipelineRunRequest(BaseModel):
     aspect_ratio: str = "9:16"
     dry_run: bool = False
     async_mode: bool = False
+
+
+class DemoPipelineRequest(BaseModel):
+    aspect_ratio: str = "9:16"
+    dry_run: bool = False
 
 
 class RoundupRunRequest(BaseModel):
@@ -336,6 +569,7 @@ def get_budget_status() -> dict[str, Any]:
 @app.post("/api/pipeline/ingest")
 def trigger_ingest() -> dict[str, Any]:
     """Trigger RSS feed ingestion and save new articles."""
+    start_time = time.time()
     try:
         service = RssService()
         items = service.fetch_all_feeds()
@@ -350,6 +584,7 @@ def trigger_ingest() -> dict[str, Any]:
             ):
                 saved = art_repo.save_feed_items(items)
 
+        pipeline_metrics.record_stage_duration("ingestion", time.time() - start_time)
         return {
             "status": "success",
             "articles_fetched": len(items),
@@ -361,11 +596,15 @@ def trigger_ingest() -> dict[str, Any]:
 
 @app.post("/api/pipeline/cluster")
 def trigger_cluster(
+    request: Request,
     req: ClusterTriggerRequest | None = None,
     threshold: float | None = Query(None),
     model: str | None = Query(None),
 ) -> dict[str, Any]:
     """Trigger embeddings generation and story clustering."""
+    enforce_heavy_rate_limit(request)
+    enforce_cost_guardrail()
+    cluster_start = time.time()
     try:
         eff_threshold = 0.82
         if req and req.threshold is not None:
@@ -416,6 +655,7 @@ def trigger_cluster(
                 getattr(clusters[0], "cluster_run_id", "run_default") if clusters else None
             )
 
+        pipeline_metrics.record_stage_duration("clustering", time.time() - cluster_start)
         return {
             "status": "success",
             "articles_embedded": embedded_count,
@@ -434,13 +674,27 @@ def trigger_cluster(
                 for idx, c in enumerate(clusters)
             ],
         }
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/pipeline/cluster/run")
+def trigger_cluster_run(
+    request: Request,
+    req: ClusterTriggerRequest | None = None,
+    threshold: float | None = Query(None),
+    model: str | None = Query(None),
+) -> dict[str, Any]:
+    """Execute clustering pipeline run with rate limiting and cost validation."""
+    return trigger_cluster(request=request, req=req, threshold=threshold, model=model)
 
 
 @app.post("/api/pipeline/script")
 def trigger_script(req: ScriptCreateRequest) -> dict[str, Any]:
     """Generate beat sheet and dialogue narration for a story cluster."""
+    script_start = time.time()
     try:
         with get_session() as session:
             art_repo = ArticleRepository(session)
@@ -471,6 +725,7 @@ def trigger_script(req: ScriptCreateRequest) -> dict[str, Any]:
             record_narration = record.full_narration
 
         words = record_narration.split()
+        pipeline_metrics.record_stage_duration("script", time.time() - script_start)
         return {
             "status": "success",
             "script_id": record_id,
@@ -505,14 +760,18 @@ def trigger_voice(req: VoiceCreateRequest) -> dict[str, Any]:
                 job_id=job.id,
                 details={"script_id": req.script_id},
             ):
+                tts_start = time.time()
                 tts = TtsService(storage, cost_repo)
                 audio_path, duration = tts.synthesize_speech(script_record.full_narration, job.id)
+                pipeline_metrics.record_stage_duration("tts", time.time() - tts_start)
                 render_repo.update_job_audio(job.id, audio_path, duration)
 
+                cap_start = time.time()
                 captions_service = CaptionService(storage, cost_repo)
                 captions_path, _captions = captions_service.generate_captions(
                     audio_path, job.id, script_record.full_narration, duration
                 )
+                pipeline_metrics.record_stage_duration("caption", time.time() - cap_start)
                 render_repo.update_job_captions(job.id, captions_path)
             job_id = job.id
 
@@ -605,11 +864,15 @@ def trigger_media(req: MediaCreateRequest) -> dict[str, Any]:
 
 @app.post("/api/pipeline/render")
 def trigger_render(
+    request: Request,
     req: RenderCreateRequest,
     response: Response,
     _: bool = Depends(verify_auth_token),
 ) -> dict[str, Any]:
     """Execute Remotion video render for a job."""
+    enforce_heavy_rate_limit(request)
+    enforce_cost_guardrail()
+
     if req.async_mode:
         queue_svc = JobQueueService()
         queue_svc.submit_render_job(job_id=req.job_id, dry_run=req.dry_run)
@@ -620,6 +883,14 @@ def trigger_render(
             "message": "Render job dispatched to queue",
         }
 
+    if not render_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="A render job is already in progress. Only one concurrent render is permitted.",
+        )
+
+    pipeline_metrics.set_active_render_jobs(1)
+    render_start = time.time()
     try:
         storage = get_storage_service()
         with get_session() as session:
@@ -698,6 +969,7 @@ def trigger_render(
             job_id = job.id
             rendered_video_path = str(output_path.resolve())
 
+        pipeline_metrics.record_stage_duration("render", time.time() - render_start)
         return {
             "status": "success",
             "job_id": job_id,
@@ -707,15 +979,22 @@ def trigger_render(
         raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        pipeline_metrics.set_active_render_jobs(0)
+        render_lock.release()
 
 
 @app.post("/api/pipeline/run")
 def trigger_run_all(
+    request: Request,
     req: PipelineRunRequest,
     response: Response,
     _: bool = Depends(verify_auth_token),
 ) -> dict[str, Any]:
     """Run full pipeline end-to-end from news clustering to finished video."""
+    enforce_heavy_rate_limit(request)
+    enforce_cost_guardrail()
+
     if req.async_mode:
         queue_svc = JobQueueService()
         job_id = queue_svc.submit_pipeline_job(
@@ -738,7 +1017,43 @@ def trigger_run_all(
             aspect_ratio=req.aspect_ratio,
             dry_run=req.dry_run,
         )
+        pipeline_metrics.record_run(success=True)
         return {"status": "success", **result}
+    except HTTPException:
+        pipeline_metrics.record_run(success=False)
+        raise
+    except Exception as exc:
+        pipeline_metrics.record_run(success=False)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/api/pipeline/demo")
+def trigger_demo_get(
+    aspect_ratio: str = Query("9:16", description="Aspect ratio (9:16 or 16:9)"),
+    dry_run: bool = Query(False, description="Force mock render without Remotion CLI"),
+) -> dict[str, Any]:
+    """Execute zero-API-key local sandbox demo pipeline via GET."""
+    try:
+        with get_session() as session:
+            service = DemoService(session=session)
+            result = service.run_demo(aspect_ratio=aspect_ratio, dry_run=dry_run)
+            return result.to_dict()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/api/pipeline/demo")
+def trigger_demo_post(
+    req: DemoPipelineRequest | None = None,
+) -> dict[str, Any]:
+    """Execute zero-API-key local sandbox demo pipeline via POST."""
+    aspect_ratio = req.aspect_ratio if req else "9:16"
+    dry_run = req.dry_run if req else False
+    try:
+        with get_session() as session:
+            service = DemoService(session=session)
+            result = service.run_demo(aspect_ratio=aspect_ratio, dry_run=dry_run)
+            return result.to_dict()
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
@@ -1512,49 +1827,66 @@ async def upload_job_media_file(
 @app.post("/api/jobs/{job_id}/re-render")
 def trigger_job_re_render(job_id: int, req: JobReRenderRequest) -> dict[str, Any]:
     """Re-render finalized video using updated media placements."""
-    storage = get_storage_service()
-    with get_session() as session:
-        render_repo = RenderRepository(session)
-        script_repo = ScriptRepository(session)
-        cost_repo = CostRepository(session)
-        action_repo = ActionLogRepository(session)
+    if not render_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail="A render job is already in progress. Only one concurrent render is permitted.",
+        )
 
-        job = render_repo.get_job_by_id(job_id)
-        if not job:
-            raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
+    pipeline_metrics.set_active_render_jobs(1)
+    render_start = time.time()
+    try:
+        storage = get_storage_service()
+        with get_session() as session:
+            render_repo = RenderRepository(session)
+            script_repo = ScriptRepository(session)
+            cost_repo = CostRepository(session)
+            action_repo = ActionLogRepository(session)
 
-        script = script_repo.get_script_by_id(job.script_id)
-        if not script:
-            raise HTTPException(status_code=404, detail=f"Script {job.script_id} not found")
+            job = render_repo.get_job_by_id(job_id)
+            if not job:
+                raise HTTPException(status_code=404, detail=f"Render job {job_id} not found")
 
-        captions: list[WordCaption] = []
-        if job.captions_path:
-            local_cap_path = storage.get_local_path(job.captions_path)
-            if local_cap_path.exists():
-                cap_data = json.loads(local_cap_path.read_text(encoding="utf-8"))
-                captions = [WordCaption(**item) for item in cap_data]
+            script = script_repo.get_script_by_id(job.script_id)
+            if not script:
+                raise HTTPException(status_code=404, detail=f"Script {job.script_id} not found")
 
-        render_svc = RenderService(render_repo, cost_repo, storage)
-        with action_repo.track_operation(
-            stage="render",
-            action="re_render_video",
-            actor="web",
-            job_id=job.id,
-            details={"dry_run": req.dry_run, "show_indices": req.show_material_indices},
-        ):
-            out_path = render_svc.re_render_job(
+            captions: list[WordCaption] = []
+            if job.captions_path:
+                local_cap_path = storage.get_local_path(job.captions_path)
+                if local_cap_path.exists():
+                    cap_data = json.loads(local_cap_path.read_text(encoding="utf-8"))
+                    captions = [WordCaption(**item) for item in cap_data]
+
+            render_svc = RenderService(render_repo, cost_repo, storage)
+            with action_repo.track_operation(
+                stage="render",
+                action="re_render_video",
+                actor="web",
                 job_id=job.id,
-                dry_run=req.dry_run,
-                show_material_indices=req.show_material_indices,
-                script=script,
-                captions=captions,
-            )
+                details={"dry_run": req.dry_run, "show_indices": req.show_material_indices},
+            ):
+                out_path = render_svc.re_render_job(
+                    job_id=job.id,
+                    dry_run=req.dry_run,
+                    show_material_indices=req.show_material_indices,
+                    script=script,
+                    captions=captions,
+                )
 
-        return {
-            "status": "success",
-            "job_id": job.id,
-            "output_video_path": str(out_path.resolve()),
-        }
+            pipeline_metrics.record_stage_duration("render", time.time() - render_start)
+            return {
+                "status": "success",
+                "job_id": job.id,
+                "output_video_path": str(out_path.resolve()),
+            }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        pipeline_metrics.set_active_render_jobs(0)
+        render_lock.release()
 
 
 @app.post("/api/jobs/{job_id}/convert-resolution")
@@ -2304,6 +2636,31 @@ def prune_system_cache(
         asset_repo = AssetRepository(session)
         pruning_svc = CachePruningService(asset_repo=asset_repo)
         return pruning_svc.prune_cache(retention_hours=retention_hours)
+
+
+@app.get("/metrics")
+def get_prometheus_metrics() -> Response:
+    """Export platform telemetry in standard Prometheus text format."""
+    spend = 0.0
+    try:
+        with get_session() as session:
+            cost_repo = CostRepository(session)
+            spend = cost_repo.get_total_spend()
+    except Exception:
+        spend = 0.0
+
+    daily_budget = settings.cost_daily_budget_usd or 0.0
+    active_renders = 1 if render_lock.locked() else pipeline_metrics.active_render_jobs
+
+    content = pipeline_metrics.generate_prometheus_text(
+        total_spend=spend,
+        daily_budget=daily_budget,
+        active_render_jobs=active_renders,
+    )
+    return Response(
+        content=content,
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
 
 
 # ---------------------------------------------------------------------------

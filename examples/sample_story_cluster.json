@@ -1,0 +1,50 @@
+{
+  "cluster_id": 101,
+  "cluster_hash": "cluster_7f8a9b1c2d3e4f5a6b7c8d9e0f1a2b3c",
+  "cluster_run_id": "run_20261006_090000",
+  "run_cluster_index": 1,
+  "title": "Next-Gen AI Reasoning: Benchmark Leaks and Test-Time Compute Shift",
+  "summary": "Frontier research labs and open-source teams report major breakthroughs in reasoning models. Instead of solely expanding parameter counts, systems leverage test-time compute, Monte Carlo search trees, and synthetic verification loops to match frontier performance at reduced training footprints.",
+  "article_count": 3,
+  "status": "ready",
+  "created_at": "2026-10-06T09:15:00Z",
+  "centroid_similarity": 0.884,
+  "article_ids": [101, 102, 103],
+  "articles": [
+    {
+      "id": 101,
+      "title": "Frontier Lab Unveils Test-Time Compute Scaling Architecture",
+      "source": "TechCrunch AI",
+      "link": "https://techcrunch.com/2026/10/06/test-time-compute-breakthrough",
+      "published_at": "2026-10-06T08:30:00Z",
+      "summary": "Researchers demonstrate that scaling inference compute using tree search algorithms allows compact 8B parameter models to outscore 70B models on mathematics and formal logic benchmarks.",
+      "cosine_similarity": 0.912
+    },
+    {
+      "id": 102,
+      "title": "Open Source Community Replicates Reasoning Search Trees",
+      "source": "VentureBeat",
+      "link": "https://venturebeat.com/ai/2026/10/06/open-source-reasoning-replication",
+      "published_at": "2026-10-06T08:45:00Z",
+      "summary": "An open-source collective releases trained verification models that guide token exploration during generation, eliminating the need for massive pre-training runs.",
+      "cosine_similarity": 0.876
+    },
+    {
+      "id": 103,
+      "title": "Inference Cost Reality Check: The Latency Penalty of Reasoning Loops",
+      "source": "ArXiv AI Review",
+      "link": "https://arxiv.org/abs/2610.99999",
+      "published_at": "2026-10-06T09:00:00Z",
+      "summary": "Benchmarking engineers caution that generating hundreds of candidate paths per answer causes a twenty-fold jump in token consumption and inference latency.",
+      "cosine_similarity": 0.864
+    }
+  ],
+  "keywords": [
+    "reasoning models",
+    "test-time compute",
+    "tree search",
+    "synthetic verification",
+    "inference latency",
+    "benchmarks"
+  ]
+}

@@ -159,25 +159,30 @@ Deploy with flags configured for background video rendering and zero-cost idle s
 
 ```bash
 gcloud run deploy ai-video-pipeline \
-  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/ai-video-repo/ai-video-pipeline:v1" \
+  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/ai-video-repo/ai-video-pipeline:latest" \
   --region="${REGION}" \
   --platform=managed \
   --allow-unauthenticated \
+  --port=7860 \
   --min-instances=0 \
   --max-instances=1 \
   --cpu=2 \
   --memory=2Gi \
   --timeout=900 \
   --no-cpu-throttling \
-  --set-env-vars="PORT=7860,STORAGE_BACKEND=s3,R2_BUCKET_NAME=ai-news-assets" \
+  --set-env-vars="STORAGE_BACKEND=s3" \
+  --set-env-vars="R2_BUCKET_NAME=bucket1" \
+  --set-env-vars="R2_ACCOUNT_ID=[SUPABASE_PROJECT_REF]" \
+  --set-env-vars="R2_PUBLIC_URL=https://[SUPABASE_PROJECT_REF].supabase.co/storage/v1/object/public/bucket1" \
+  --set-env-vars="S3_ENDPOINT_URL=https://[SUPABASE_PROJECT_REF].supabase.co/storage/v1/s3" \
   --set-env-vars="DATABASE_URL=postgresql://postgres.[REF]:[PW]@aws-0-[REG].pooler.supabase.com:5432/postgres?sslmode=require" \
   --set-env-vars="API_AUTH_TOKEN=your-random-32-char-token" \
-  --set-env-vars="OPENAI_API_KEY=your_openai_key,DEEPSEEK_API_KEY=your_deepseek_key,GEMINI_API_KEY=your_gemini_key" \
-  --set-env-vars="R2_ACCESS_KEY_ID=your_s3_key_id,R2_SECRET_ACCESS_KEY=your_s3_secret" \
-  --set-env-vars="R2_PUBLIC_URL=https://[REF].supabase.co/storage/v1/object/public/ai-news-assets"
+  --set-env-vars="R2_ACCESS_KEY_ID=your_s3_key_id" \
+  --set-env-vars="R2_SECRET_ACCESS_KEY=your_s3_secret" \
+  --set-env-vars="GEMINI_API_KEY=your_gemini_key"
 ```
 
-After deployment, note the public service URL output by Google Cloud (e.g., `https://ai-video-pipeline-xyz.a.run.app`).
+After deployment, note the public service URL output by Google Cloud (e.g., `https://ai-video-pipeline-888975339891.us-central1.run.app`).
 
 ---
 

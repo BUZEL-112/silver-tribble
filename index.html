@@ -888,15 +888,18 @@
     // =====================================================================
     // CLOUD RUN BACKEND CONFIGURATION & CLIENT LAYER (deploy.md)
     // =====================================================================
-    const BACKEND_API_URL = window.localStorage.getItem("ai_video_api_url") || "https://ai-video-pipeline-xyz.a.run.app";
-    const AUTH_TOKEN = window.localStorage.getItem("ai_video_auth_token") || "your-token";
+    const DEFAULT_BACKEND_URL = "https://ai-video-pipeline-888975339891.us-central1.run.app";
+    const DEFAULT_AUTH_TOKEN = "c01a1e0431fe2850a396304a79afaf0a";
+
+    const BACKEND_API_URL = window.localStorage.getItem("ai_video_api_url") || DEFAULT_BACKEND_URL;
+    const AUTH_TOKEN = window.localStorage.getItem("ai_video_auth_token") || DEFAULT_AUTH_TOKEN;
 
     function getBackendUrl() {
-      return (window.localStorage.getItem("ai_video_api_url") || "").trim();
+      return (window.localStorage.getItem("ai_video_api_url") || DEFAULT_BACKEND_URL).trim();
     }
 
     function getAuthToken() {
-      return (window.localStorage.getItem("ai_video_auth_token") || "").trim();
+      return (window.localStorage.getItem("ai_video_auth_token") || DEFAULT_AUTH_TOKEN).trim();
     }
 
     function getAuthHeaders() {

@@ -194,8 +194,14 @@ class ModelRegistryService:
             return [emb.tolist() for emb in embeddings]
 
         client = self._resolve_openai_client(model_def)
-        resp = client.embeddings.create(input=texts, model=model_def.model_name)
-        return [item.embedding for item in resp.data]
+        # Provider batch limits (e.g. Gemini limits to at most 100 requests per batch)
+        batch_size = 50
+        all_embeddings: list[list[float]] = []
+        for i in range(0, len(texts), batch_size):
+            chunk = texts[i : i + batch_size]
+            resp = client.embeddings.create(input=chunk, model=model_def.model_name)
+            all_embeddings.extend([item.embedding for item in resp.data])
+        return all_embeddings
 
     def call_multimodal(
         self,

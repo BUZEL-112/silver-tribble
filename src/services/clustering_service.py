@@ -168,9 +168,12 @@ class ClusteringService:
                 provider = "model_registry"
                 total_tokens = len(texts) * 50
 
-            for idx, emb_vals in enumerate(embeddings_data):
-                if idx < len(articles):
-                    self.article_repo.update_article_embedding(articles[idx].id, emb_vals)
+            batch_map = {
+                articles[idx].id: emb_vals
+                for idx, emb_vals in enumerate(embeddings_data)
+                if idx < len(articles)
+            }
+            self.article_repo.update_article_embeddings_batch(batch_map, batch_size=50)
 
             cost_usd = (total_tokens / 1000.0) * 0.00002
             self.cost_repo.log_cost(
@@ -186,12 +189,14 @@ class ClusteringService:
             return len(articles)
         except Exception:
             # Fallback for offline or local test mode: generate deterministic normalized vectors
-            for idx, article in enumerate(articles):
+            fallback_map: dict[int, list[float]] = {}
+            for article in articles:
                 seed = int(hashlib.md5(article.title.encode("utf-8")).hexdigest()[:8], 16)
                 rng = np.random.default_rng(seed)
                 vec = rng.standard_normal(1536)
                 norm_vec = (vec / np.linalg.norm(vec)).tolist()
-                self.article_repo.update_article_embedding(article.id, norm_vec)
+                fallback_map[article.id] = norm_vec
+            self.article_repo.update_article_embeddings_batch(fallback_map, batch_size=50)
             return len(articles)
 
     def cluster_recent_articles(

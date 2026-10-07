@@ -654,6 +654,16 @@ def trigger_cluster(
             cluster_run_id = getattr(service, "last_run_id", None) or (
                 getattr(clusters[0], "cluster_run_id", "run_default") if clusters else None
             )
+            cluster_payload = [
+                {
+                    "id": c.id,
+                    "cluster_run_id": getattr(c, "cluster_run_id", cluster_run_id or "run_default"),
+                    "run_cluster_index": getattr(c, "run_cluster_index", idx + 1),
+                    "title": c.title,
+                    "article_count": c.article_count,
+                }
+                for idx, c in enumerate(clusters)
+            ]
 
         pipeline_metrics.record_stage_duration("clustering", time.time() - cluster_start)
         return {
@@ -663,16 +673,7 @@ def trigger_cluster(
             "clusters_count": clusters_count,
             "top_cluster_id": top_id,
             "cluster_run_id": cluster_run_id,
-            "clusters": [
-                {
-                    "id": c.id,
-                    "cluster_run_id": getattr(c, "cluster_run_id", cluster_run_id or "run_default"),
-                    "run_cluster_index": getattr(c, "run_cluster_index", idx + 1),
-                    "title": c.title,
-                    "article_count": c.article_count,
-                }
-                for idx, c in enumerate(clusters)
-            ],
+            "clusters": cluster_payload,
         }
     except HTTPException:
         raise

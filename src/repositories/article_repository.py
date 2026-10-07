@@ -52,7 +52,43 @@ class ArticleRepository(BaseRepository):
         article = self.session.get(Article, article_id)
         if article:
             article.embedding = embedding
-            self.session.flush()
+            try:
+                self.session.flush()
+            except Exception:
+                self.session.rollback()
+                raise
+
+    def update_article_embeddings_batch(
+        self,
+        embeddings_by_id: dict[int, list[float]] | list[tuple[int, list[float]]],
+        batch_size: int = 50,
+        commit_batches: bool = True,
+    ) -> int:
+        """Assign vector embeddings in batches to prevent long-running transaction timeouts."""
+        if not embeddings_by_id:
+            return 0
+        items = (
+            list(embeddings_by_id.items())
+            if isinstance(embeddings_by_id, dict)
+            else list(embeddings_by_id)
+        )
+        total_updated = 0
+        for i in range(0, len(items), batch_size):
+            chunk = items[i : i + batch_size]
+            for article_id, emb in chunk:
+                article = self.session.get(Article, article_id)
+                if article:
+                    article.embedding = emb
+                    total_updated += 1
+            try:
+                if commit_batches:
+                    self.session.commit()
+                else:
+                    self.session.flush()
+            except Exception:
+                self.session.rollback()
+                raise
+        return total_updated
 
     def get_all_embedded_articles(self, limit: int | None = None) -> list[Article]:
         """Retrieve recent articles that possess embeddings for clustering."""

@@ -92,14 +92,21 @@ class ActionLogRepository(BaseRepository):
             )
         except Exception as exc:
             duration = round(time.time() - start_time, 3)
-            self.record_action(
-                stage=stage,
-                action=action,
-                actor=actor,
-                status="failed",
-                message=str(exc),
-                details=details,
-                job_id=job_id,
-                duration_seconds=duration,
-            )
+            try:
+                self.session.rollback()
+            except Exception:
+                pass
+            try:
+                self.record_action(
+                    stage=stage,
+                    action=action,
+                    actor=actor,
+                    status="failed",
+                    message=str(exc),
+                    details=details,
+                    job_id=job_id,
+                    duration_seconds=duration,
+                )
+            except Exception:
+                pass
             raise

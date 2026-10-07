@@ -59,7 +59,9 @@ def build_engine(database_url: str | None = None):
 
 
 engine = build_engine()
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+SessionLocal = sessionmaker(
+    autocommit=False, autoflush=False, expire_on_commit=False, bind=engine
+)
 
 
 def init_db(target_engine=None) -> None:

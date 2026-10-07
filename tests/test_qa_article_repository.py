@@ -583,3 +583,40 @@ def test_get_trending_clusters_excludes_clusters_older_than_hours_back(
     titles = [c.title for c, _ in result]
     assert "Old News" not in titles
     assert "Fresh News" in titles
+
+
+@pytest.mark.unit
+def test_update_article_embeddings_batch_empty(
+    article_repo: ArticleRepository,
+) -> None:
+    """Batch update with empty input returns 0 and does not error."""
+    assert article_repo.update_article_embeddings_batch({}) == 0
+    assert article_repo.update_article_embeddings_batch([]) == 0
+
+
+@pytest.mark.unit
+def test_update_article_embeddings_batch_multiple(
+    article_repo: ArticleRepository,
+    db_session: Session,
+) -> None:
+    """Batch update correctly sets embeddings across multiple chunks."""
+    art1 = _article(db_session, link="https://example.com/batch-1")
+    art2 = _article(db_session, link="https://example.com/batch-2")
+    art3 = _article(db_session, link="https://example.com/batch-3")
+
+    updates = {
+        art1.id: [0.1, 0.2, 0.3],
+        art2.id: [0.4, 0.5, 0.6],
+        art3.id: [0.7, 0.8, 0.9],
+    }
+
+    count = article_repo.update_article_embeddings_batch(
+        updates,
+        batch_size=2,
+        commit_batches=False,
+    )
+    assert count == 3
+
+    assert art1.embedding == [0.1, 0.2, 0.3]
+    assert art2.embedding == [0.4, 0.5, 0.6]
+    assert art3.embedding == [0.7, 0.8, 0.9]

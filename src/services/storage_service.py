@@ -59,9 +59,12 @@ class S3StorageService(StorageService):
         import boto3
         from botocore.config import Config
 
-        endpoint_url = None
-        if settings.r2_account_id:
-            endpoint_url = f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
+        endpoint_url = settings.s3_endpoint_url
+        if not endpoint_url and settings.r2_account_id:
+            if settings.r2_public_url and "supabase.co" in settings.r2_public_url:
+                endpoint_url = f"https://{settings.r2_account_id}.supabase.co/storage/v1/s3"
+            else:
+                endpoint_url = f"https://{settings.r2_account_id}.r2.cloudflarestorage.com"
 
         self.bucket = settings.r2_bucket_name or "ai-video-assets"
         self.public_url = settings.r2_public_url

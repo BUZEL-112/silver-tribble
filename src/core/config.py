@@ -854,6 +854,7 @@ class Settings(BaseSettings):
     r2_secret_access_key: str | None = None
     r2_bucket_name: str | None = None
     r2_public_url: str | None = None
+    s3_endpoint_url: str | None = None
 
     # Audio Alignment / Whisper
     whisper_model_size: str = Field(

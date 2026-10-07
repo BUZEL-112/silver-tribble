@@ -79,6 +79,8 @@ def init_db(target_engine=None) -> None:
             except Exception:
                 pass
 
+    import src.models.entities  # noqa: F401
+
     Base.metadata.create_all(bind=active_engine)
 
     if "sqlite" in url_str:

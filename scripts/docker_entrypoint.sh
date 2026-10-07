@@ -15,6 +15,9 @@ mkdir -p "${DATA_DIR}/captions" 2>/dev/null || true
 mkdir -p "${DATA_DIR}/render_props" 2>/dev/null || true
 mkdir -p "/app/output/videos" 2>/dev/null || true
 
+# Ensure /app/data points to DATA_DIR for relative path compatibility
+ln -sfn "${DATA_DIR}" /app/data 2>/dev/null || mkdir -p /app/data 2>/dev/null || true
+
 # Seed default config.yaml if not present in mounted volume
 if [ ! -f "${CONFIG_FILE}" ]; then
     echo "No config.yaml found in ${DATA_DIR}. Seeding from config_example.yaml..."
@@ -30,6 +33,11 @@ python -c "from src.core.database import init_db; init_db()" || {
     sleep 3
     python -c "from src.core.database import init_db; init_db()"
 }
+
+# If custom command arguments are passed, execute them
+if [ "$#" -gt 0 ]; then
+    exec "$@"
+fi
 
 PORT="${PORT:-7860}"
 echo "Database ready. Starting web server on port ${PORT}..."

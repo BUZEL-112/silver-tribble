@@ -7,6 +7,7 @@ LABEL description="Production container with FastAPI, Remotion, Chromium, and FF
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/app \
     APP_CONFIG_FILE=/data/config.yaml \
     DATA_DIR=/data
 
@@ -63,9 +64,14 @@ COPY prompts/ /app/prompts/
 COPY remotion/ /app/remotion/
 COPY scripts/ /app/scripts/
 COPY config_example.yaml /app/config_example.yaml
+COPY index.html /app/index.html
 
-# Create persistent storage directories and assign permissions for UID 1000
-RUN mkdir -p /data/assets /data/media /data/audio /data/captions /data/render_props /app/output/videos /app/artifacts/media \
+# Install pipeline package in editable mode with copied source files
+RUN pip install --no-cache-dir --no-deps -e .
+
+# Create persistent storage directories, link /app/data to /data, and assign permissions for UID 1000
+RUN mkdir -p /data/assets /data/media /data/audio /data/captions /data/render_props /app/output/videos /app/artifacts/media /app/data \
+    && ln -sfn /data /app/data \
     && chown -R 1000:1000 /app /data /home/user \
     && chmod -R 777 /data /app/output /app/artifacts \
     && chmod +x /app/scripts/docker_entrypoint.sh

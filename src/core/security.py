@@ -124,3 +124,69 @@ def verify_auth_token(
         detail="Unauthorized: Valid authentication token or session required",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+SECRET_PATTERNS: list[tuple[str, str]] = [
+    (r"AIzaSy[0-9A-Za-z\-_]{33}", "Google API Key"),
+    (r"sk-proj-[0-9A-Za-z\-_]{32,}", "OpenAI Project Key"),
+    (r"sk-[0-9A-Za-z]{32,}", "Generic Secret Key"),
+    (r"ghp_[0-9A-Za-z]{36}", "GitHub Personal Access Token"),
+    (r"xox[baprs]-[0-9A-Za-z\-]+", "Slack Token"),
+    (r"AKIA[0-9A-Z]{16}", "AWS Access Key ID"),
+    (r"-----BEGIN (?:RSA|OPENSSH|EC|DSA) PRIVATE KEY-----", "Private Key"),
+]
+
+BLOCKED_FILES: set[str] = {
+    ".env",
+    ".env.local",
+    "config.yaml",
+    "id_rsa",
+    "id_ed25519",
+}
+
+
+def audit_repository_security() -> list[str]:
+    """Scan git status and unstaged diff for leaked secrets, keys, and blocked files."""
+    import re
+    import subprocess
+    from pathlib import Path
+
+    violations: list[str] = []
+
+    # 1. Inspect git status
+    res = subprocess.run(
+        ["git", "status", "--porcelain"], capture_output=True, text=True, check=False
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        for line in res.stdout.strip().split("\n"):
+            if not line.strip():
+                continue
+            filepath = line[3:].strip()
+            path_obj = Path(filepath)
+
+            if path_obj.name in BLOCKED_FILES:
+                violations.append(f"Blocked file detected: {filepath}")
+
+            if path_obj.suffix in [".pem", ".key", ".p12", ".pfx", ".db", ".sqlite3"]:
+                violations.append(f"Sensitive file extension: {filepath}")
+
+    # 2. Inspect git diff
+    diff_res = subprocess.run(["git", "diff", "HEAD"], capture_output=True, text=True, check=False)
+    if diff_res.returncode != 0:
+        diff_res = subprocess.run(["git", "diff"], capture_output=True, text=True, check=False)
+
+    if diff_res.returncode == 0 and diff_res.stdout:
+        for line in diff_res.stdout.split("\n"):
+            if not line.startswith("+") or line.startswith("+++"):
+                continue
+
+            for pattern, label in SECRET_PATTERNS:
+                if re.search(pattern, line):
+                    if any(
+                        term in line.lower()
+                        for term in ["your_", "dummy", "placeholder", "example"]
+                    ):
+                        continue
+                    violations.append(f"Potential {label} detected: {line[:50]}...")
+
+    return violations

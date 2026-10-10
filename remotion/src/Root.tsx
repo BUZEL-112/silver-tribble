@@ -99,6 +99,28 @@ export const RemotionRoot: React.FC = () => {
           };
         }}
       />
+
+      {/* 1:1 Square Composition */}
+      <Composition
+        id="AiNewsVideoSquare"
+        component={MainVideo}
+        durationInFrames={450}
+        fps={30}
+        width={1080}
+        height={1080}
+        defaultProps={{
+          ...defaultSampleProps,
+          aspectRatio: "1:1",
+        }}
+        calculateMetadata={({ props }) => {
+          const duration = props.durationInSeconds || 15;
+          const fps = props.fps || 30;
+          return {
+            durationInFrames: Math.max(Math.round(duration * fps), 30),
+            fps,
+          };
+        }}
+      />
     </>
   );
 };

@@ -229,6 +229,7 @@ def render_video_task(job_id: int, dry_run: bool = False) -> str:
                 job_id=job.id,
                 captions=captions,
                 beats=script.beats,
+                aspect_ratio=job.aspect_ratio or "9:16",
             )
             try:
                 placements_path.parent.mkdir(parents=True, exist_ok=True)

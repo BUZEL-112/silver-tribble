@@ -16,6 +16,7 @@ from src.models.schemas import (
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.cost_repository import CostRepository
 from src.services.brand_card_service import BrandCardService
+from src.services.image_generation_service import ImageGenerationService
 from src.services.image_search_service import ImageSearchService
 from src.services.media_inspector import MediaInspector
 from src.services.media_router import MediaRouter
@@ -238,6 +239,7 @@ class MediaService:
         self.inspector = MediaInspector()
         self.image_search = ImageSearchService()
         self.brand_cards = BrandCardService()
+        self.image_gen = ImageGenerationService(output_dir=self.media_cache_dir)
         self.router = MediaRouter(
             storage_service=self.storage_service,
             cost_repo=self.cost_repo,
@@ -365,7 +367,8 @@ class MediaService:
                                 continue
                             best_file = files[0]
                             for f in files:
-                                if f.get("quality") in ["sd", "hd"]:
+                                w = f.get("width") or 0
+                                if 1280 <= w <= 2048 or f.get("quality") == "hd":
                                     best_file = f
                                     break
                             link = best_file.get("link")
@@ -429,7 +432,8 @@ class MediaService:
                                 continue
                             best_file = files[0]
                             for f in files:
-                                if f.get("quality") in ["sd", "hd"]:
+                                w = f.get("width") or 0
+                                if 1280 <= w <= 2048 or f.get("quality") == "hd":
                                     best_file = f
                                     break
                             link = best_file.get("link")
@@ -1117,11 +1121,13 @@ class MediaService:
         job_id: int,
         sentence_index: int,
         query: str,
-        provider: Literal["pexels", "giphy"] = "pexels",
+        provider: str = "pexels",
         media_type: Literal["video", "image"] = "video",
         aspect_ratio: str = "9:16",
     ) -> SentenceMediaPlacement:
-        """Search Pexels or Giphy with user query and replace media at sentence_index."""
+        """Search Pexels, Giphy, Web Search, Brand Card, or AI Generation
+        to replace media at sentence_index.
+        """
         placements = self.get_job_placements(job_id)
         if not placements:
             raise ValueError(f"No placements found for job {job_id}")
@@ -1154,11 +1160,21 @@ class MediaService:
             source_url, ext = res
         elif provider == "brand_card":
             dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_card.png"
-            self.brand_cards.generate_card(query, dest)
+            self.brand_cards.generate_card(query, dest, aspect_ratio=aspect_ratio)
             placements[target_idx].local_path = str(dest.resolve())
             placements[target_idx].source_url = ""
             placements[target_idx].media_type = "image"
             placements[target_idx].provider = "brand_card"
+            placements[target_idx].query = query
+            self.save_job_placements(job_id, placements)
+            return placements[target_idx]
+        elif provider in ("ai_generated", "procedural", "flux_generation"):
+            dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_procedural.png"
+            self.image_gen.generate_image(query, dest, aspect_ratio=aspect_ratio)
+            placements[target_idx].local_path = str(dest.resolve())
+            placements[target_idx].source_url = ""
+            placements[target_idx].media_type = "image"
+            placements[target_idx].provider = "ai_generated"
             placements[target_idx].query = query
             self.save_job_placements(job_id, placements)
             return placements[target_idx]

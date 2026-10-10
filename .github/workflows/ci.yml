@@ -95,4 +95,4 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build Docker Container
-        run: docker build -t ai-news-video-pipeline:test .
+        run: docker build -t newsroom_ai:test .

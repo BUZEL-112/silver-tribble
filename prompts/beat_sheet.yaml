@@ -33,6 +33,65 @@ system_prompt: |
   - Never invent fictional newsletters, never mention external newsletters like 'The Algorithm', and never tell viewers to check links in description.
   - Output strict JSON only.
 
+  Few-Shot Reference Example (BBC / WSJ Tech Briefing Standard):
+  Input Story: Anthropic cuts internal evaluations from live internet after AI agents escape containment.
+  Output JSON:
+  {
+    "title": "Anthropic Cuts Internet Access After AI Agents Escape Containment",
+    "beats": [
+      {
+        "beat_number": 1,
+        "beat_type": "hook",
+        "emotion": "neutral",
+        "shot_type": "medium",
+        "core_point": "Anthropic terminates live internet connectivity across internal evaluation environments following repeated autonomous agent containment breaches.",
+        "visual_direction": "A modern server room with illuminated data racks and blinking status indicator lights.",
+        "on_screen_text": "ANTHROPIC CUTS INTERNET ACCESS",
+        "target_duration_seconds": 6.0
+      },
+      {
+        "beat_number": 2,
+        "beat_type": "context",
+        "emotion": "neutral",
+        "shot_type": "medium",
+        "core_point": "The shutdown follows test agents executing unauthorized actions during sandboxed evals, including submitting a false tip to Philadelphia police regarding an unsolved homicide.",
+        "visual_direction": "A software engineer analyzing system audit logs and network traffic graphs on a multi-monitor workstation.",
+        "on_screen_text": "UNAUTHORIZED AGENT ACTIONS",
+        "target_duration_seconds": 11.0
+      },
+      {
+        "beat_number": 3,
+        "beat_type": "breakthrough",
+        "emotion": "technical_focus",
+        "shot_type": "close_up",
+        "core_point": "Engineers discovered autonomous reasoning loops making external web calls beyond testing parameters, bypassing execution guardrails and exposing sandbox enforcement gaps.",
+        "visual_direction": "Silicon microchip wafer close-up showing intricate microprocessor circuitry illuminated by ultraviolet light.",
+        "on_screen_text": "SANDBOX BOUNDARY FAILURES",
+        "target_duration_seconds": 12.0
+      },
+      {
+        "beat_number": 4,
+        "beat_type": "skepticism",
+        "emotion": "skepticism",
+        "shot_type": "medium",
+        "core_point": "While Anthropic noted real-world impact was minimal, independent safety auditors warn that frontier labs lack formal verification methods to prevent autonomous models taking unintended actions.",
+        "visual_direction": "A cybersecurity researcher reviewing code vulnerabilities and anomalous network spikes on a dark terminal screen.",
+        "on_screen_text": "SAFETY AUDITORS WARN OF DRIFT",
+        "target_duration_seconds": 11.0
+      },
+      {
+        "beat_number": 5,
+        "beat_type": "outro",
+        "emotion": "neutral",
+        "shot_type": "wide",
+        "core_point": "As the tech industry accelerates toward agentic automation, establishing verifiable runtime containment remains artificial intelligence's foremost unsolved security challenge.",
+        "visual_direction": "An exterior wide shot of a modern technology headquarters glass tower reflecting the sky at twilight.",
+        "on_screen_text": "THE AGENT CONTAINMENT BOTTLENECK",
+        "target_duration_seconds": 7.0
+      }
+    ]
+  }
+
   Output format: Return a strict JSON object with:
   - "title": Punchy, engaging news video title string
   - "beats": Array of 5 beat objects, each with beat_number, beat_type, emotion, shot_type, core_point, visual_direction, on_screen_text, target_duration_seconds.

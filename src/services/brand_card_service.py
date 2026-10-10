@@ -64,6 +64,24 @@ class BrandCardService:
             "tag": "FRONTIER AI SYSTEMS",
             "sub": "Grok & Colossus Supercomputer",
         },
+        "apple": {
+            "name": "APPLE INTELLIGENCE",
+            "accent": (162, 170, 173),  # Silver
+            "tag": "ON-DEVICE AI ARCHITECTURE",
+            "sub": "Foundation Models & Neural Engine",
+        },
+        "huggingface": {
+            "name": "HUGGING FACE",
+            "accent": (255, 210, 30),  # Yellow
+            "tag": "OPEN SOURCE AI HUB",
+            "sub": "Open Weights & Community Models",
+        },
+        "mistral": {
+            "name": "MISTRAL AI",
+            "accent": (255, 112, 0),  # Orange
+            "tag": "FRONTIER EUROPEAN AI",
+            "sub": "Mistral Large & Open Architecture",
+        },
     }
 
     def detect_brand(self, text: str) -> str | None:
@@ -74,7 +92,7 @@ class BrandCardService:
                 return key
         if "claude" in lower:
             return "anthropic"
-        if "chatgpt" in lower or "gpt" in lower:
+        if "chatgpt" in lower or "gpt" in lower or "o1" in lower or "o3" in lower:
             return "openai"
         if "blackwell" in lower or "jensen" in lower or "geforce" in lower:
             return "nvidia"
@@ -84,6 +102,12 @@ class BrandCardService:
             return "meta"
         if "grok" in lower or "colossus" in lower:
             return "xai"
+        if "apple" in lower or "siri" in lower:
+            return "apple"
+        if "hugging" in lower or "huggingface" in lower:
+            return "huggingface"
+        if "mistral" in lower or "mixtral" in lower:
+            return "mistral"
         return None
 
     def generate_card(
@@ -91,10 +115,18 @@ class BrandCardService:
         entity_key: str,
         output_path: Path,
         custom_subtitle: str | None = None,
-        width: int = 720,
-        height: int = 1280,
+        width: int | None = None,
+        height: int | None = None,
+        aspect_ratio: str = "9:16",
     ) -> Path:
-        """Create a 9:16 high-tech brand card PNG image."""
+        """Create a high-tech visual brand card PNG image adapted to aspect ratio."""
+        if width is None or height is None:
+            if aspect_ratio == "16:9":
+                width, height = 1920, 1080
+            elif aspect_ratio == "1:1":
+                width, height = 1080, 1080
+            else:
+                width, height = 1080, 1920
         cfg = self.BRAND_CONFIGS.get(
             entity_key.lower(),
             {
@@ -131,15 +163,15 @@ class BrandCardService:
             draw.line([(0, y), (width, y)], fill=grid_color, width=1)
 
         # 4. Central card border frame with glowing corner brackets
-        margin_x = 44
-        margin_y = 120
+        margin_x = int(width * 0.06)
+        margin_y = int(height * 0.08)
         card_box = [margin_x, margin_y, width - margin_x, height - margin_y]
 
         # Inner dark card fill
         draw.rectangle(card_box, fill=(12, 18, 30), outline=(30, 41, 59), width=2)
 
         # Corner bracket highlights with brand accent color
-        corner_len = 36
+        corner_len = min(int(width * 0.08), int(height * 0.08), 48)
         c_w = 4
         # Top-left
         draw.line([(margin_x, margin_y), (margin_x + corner_len, margin_y)], fill=accent, width=c_w)
@@ -185,13 +217,13 @@ class BrandCardService:
         )
 
         # 5. Top category badge pill
-        pill_w = 280
-        pill_h = 32
+        pill_w = min(int(width * 0.55), 520)
+        pill_h = 36
         pill_x1 = (width - pill_w) // 2
-        pill_y1 = margin_y + 80
+        pill_y1 = margin_y + int(height * 0.06)
         draw.rounded_rectangle(
             [pill_x1, pill_y1, pill_x1 + pill_w, pill_y1 + pill_h],
-            radius=16,
+            radius=18,
             fill=(20, 30, 48),
             outline=accent,
             width=1,
@@ -199,25 +231,31 @@ class BrandCardService:
         draw.text((width // 2, pill_y1 + pill_h // 2), tag, fill=accent, anchor="mm")
 
         # 6. Central Brand Name
-        center_y = height // 2 - 40
+        center_y = height // 2 - int(height * 0.03)
         # Brand decorative icon line
+        line_w = min(int(width * 0.1), 80)
         draw.line(
-            [(width // 2 - 40, center_y - 80), (width // 2 + 40, center_y - 80)],
+            [
+                (width // 2 - line_w, center_y - int(height * 0.06)),
+                (width // 2 + line_w, center_y - int(height * 0.06)),
+            ],
             fill=accent,
             width=3,
         )
         draw.text((width // 2, center_y), name, fill=(255, 255, 255), anchor="mm")
 
         # 7. Subtitle description
-        draw.text((width // 2, center_y + 80), sub, fill=(148, 163, 184), anchor="mm")
+        draw.text(
+            (width // 2, center_y + int(height * 0.06)), sub, fill=(148, 163, 184), anchor="mm"
+        )
 
         # 8. Bottom tech indicator bar
-        bot_y = height - margin_y - 80
+        bot_y = height - margin_y - int(height * 0.06)
         draw.line(
             [(margin_x + 60, bot_y), (width - margin_x - 60, bot_y)], fill=(30, 41, 59), width=1
         )
         draw.text(
-            (width // 2, bot_y + 30),
+            (width // 2, bot_y + 24),
             "INDUSTRY DEVELOPMENT REPORT",
             fill=(100, 116, 139),
             anchor="mm",

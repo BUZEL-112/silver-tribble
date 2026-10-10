@@ -77,8 +77,11 @@ class ActionLogRepository(BaseRepository):
             duration_seconds=None,
         )
 
+        savepoint = self.session.begin_nested()
         try:
             yield start_log
+            if savepoint.is_active:
+                savepoint.commit()
             duration = round(time.time() - start_time, 3)
             self.record_action(
                 stage=stage,
@@ -93,7 +96,10 @@ class ActionLogRepository(BaseRepository):
         except Exception as exc:
             duration = round(time.time() - start_time, 3)
             try:
-                self.session.rollback()
+                if savepoint.is_active:
+                    savepoint.rollback()
+                else:
+                    self.session.rollback()
             except Exception:
                 pass
             try:

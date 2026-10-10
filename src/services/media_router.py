@@ -299,7 +299,10 @@ class MediaRouter:
             if brand_key:
                 dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_card.png"
                 self.brand_cards.generate_card(
-                    brand_key, dest, custom_subtitle="Official Tech Intelligence"
+                    brand_key,
+                    dest,
+                    custom_subtitle="Official Tech Intelligence",
+                    aspect_ratio=aspect_ratio,
                 )
                 self._index_asset(
                     source_url="",
@@ -339,18 +342,21 @@ class MediaRouter:
                 dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
                 ok, final_path = self._download(src_url, dest, media_service_ref)
                 if ok:
+                    actual_type: Literal["video", "image"] = (
+                        "video" if final_path.suffix.lower() == ".mp4" else "image"
+                    )
                     approved, _ = self.inspector.inspect_candidate(
                         sentence_text=sentence_text,
                         keywords=[initial_query],
                         media_path=final_path,
-                        media_type="image",
+                        media_type=actual_type,
                     )
                     if approved:
                         used_urls.add(src_url)
                         self._index_asset(
                             source_url=src_url,
                             local_path=str(final_path.resolve()),
-                            media_type="image",
+                            media_type=actual_type,
                             provider="giphy",
                             query=initial_query,
                             tags=[initial_query],
@@ -363,7 +369,7 @@ class MediaRouter:
                             start_time=start_time,
                             end_time=end_time,
                             keywords=[initial_query],
-                            media_type="image",
+                            media_type=actual_type,
                             local_path=str(final_path.resolve()),
                             source_url=src_url,
                             provider="giphy",
@@ -586,18 +592,21 @@ class MediaRouter:
                     dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
                     ok, final_path = self._download(src_url, dest, media_service_ref)
                     if ok:
+                        actual_type: Literal["video", "image"] = (
+                            "video" if final_path.suffix.lower() == ".mp4" else "image"
+                        )
                         approved, _ = self.inspector.inspect_candidate(
                             sentence_text=sentence_text,
                             keywords=[core_noun],
                             media_path=final_path,
-                            media_type="image",
+                            media_type=actual_type,
                         )
                         if approved:
                             used_urls.add(src_url)
                             self._index_asset(
                                 source_url=src_url,
                                 local_path=str(final_path.resolve()),
-                                media_type="image",
+                                media_type=actual_type,
                                 provider="giphy",
                                 query=core_noun,
                                 tags=[core_noun],
@@ -610,7 +619,7 @@ class MediaRouter:
                                 start_time=start_time,
                                 end_time=end_time,
                                 keywords=[core_noun],
-                                media_type="image",
+                                media_type=actual_type,
                                 local_path=str(final_path.resolve()),
                                 source_url=src_url,
                                 provider="giphy",
@@ -651,6 +660,7 @@ class MediaRouter:
                 dest,
                 custom_subtitle=(beat_info or {}).get("visual_direction")
                 or "Artificial Intelligence",
+                aspect_ratio=aspect_ratio,
             )
             self._index_asset(
                 source_url="",
@@ -870,6 +880,34 @@ class MediaRouter:
                 if r.status_code == 200 and len(r.content) > 500:
                     dest.parent.mkdir(parents=True, exist_ok=True)
                     dest.write_bytes(r.content)
+                    if dest.suffix.lower() == ".gif":
+                        mp4_file = dest.with_suffix(".mp4")
+                        try:
+                            import subprocess
+
+                            cmd = [
+                                "ffmpeg",
+                                "-y",
+                                "-i",
+                                str(dest),
+                                "-movflags",
+                                "faststart",
+                                "-pix_fmt",
+                                "yuv420p",
+                                "-vf",
+                                "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                                str(mp4_file),
+                            ]
+                            subprocess.run(
+                                cmd,
+                                check=True,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                            if mp4_file.exists() and mp4_file.stat().st_size > 0:
+                                return True, mp4_file
+                        except Exception:
+                            pass
                     return True, dest
         except Exception:
             return False, dest

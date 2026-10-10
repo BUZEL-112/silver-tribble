@@ -710,7 +710,7 @@ class Settings(BaseSettings):
 
     # Watermark and Branding
     channel_badge_text: str = Field(
-        default="AI NEWS BY ESWAR",
+        default="AI NEWS | OCTOBER 10, 2026",
         description="Top header channel badge text in title card",
     )
     watermark_text: str = Field(
@@ -786,7 +786,7 @@ class Settings(BaseSettings):
         description="Vertical caption position percentage offset from bottom for 16:9 canvas",
     )
     horizontal_channel_badge_text: str = Field(
-        default="AI NEWS DESK",
+        default="AI NEWS | OCTOBER 10, 2026",
         description="Channel badge text for 16:9 landscape videos",
     )
     horizontal_lower_third_title: str = Field(
@@ -952,6 +952,10 @@ class Settings(BaseSettings):
     rate_limit_enabled: bool = Field(
         default=True,
         description="Flag to toggle in-memory rate limiting enforcement",
+    )
+    api_only_mode: bool = Field(
+        default=False,
+        description="Operate strictly as a headless API service without HTML dashboard",
     )
 
     # YouTube Direct Publishing OAuth

@@ -28,14 +28,14 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-video-repo/ai-video-pipeline:${{ github.sha }}"
+          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newsroom-ai-repo/newsroom_ai:${{ github.sha }}"
           docker build -t "$IMAGE_TAG" .
           docker push "$IMAGE_TAG"
 
       - name: Deploy to Cloud Run
         run: |
-          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-video-repo/ai-video-pipeline:${{ github.sha }}"
-          gcloud run deploy ai-video-pipeline \
+          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newsroom-ai-repo/newsroom_ai:${{ github.sha }}"
+          gcloud run deploy newsroom-ai \
             --image="$IMAGE_TAG" \
             --region=us-central1 \
             --platform=managed \

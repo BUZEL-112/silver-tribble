@@ -1,7 +1,7 @@
 # System Explanation and Design
 
 ## Overview
-
+this project name is isnspiraed of the hbo series of newsroom  
 The AI News to Video Pipeline automatically transforms trending AI research papers, industry announcements, and tech news into high-retention short-form videos (9:16 vertical shorts or 16:9 widescreen). The system ingests RSS feeds, normalizes articles, computes semantic vector embeddings, clusters related news stories, plans structured narrative beat sheets, synthesizes conversational host narration, retrieves context-aligned visual assets (b-roll videos, GIFs, entity photos, SVG brand cards), and renders final motion graphics via Remotion.
 
 ## System Flow
@@ -297,3 +297,44 @@ silver-tribble/
 ├── uv.lock                          # Dependency lockfile
 └── design.md                        # Architectural design documentation
 ```
+
+## Deployment
+
+## Post Mortem
+
+### 1. Executive Summary
+- Date: 
+- Authors / Contributors: 
+- Project Status / Outcome: 
+- High-Level Summary: 
+
+### 2. Timeline and Key Events
+- [Date / Milestone]: Event description and impact
+
+### 3. What Went Well
+- Success 1: 
+- Success 2: 
+
+### 4. What Went Wrong
+- Issue 1: 
+  - Description: 
+  - Impact: 
+- Issue 2: 
+  - Description: 
+  - Impact: 
+
+### 5. Root Cause Analysis
+- Technical Root Causes: 
+  - Finding: 
+- Architectural / Process Root Causes: 
+  - Finding: 
+
+### 6. Lessons Learned
+- Technical Insights: 
+- Operational and Workflow Insights: 
+
+### 7. Action Items and Next Steps
+| Action Item | Type (Bugfix / Architecture / Process) | Owner | Priority | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| Item 1 | Bugfix | | High | Open |
+| Item 2 | Architecture | | Medium | Open |

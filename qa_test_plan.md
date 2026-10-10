@@ -1,8 +1,8 @@
-# Production QA Test Plan: ai-news-video-pipeline
+# Production QA Test Plan: newsroom_ai
 
 ## Overview
 
-This document defines the complete QA test strategy for the `ai-news-video-pipeline` project. It covers every subsystem across four test layers.
+This document defines the complete QA test strategy for the `newsroom_ai` project. It covers every subsystem across four test layers.
 
 | Layer | Marker | Runner | External Deps |
 |---|---|---|---|

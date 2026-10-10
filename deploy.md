@@ -142,24 +142,24 @@ gcloud services enable \
 
 ### 2. Create Artifact Registry Repository
 ```bash
-gcloud artifacts repositories create ai-video-repo \
+gcloud artifacts repositories create newsroom-ai-repo \
   --repository-format=docker \
   --location="${REGION}" \
-  --description="AI Video Pipeline Docker repository"
+  --description="Newsroom AI Docker repository"
 ```
 
 ### 3. Build and Submit Container Image
 Run from the root of this repository:
 ```bash
-gcloud builds submit --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/ai-video-repo/ai-video-pipeline:v1" .
+gcloud builds submit --tag "${REGION}-docker.pkg.dev/${PROJECT_ID}/newsroom-ai-repo/newsroom_ai:v1" .
 ```
 
 ### 4. Deploy Container to Cloud Run
 Deploy with flags configured for background video rendering and zero-cost idle state:
 
 ```bash
-gcloud run deploy ai-video-pipeline \
-  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/ai-video-repo/ai-video-pipeline:latest" \
+gcloud run deploy newsroom-ai \
+  --image="${REGION}-docker.pkg.dev/${PROJECT_ID}/newsroom-ai-repo/newsroom_ai:latest" \
   --region="${REGION}" \
   --platform=managed \
   --allow-unauthenticated \
@@ -182,7 +182,7 @@ gcloud run deploy ai-video-pipeline \
   --set-env-vars="GEMINI_API_KEY=your_gemini_key"
 ```
 
-After deployment, note the public service URL output by Google Cloud (e.g., `https://ai-video-pipeline-888975339891.us-central1.run.app`).
+After deployment, note the public service URL output by Google Cloud (e.g., `https://newsroom-ai-888975339891.us-central1.run.app`).
 
 ---
 
@@ -194,7 +194,7 @@ After deployment, note the public service URL output by Google Cloud (e.g., `htt
 2. Configure the API endpoint in your frontend code or pass it dynamically:
    In [index.html](file:///teamspace/studios/this_studio/silver-tribble/index.html), add or verify the backend URL target:
    ```javascript
-   const BACKEND_API_URL = window.localStorage.getItem("ai_video_api_url") || "https://ai-video-pipeline-xyz.a.run.app";
+   const BACKEND_API_URL = window.localStorage.getItem("ai_video_api_url") || "https://newsroom-ai-xyz.a.run.app";
    const AUTH_TOKEN = window.localStorage.getItem("ai_video_auth_token") || "your-token";
    ```
 3. Push to your GitHub repository:
@@ -268,14 +268,14 @@ jobs:
 
       - name: Build and Push Docker Image
         run: |
-          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-video-repo/ai-video-pipeline:${{ github.sha }}"
+          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newsroom-ai-repo/newsroom_ai:${{ github.sha }}"
           docker build -t "$IMAGE_TAG" .
           docker push "$IMAGE_TAG"
 
       - name: Deploy to Cloud Run
         run: |
-          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/ai-video-repo/ai-video-pipeline:${{ github.sha }}"
-          gcloud run deploy ai-video-pipeline \
+          IMAGE_TAG="us-central1-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/newsroom-ai-repo/newsroom_ai:${{ github.sha }}"
+          gcloud run deploy newsroom-ai \
             --image="$IMAGE_TAG" \
             --region=us-central1 \
             --platform=managed \

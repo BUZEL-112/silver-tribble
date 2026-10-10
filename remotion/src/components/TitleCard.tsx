@@ -4,7 +4,7 @@ import { spring, useCurrentFrame, useVideoConfig } from "remotion";
 interface TitleCardProps {
   title: string;
   onScreenText: string;
-  aspectRatio: "9:16" | "16:9";
+  aspectRatio: "9:16" | "16:9" | "1:1";
   beatType?: string;
   channelBadgeText?: string;
 }
@@ -14,12 +14,13 @@ export const TitleCard: React.FC<TitleCardProps> = ({
   onScreenText,
   aspectRatio,
   beatType = "context",
-  channelBadgeText = "AI NEWS BY ESWAR",
+  channelBadgeText = "AI NEWS | OCTOBER 10, 2026",
 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
   const isVertical = aspectRatio === "9:16";
+  const isSquare = aspectRatio === "1:1";
 
   const slideIn = spring({
     frame,
@@ -34,9 +35,9 @@ export const TitleCard: React.FC<TitleCardProps> = ({
     <div
       style={{
         position: "absolute",
-        top: isVertical ? "10%" : "6%",
-        left: isVertical ? "6%" : "6%",
-        right: isVertical ? "6%" : "6%",
+        top: isVertical ? "10%" : (isSquare ? "8%" : "6%"),
+        left: isVertical ? "6%" : (isSquare ? "6%" : "6%"),
+        right: isVertical ? "6%" : (isSquare ? "6%" : "6%"),
         zIndex: 50,
         transform: `translateY(${(1 - slideIn) * -30}px)`,
         opacity: slideIn,

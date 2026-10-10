@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Video Studio - Automated YouTube Production Platform</title>
+  <title>Newsroom AI - AI Video Studio</title>
   <link rel="icon" type="image/svg+xml" href="/favicon.ico">
-  <link rel="alternate icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23090d16'/%3E%3Cstop offset='100%25' stop-color='%2302040a'/%3E%3C/linearGradient%3E%3ClinearGradient id='play' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2338bdf8'/%3E%3Cstop offset='50%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3ClinearGradient id='ai' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='60' height='60' rx='15' fill='url(%23bg)' stroke='%2338bdf8' stroke-width='2' stroke-opacity='0.5'/%3E%3Crect x='10' y='27' width='3.5' height='10' rx='1.75' fill='url(%23ai)'/%3E%3Crect x='16' y='20' width='3.5' height='24' rx='1.75' fill='url(%23play)'/%3E%3Cpath d='M46 9 C46 14 51 14 51 14 C51 14 46 14 46 19 C46 14 41 14 41 14 C41 14 46 14 46 9 Z' fill='%2338bdf8'/%3E%3Cpath d='M26 19 C26 17.5 27.6 16.6 28.9 17.4 L47.4 29.8 C48.8 30.7 48.8 32.8 47.4 33.7 L28.9 46.1 C27.6 46.9 26 46.0 26 44.5 Z' fill='url(%23play)'/%3E%3C/svg%3E">
+  <link rel="alternate icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='bg' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%23090d16'/%3E%3Cstop offset='100%25' stop-color='%2302040a'/%3E%3C/linearGradient%3E%3ClinearGradient id='play' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2338bdf8'/%3E%3Cstop offset='50%25' stop-color='%236366f1'/%3E%3Cstop offset='100%25' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3ClinearGradient id='ai' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' stop-color='%2310b981'/%3E%3Cstop offset='100%25' stop-color='%2306b6d4'/%3E%3C/linearGradient%3E%3Cdefs%3E%3Crect x='2' y='2' width='60' height='60' rx='15' fill='url(%23bg)' stroke='%2338bdf8' stroke-width='2' stroke-opacity='0.5'/%3E%3Crect x='10' y='27' width='3.5' height='10' rx='1.75' fill='url(%23ai)'/%3E%3Crect x='16' y='20' width='3.5' height='24' rx='1.75' fill='url(%23play)'/%3E%3Cpath d='M46 9 C46 14 51 14 51 14 C51 14 46 14 46 19 C46 14 41 14 41 14 C41 14 46 14 46 9 Z' fill='%2338bdf8'/%3E%3Cpath d='M26 19 C26 17.5 27.6 16.6 28.9 17.4 L47.4 29.8 C48.8 30.7 48.8 32.8 47.4 33.7 L28.9 46.1 C27.6 46.9 26 46.0 26 44.5 Z' fill='url(%23play)'/%3E%3C/svg%3E">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
@@ -24,7 +24,8 @@
       <div class="flex items-center space-x-3">
         <div id="live-status-dot" class="w-3 h-3 rounded-none-none bg-emerald-500 animate-pulse" title="System Operational"></div>
         <div class="flex items-baseline space-x-2">
-          <span class="font-black text-xl tracking-tight text-white">AI Video Studio</span>
+          <span class="font-black text-xl tracking-tight text-white">Newsroom AI</span>
+          <span class="hidden sm:inline text-xs text-zinc-400 font-mono">(AI Video Studio)</span>
           <span class="text-xs px-2 py-0.5 rounded-none bg-zinc-900 text-blue-400 font-mono font-semibold border border-zinc-700">v2.0</span>
         </div>
         <div id="header-health-pill" class="hidden sm:inline-flex items-center px-2 py-0.5 rounded-none-none text-xs font-mono bg-emerald-950/60 border border-emerald-800/50 text-emerald-400 cursor-pointer" onclick="switchTab('system')">
@@ -4316,9 +4317,11 @@
           previewUrl = p.source_url;
         }
 
-        const isVideo = p.media_type === "video" || (previewUrl && previewUrl.endsWith(".mp4"));
+        const isVideo = p.media_type === "video" ||
+          (p.local_path && (p.local_path.toLowerCase().endsWith(".mp4") || p.local_path.toLowerCase().endsWith(".webm"))) ||
+          (previewUrl && (previewUrl.toLowerCase().split("?")[0].endsWith(".mp4") || previewUrl.toLowerCase().split("?")[0].endsWith(".webm")));
         const mediaTag = isVideo
-          ? `<video src="${previewUrl}" class="w-full h-32 object-cover rounded-none bg-black pointer-events-none" muted preload="metadata"></video>`
+          ? `<video src="${previewUrl}#t=0.001" class="w-full h-32 object-cover rounded-none bg-black pointer-events-none" muted autoplay loop playsinline preload="auto"></video>`
           : `<img src="${previewUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'><rect width=\'100\' height=\'100\' fill=\'%23111827\'/><text x=\'50\' y=\'50\' fill=\'%2364748b\' font-size=\'12\' text-anchor=\'middle\' dy=\'.3em\'>No Preview</text></svg>'}" class="w-full h-32 object-cover rounded-none bg-black pointer-events-none" alt="Scene preview">`;
 
         const provBadge = p.provider === "pexels" ? "bg-emerald-950/60 text-emerald-400 border-emerald-800/40"
@@ -4369,6 +4372,8 @@
               <select id="prov-select-${p.sentence_index}" class="bg-zinc-950 border border-zinc-800 rounded-none px-1.5 py-1 text-[11px] text-zinc-300">
                 <option value="pexels" ${p.provider === 'pexels' ? 'selected' : ''}>Pexels</option>
                 <option value="giphy" ${p.provider === 'giphy' ? 'selected' : ''}>Giphy</option>
+                <option value="ai_generated" ${p.provider === 'ai_generated' ? 'selected' : ''}>AI Depiction</option>
+                <option value="brand_card" ${p.provider === 'brand_card' ? 'selected' : ''}>Brand Card</option>
                 <option value="custom">Custom URL/File</option>
               </select>
               <input type="text" id="input-asset-${p.sentence_index}" placeholder="New query or URL..." value="${escapeHtml(p.query || '')}" class="bg-zinc-950 border border-zinc-800 rounded-none px-2 py-1 text-[11px] text-white flex-1 min-w-0">
@@ -4697,7 +4702,9 @@
         currentUrl = p.source_url;
       }
 
-      const isVid = p.media_type === "video" || (currentUrl && currentUrl.endsWith(".mp4"));
+      const isVid = p.media_type === "video" ||
+        (p.local_path && (p.local_path.toLowerCase().endsWith(".mp4") || p.local_path.toLowerCase().endsWith(".webm"))) ||
+        (currentUrl && (currentUrl.toLowerCase().split("?")[0].endsWith(".mp4") || currentUrl.toLowerCase().split("?")[0].endsWith(".webm")));
       if (isVid && currentUrl) {
         imgEl.classList.add("hidden");
         videoEl.classList.remove("hidden");
@@ -5162,7 +5169,9 @@
 
           const videoEl = document.getElementById("inspector-current-video");
           const imgEl = document.getElementById("inspector-current-img");
-          const isVid = updatedPlacement.media_type === "video" || (updatedUrl && updatedUrl.endsWith(".mp4"));
+          const isVid = updatedPlacement.media_type === "video" ||
+            (updatedPlacement.local_path && (updatedPlacement.local_path.toLowerCase().endsWith(".mp4") || updatedPlacement.local_path.toLowerCase().endsWith(".webm"))) ||
+            (updatedUrl && (updatedUrl.toLowerCase().split("?")[0].endsWith(".mp4") || updatedUrl.toLowerCase().split("?")[0].endsWith(".webm")));
 
           if (isVid && updatedUrl) {
             imgEl.classList.add("hidden");
@@ -6759,7 +6768,8 @@
       const vidEl = document.getElementById("preview-modal-video");
 
       titleEl.textContent = title || "Provider Media Preview";
-      if (mediaType === "video" || (url && url.endsWith(".mp4"))) {
+      const isVideoPreview = mediaType === "video" || (url && (url.toLowerCase().split("?")[0].endsWith(".mp4") || url.toLowerCase().split("?")[0].endsWith(".webm")));
+      if (isVideoPreview) {
         imgEl.classList.add("hidden");
         vidEl.classList.remove("hidden");
         vidEl.src = url;

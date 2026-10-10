@@ -43,8 +43,8 @@ from src.services.youtube_metadata_service import YouTubeMetadataService
 from src.services.youtube_upload_service import YouTubeUploadService
 
 app = typer.Typer(
-    name="ai-video",
-    help="AI News to YouTube Video Generation Pipeline CLI",
+    name="newsroom-ai",
+    help="Newsroom AI: Autonomous AI News to Video Production Pipeline CLI",
     add_completion=False,
     no_args_is_help=True,
 )
@@ -64,15 +64,61 @@ def _get_remote_auth_headers() -> dict[str, str]:
     return {}
 
 
-def print_studio_banner() -> None:
+def print_studio_banner(style: str = "card") -> None:
     """Print clean ASCII studio banner."""
-    banner = (
-        "========================================================================\n"
-        "     AI VIDEO STUDIO: AUTONOMOUS YOUTUBE PRODUCTION PIPELINE v2.0       \n"
-        "  Ingestion | Clustering | Scripting | TTS | Motion Graphics | YouTube  \n"
-        "========================================================================"
+    glyph = "      ▄▀▀▄    \n     ▀▀▀▀▀▀   \n    ▀▀▀▀▀▀▀▀  \n   ▄▀▀    ▀▀▄ \n  ▄▀▀      ▀▀▄"
+
+    models_desc = f"{settings.llm_planning_model} | {settings.llm_writing_model}"
+    meta = (
+        "[bold cyan]Newsroom AI CLI[/bold cyan] [bold white]2.0.0[/bold white]\n"
+        "[bold white]Autonomous AI News-to-Video Studio[/bold white]\n"
+        f"[bright_blue]Models:[/bright_blue] [white]{models_desc}[/white]\n"
+        f"[bright_blue]Voice:[/bright_blue] [white]{settings.tts_provider}[/white] "
+        f"[dim]|[/dim] [bright_blue]Engine:[/bright_blue] [white]Remotion[/white]\n"
+        f"[dim]~/{Path.cwd().name}[/dim]"
     )
-    console.print(Panel(banner, style="bold blue", border_style="blue"))
+
+    grid = Table.grid(padding=(0, 4))
+    grid.add_column(style="bold bright_blue", justify="left")
+    grid.add_column(justify="left")
+    grid.add_row(glyph, meta)
+
+    if style in ("minimal", "glyph"):
+        console.print(grid)
+        return
+
+    big_title = (
+        "[bold bright_blue]"
+        "  █▄ █ █▀▀ █ █ █ █▀▀ █▀█ █▀█ █▀█ █▄█   ▄▀█ █\n"
+        "  █ ▀█ ██▄ ▀▄▀▄▀ ▄██ █▀▄ █▄█ █▄█ █ █   █▀█ █"
+        "[/bold bright_blue]\n"
+    )
+
+    if style == "big":
+        console.print(big_title)
+        return
+
+    card_meta = (
+        "  [bold cyan]Newsroom AI CLI[/bold cyan] [bold white]2.0.0[/bold white]\n"
+        "  [bold white]Autonomous AI News-to-Video Studio[/bold white]\n"
+        f"  [bright_blue]Models:[/bright_blue] [white]{models_desc}[/white]\n"
+        f"  [bright_blue]Voice:[/bright_blue] [white]{settings.tts_provider}[/white] "
+        f"[dim]|[/dim] [bright_blue]Engine:[/bright_blue] [white]Remotion[/white]\n"
+        f"  [dim]~/{Path.cwd().name}[/dim]"
+    )
+
+    card = Table.grid()
+    card.add_row(big_title)
+    card.add_row(card_meta)
+
+    console.print(
+        Panel(
+            card,
+            title="[bold bright_blue]NEWSROOM AI STUDIO[/bold bright_blue]",
+            border_style="bright_blue",
+            padding=(1, 2),
+        )
+    )
 
 
 @app.callback(invoke_without_command=True)
@@ -82,16 +128,21 @@ def main_callback(
 ) -> None:
     """Autonomous AI Video Production Studio CLI."""
     if version:
-        console.print("[bold blue]AI Video Studio[/bold blue] version 2.0.0")
+        console.print("[bold blue]Newsroom AI[/bold blue] version 2.0.0")
         raise typer.Exit()
     if ctx.invoked_subcommand is None:
         print_studio_banner()
 
 
 @app.command(name="banner")
-def show_banner() -> None:
+def show_banner(
+    style: Annotated[
+        str,
+        typer.Option("--style", "-s", help="Banner style: card, minimal, big"),
+    ] = "card",
+) -> None:
     """Display studio startup ASCII banner."""
-    print_studio_banner()
+    print_studio_banner(style=style)
 
 
 def update_env_file(updates: dict[str, str], env_path: Path = Path(".env")) -> None:
@@ -1278,6 +1329,7 @@ def media(
                 job_id=job.id,
                 captions=captions,
                 beats=script.beats,
+                aspect_ratio=job.aspect_ratio or "9:16",
             )
 
         placements_path = settings.media_cache_dir / f"placements_job_{job.id}.json"
@@ -2719,8 +2771,12 @@ def publish_to_youtube(
 def demo_pipeline(
     aspect_ratio: Annotated[
         str,
-        typer.Option("--aspect-ratio", "-a", help="Aspect ratio (9:16 or 16:9)"),
+        typer.Option("--aspect-ratio", "-a", help="Aspect ratio (9:16, 16:9, or 1:1)"),
     ] = "9:16",
+    all_sizes: Annotated[
+        bool,
+        typer.Option("--all-sizes", help="Render demo videos in all sizes (9:16, 16:9, and 1:1)"),
+    ] = False,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Force mock render without Remotion CLI"),
@@ -2795,6 +2851,17 @@ def demo_pipeline(
                     border_style="cyan",
                 )
             )
+        elif stage == "media":
+            console.print(
+                Panel(
+                    f"[bold green]Synthesized Topic Depiction Media[/bold green]\n"
+                    f"Job ID: #{details.get('job_id')}\n"
+                    f"Placements: {details.get('placements_count')} scene assets\n"
+                    f"Duration: {details.get('elapsed')}s",
+                    title="Stage 5b: Topic Depiction Media Generation",
+                    border_style="purple",
+                )
+            )
         elif stage == "render":
             render_type = "Mock Render" if details.get("is_mock_render") else "Remotion MP4 Render"
             console.print(
@@ -2820,6 +2887,53 @@ def demo_pipeline(
 
     with get_session() as session:
         service = DemoService(session=session)
+        if all_sizes:
+            results = service.run_all_sizes(
+                dry_run=dry_run,
+                progress_callback=on_progress,
+            )
+            if as_json:
+                typer.echo(
+                    json.dumps(
+                        {
+                            "status": "success",
+                            "sizes": {ratio: res.to_dict() for ratio, res in results.items()},
+                        },
+                        indent=2,
+                    )
+                )
+                return
+
+            summary_table = Table(title="All-Sizes Demo Execution Summary", border_style="green")
+            summary_table.add_column("Aspect Ratio", style="bold")
+            summary_table.add_column("Resolution")
+            summary_table.add_column("Duration (s)", justify="right")
+            summary_table.add_column("Engine")
+            summary_table.add_column("Video Output File")
+
+            res_map = {"9:16": "1080x1920", "16:9": "1920x1080", "1:1": "1080x1080"}
+            for ratio, res in results.items():
+                eng = "Mock Engine" if res.is_mock_render else "Remotion MP4"
+                summary_table.add_row(
+                    ratio,
+                    res_map.get(ratio, "Custom"),
+                    f"{res.duration_seconds:.2f}",
+                    eng,
+                    res.video_path,
+                )
+            console.print(summary_table)
+
+            console.print(
+                Panel(
+                    f"[bold green]Demo Completed Successfully (All Sizes)[/bold green]\n"
+                    f"Rendered {len(results)} formats: "
+                    "9:16 (Vertical), 16:9 (Horizontal), and 1:1 (Square)\n"
+                    f"Status: Zero external API keys used (Sandbox Verified)",
+                    border_style="green",
+                )
+            )
+            return
+
         result = service.run_demo(
             aspect_ratio=aspect_ratio,
             dry_run=dry_run,
@@ -2842,10 +2956,39 @@ def demo_pipeline(
         Panel(
             f"[bold green]Demo Completed Successfully[/bold green]\n"
             f"Title: {result.title}\n"
+            f"Aspect Ratio: {result.aspect_ratio}\n"
             f"Duration: {result.duration_seconds:.2f}s\n"
             f"Video: {result.video_path}\n"
             f"Engine: {engine_label}\n"
             f"Status: Zero external API keys used (Sandbox Verified)",
+            border_style="green",
+        )
+    )
+
+
+@app.command(name="security-check")
+def security_check() -> None:
+    """Scan git staging area and repository for credentials, tokens, and blocked files."""
+    from src.core.security import audit_repository_security
+
+    console.print("[cyan]Running Newsroom AI pre-deployment security scan...[/cyan]")
+    violations = audit_repository_security()
+
+    if violations:
+        console.print(
+            Panel(
+                "\n".join(f"[bold red]-[/bold red] {v}" for v in violations),
+                title="[bold red]Security Violations Detected[/bold red]",
+                border_style="red",
+            )
+        )
+        raise typer.Exit(code=1)
+
+    console.print(
+        Panel(
+            "[bold green]Security Audit Passed[/bold green]\n"
+            "No API keys, credentials, or blocked files detected in git tracking.",
+            title="[bold green]Clean Deployment Verification[/bold green]",
             border_style="green",
         )
     )

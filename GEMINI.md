@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-`ai-news-video-pipeline` is an automated pipeline that discovers AI news, synthesizes news clusters, generates scripts, produces audio narrations, inspects media assets, and renders videos using Prefect, Google Gemini / LLMs, and Remotion.
+`newsroom_ai` (Newsroom AI) is an automated pipeline that discovers AI news, synthesizes news clusters, generates scripts, produces audio narrations, inspects media assets, and renders videos using Prefect, Google Gemini / LLMs, and Remotion.
 
 ## Directory Structure and Architecture
 

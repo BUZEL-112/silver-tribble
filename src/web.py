@@ -419,6 +419,7 @@ class PipelineRunRequest(BaseModel):
 
 class DemoPipelineRequest(BaseModel):
     aspect_ratio: str = "9:16"
+    all_sizes: bool = False
     dry_run: bool = False
 
 
@@ -841,6 +842,7 @@ def trigger_media(req: MediaCreateRequest) -> dict[str, Any]:
                     job_id=job.id,
                     captions=captions,
                     beats=script.beats,
+                    aspect_ratio=job.aspect_ratio or "9:16",
                 )
 
             placements_path = settings.media_cache_dir / f"placements_job_{job.id}.json"
@@ -944,6 +946,7 @@ def trigger_render(
                     job_id=job.id,
                     captions=captions,
                     beats=script.beats,
+                    aspect_ratio=job.aspect_ratio or "9:16",
                 )
 
             audio_local_path = storage.get_local_path(job.audio_path or "")
@@ -1030,13 +1033,22 @@ def trigger_run_all(
 
 @app.get("/api/pipeline/demo")
 def trigger_demo_get(
-    aspect_ratio: str = Query("9:16", description="Aspect ratio (9:16 or 16:9)"),
+    aspect_ratio: str = Query("9:16", description="Aspect ratio (9:16, 16:9, or 1:1)"),
+    all_sizes: bool = Query(
+        False, description="Render demo videos in all sizes (9:16, 16:9, and 1:1)"
+    ),
     dry_run: bool = Query(False, description="Force mock render without Remotion CLI"),
 ) -> dict[str, Any]:
     """Execute zero-API-key local sandbox demo pipeline via GET."""
     try:
         with get_session() as session:
             service = DemoService(session=session)
+            if all_sizes:
+                results = service.run_all_sizes(dry_run=dry_run)
+                return {
+                    "status": "success",
+                    "sizes": {ratio: res.to_dict() for ratio, res in results.items()},
+                }
             result = service.run_demo(aspect_ratio=aspect_ratio, dry_run=dry_run)
             return result.to_dict()
     except Exception as exc:
@@ -1049,10 +1061,17 @@ def trigger_demo_post(
 ) -> dict[str, Any]:
     """Execute zero-API-key local sandbox demo pipeline via POST."""
     aspect_ratio = req.aspect_ratio if req else "9:16"
+    all_sizes = req.all_sizes if req else False
     dry_run = req.dry_run if req else False
     try:
         with get_session() as session:
             service = DemoService(session=session)
+            if all_sizes:
+                results = service.run_all_sizes(dry_run=dry_run)
+                return {
+                    "status": "success",
+                    "sizes": {ratio: res.to_dict() for ratio, res in results.items()},
+                }
             result = service.run_demo(aspect_ratio=aspect_ratio, dry_run=dry_run)
             return result.to_dict()
     except Exception as exc:
@@ -1804,6 +1823,36 @@ async def upload_job_media_file(
         content = await file.read()
         dest_path.write_bytes(content)
 
+        target_path = dest_path
+        if ext == ".gif":
+            mp4_file = dest_path.with_suffix(".mp4")
+            try:
+                import subprocess
+
+                cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    str(dest_path),
+                    "-movflags",
+                    "faststart",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-vf",
+                    "scale=trunc(iw/2)*2:trunc(ih/2)*2",
+                    str(mp4_file),
+                ]
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                if mp4_file.exists() and mp4_file.stat().st_size > 0:
+                    target_path = mp4_file
+            except Exception:
+                pass
+
         with action_repo.track_operation(
             stage="media",
             action="upload_frame_material",
@@ -1814,7 +1863,7 @@ async def upload_job_media_file(
             updated = media_svc.update_placement_media(
                 job_id=job.id,
                 sentence_index=sentence_index,
-                new_media_path_or_url=str(dest_path.resolve()),
+                new_media_path_or_url=str(target_path.resolve()),
                 provider="custom",
             )
 
@@ -2681,9 +2730,22 @@ def favicon() -> Response:
     return Response(status_code=404)
 
 
-@app.get("/", response_class=HTMLResponse)
-def index() -> HTMLResponse:
-    """Serve the single-page interactive pipeline operations dashboard."""
+@app.get("/")
+def index(request: Request) -> Response:
+    """Serve API overview JSON in API-only mode, or HTML dashboard otherwise."""
+    accept_header = request.headers.get("accept", "")
+    is_api_client = "application/json" in accept_header and "text/html" not in accept_header
+    if settings.api_only_mode or is_api_client:
+        return JSONResponse(
+            content={
+                "service": "AI Video Production Platform API",
+                "status": "online",
+                "version": "1.0.0",
+                "docs": "/docs",
+                "redoc": "/redoc",
+                "health": "/api/health",
+            }
+        )
     if DASHBOARD_TEMPLATE_PATH.exists():
         content = DASHBOARD_TEMPLATE_PATH.read_text(encoding="utf-8")
     else:

@@ -110,3 +110,73 @@ def test_remotion_config_contains_sandbox_setting() -> None:
     assert config_file.exists(), "remotion.config.ts must exist"
     content = config_file.read_text(encoding="utf-8")
     assert "Config.setChromiumSandbox(false)" in content
+
+
+def test_cli_demo_all_sizes_dry_run() -> None:
+    """Validate that 'demo --all-sizes --dry-run' renders all 3 aspect ratios."""
+    result = runner.invoke(app, ["demo", "--all-sizes", "--dry-run"])
+    assert result.exit_code == 0
+    assert "All-Sizes Demo Execution Summary" in result.output
+    assert "9:16" in result.output
+    assert "16:9" in result.output
+    assert "1:1" in result.output
+    assert "Demo Completed Successfully (All Sizes)" in result.output
+
+
+def test_cli_demo_all_sizes_json() -> None:
+    """Validate that 'demo --all-sizes --dry-run --json' produces structured JSON with all sizes."""
+    import json
+
+    result = runner.invoke(app, ["demo", "--all-sizes", "--dry-run", "--json"])
+    assert result.exit_code == 0
+    data = json.loads(result.output.strip())
+    assert data["status"] == "success"
+    assert "sizes" in data
+    assert set(data["sizes"].keys()) == {"9:16", "16:9", "1:1"}
+    for ratio in ["9:16", "16:9", "1:1"]:
+        size_data = data["sizes"][ratio]
+        assert size_data["aspect_ratio"] == ratio
+        assert size_data["is_mock_render"] is True
+        assert size_data["beats_count"] == 5
+
+
+def test_cli_demo_square_aspect_ratio() -> None:
+    """Validate that 'demo --aspect-ratio 1:1 --dry-run' creates 1:1 square video job."""
+    result = runner.invoke(app, ["demo", "--aspect-ratio", "1:1", "--dry-run"])
+    assert result.exit_code == 0
+    assert "Aspect Ratio: 1:1" in result.output
+
+
+def test_web_endpoint_demo_all_sizes() -> None:
+    """Validate GET /api/pipeline/demo?all_sizes=true returns all 3 aspect ratios."""
+    client = TestClient(fastapi_app)
+    response = client.get("/api/pipeline/demo?all_sizes=true&dry_run=true")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "success"
+    assert "sizes" in data
+    assert "9:16" in data["sizes"]
+    assert "16:9" in data["sizes"]
+    assert "1:1" in data["sizes"]
+
+
+def test_demo_media_placements_generated() -> None:
+    """Validate that demo execution generates accurate depiction media placements on disk."""
+    import json
+
+    from src.core.config import settings
+
+    with get_session() as session:
+        service = DemoService(session=session)
+        result = service.run_demo(aspect_ratio="1:1", dry_run=True)
+        placements_file = settings.media_cache_dir / f"placements_job_{result.job_id}.json"
+        assert placements_file.exists()
+        placements = json.loads(placements_file.read_text(encoding="utf-8"))
+        assert len(placements) == 5
+        # Verify first placement is code IDE depiction
+        assert placements[0]["provider"] == "ai_generated"
+        assert "code" in placements[0]["keywords"]
+        assert Path(placements[0]["local_path"]).exists()
+        # Verify outro placement is brand card
+        assert placements[4]["provider"] == "brand_card"
+        assert Path(placements[4]["local_path"]).exists()

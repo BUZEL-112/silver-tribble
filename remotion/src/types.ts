@@ -41,7 +41,7 @@ export interface SentenceMediaItem {
 
 export interface RenderProps {
   videoTitle: string;
-  aspectRatio: "9:16" | "16:9";
+  aspectRatio: "9:16" | "16:9" | "1:1";
   audioPath: string;
   durationInSeconds: number;
   fps: number;

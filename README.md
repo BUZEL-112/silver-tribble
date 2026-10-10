@@ -1,27 +1,27 @@
 ---
-title: AI News Video Production Studio
+title: Newsroom AI Video Production Studio
 colorFrom: indigo
 colorTo: purple
 sdk: static
 pinned: false
 ---
 
-# AI News to YouTube Video Pipeline
+# Newsroom AI
 
-[![CI Pipeline](https://github.com/eswar/ai-news-video-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/eswar/ai-news-video-pipeline/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/BUZEL-112/silver-tribble/actions/workflows/ci.yml/badge.svg)](https://github.com/BUZEL-112/silver-tribble/actions/workflows/ci.yml)
 [![Lint and Format](https://img.shields.io/badge/lint-ruff-blue.svg)](https://github.com/astral-sh/ruff)
 [![Type Checking](https://img.shields.io/badge/types-mypy-blue.svg)](https://mypy-lang.org/)
 [![Python Versions](https://img.shields.io/badge/python-3.11%20%7C%203.12-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Hugging Face Space](https://img.shields.io/badge/Hugging%20Face-Space%20Demo-orange.svg)](https://huggingface.co/spaces)
 
-Automated, resilient AI news video studio that turns daily research papers and tech headlines into stylized, comedic video shorts and widescreen episodes using Remotion, LiteLLM, Prefect, and Faster-Whisper.
+Automated, resilient AI news video studio that turns daily research papers and tech headlines into stylized video shorts and widescreen episodes using Remotion, LiteLLM, Prefect, and Faster-Whisper.
 
 ---
 
 ## High-Impact Project Pitch
 
-The AI News Video Pipeline is an autonomous content engine designed to solve the bottleneck of daily tech video creation. Instead of requiring human editors, scriptwriters, and voiceover artists, this platform operates on an end-to-end automated loop:
+Newsroom AI is an autonomous content engine designed to solve the bottleneck of daily tech video creation. Instead of requiring human editors, scriptwriters, and voiceover artists, this platform operates on an end-to-end automated loop:
 
 1. Ingests raw RSS feeds from curated tech sources (ArXiv, TechCrunch, VentureBeat, GitHub Trending).
 2. Performs vector-based semantic clustering with cosine similarity to identify breaking narratives.
@@ -127,8 +127,8 @@ You can execute a full demonstration of all pipeline stages without configuring 
 
 ```bash
 # Clone the repository
-git clone https://github.com/eswar/ai-news-video-pipeline.git
-cd ai-news-video-pipeline
+git clone https://github.com/BUZEL-112/silver-tribble.git
+cd silver-tribble
 
 # Create and activate Python virtual environment
 python3 -m venv .venv
@@ -138,7 +138,9 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install -e ".[dev]"
 
-# Run the zero-key pipeline demo
+# Run the zero-key pipeline demo via CLI tool
+newsroom demo
+# Or using python module:
 python -m src.cli demo
 ```
 

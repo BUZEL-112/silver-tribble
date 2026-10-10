@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import time
 from pathlib import Path
+from typing import Literal
 
 from src.core.config import settings
 from src.models.entities import RenderJob, ScriptRecord
@@ -50,7 +51,7 @@ class RenderService:
             or bool(os.environ.get("PORT"))
         )
         if is_linux_or_docker:
-            return ["--no-sandbox", "--disable-setuid-sandbox"]
+            return ["--no-sandbox", "--disable-setuid-sandbox", "--gl=angle"]
         return []
 
     def prepare_render_props(
@@ -152,6 +153,14 @@ class RenderService:
             audio_path_str = f"data:{mime};base64,{encoded_data}"
 
         is_horizontal = job.aspect_ratio == "16:9"
+        is_square = job.aspect_ratio == "1:1"
+        if is_horizontal:
+            target_aspect: Literal["9:16", "16:9", "1:1"] = "16:9"
+        elif is_square:
+            target_aspect = "1:1"
+        else:
+            target_aspect = "9:16"
+
         cap_level = settings.horizontal_caption_level if is_horizontal else settings.caption_level
         badge_text = (
             settings.horizontal_channel_badge_text if is_horizontal else settings.channel_badge_text
@@ -159,7 +168,7 @@ class RenderService:
 
         props = RenderProps(
             videoTitle=script.title,
-            aspectRatio="16:9" if is_horizontal else "9:16",
+            aspectRatio=target_aspect,
             audioPath=audio_path_str,
             durationInSeconds=total_duration,
             fps=30,
@@ -214,9 +223,12 @@ class RenderService:
         if not props_file or not props_file.exists():
             raise FileNotFoundError(f"Missing render props file for job {job_id}")
 
-        composition = (
-            "AiNewsVideoVertical" if job.aspect_ratio == "9:16" else "AiNewsVideoHorizontal"
-        )
+        if job.aspect_ratio == "16:9":
+            composition = "AiNewsVideoHorizontal"
+        elif job.aspect_ratio == "1:1":
+            composition = "AiNewsVideoSquare"
+        else:
+            composition = "AiNewsVideoVertical"
         output_filename = f"video_job_{job_id}_{composition}.mp4"
         output_path = self.output_dir / output_filename
 
@@ -265,6 +277,7 @@ class RenderService:
             str(output_path.resolve()),
             f"--props={props_file.resolve()}",
             "--overwrite",
+            "--concurrency=4",
         ]
         cmd.extend(self.get_chromium_headless_flags())
 

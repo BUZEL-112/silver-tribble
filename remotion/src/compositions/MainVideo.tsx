@@ -35,7 +35,7 @@ export const MainVideo: React.FC<RenderProps> = ({
   durationInSeconds = 30,
   introDelaySeconds = 0,
   outroDurationSeconds = 3.5,
-  channelBadgeText = "AI NEWS BY ESWAR",
+  channelBadgeText = "AI NEWS | OCTOBER 10, 2026",
   showMaterialIndices = false,
   captionStyle = "hormozi",
   captionLevel,
@@ -120,7 +120,11 @@ export const MainVideo: React.FC<RenderProps> = ({
           Math.round((m.end_time - m.start_time) * fps) + 4
         );
         const mediaSrc = resolveMediaSrc(m.local_path || m.source_url);
-        if (!mediaSrc) return null;
+        const isVideo =
+          m.media_type === "video" ||
+          mediaSrc.toLowerCase().endsWith(".mp4") ||
+          mediaSrc.toLowerCase().endsWith(".webm") ||
+          Boolean(m.local_path && m.local_path.toLowerCase().endsWith(".mp4"));
 
         return (
           <Sequence
@@ -137,7 +141,7 @@ export const MainVideo: React.FC<RenderProps> = ({
               overflow: "hidden",
             }}
           >
-            {m.media_type === "video" ? (
+            {isVideo ? (
               <>
                 {/* Blurred background expansion for video */}
                 <Video
@@ -149,10 +153,10 @@ export const MainVideo: React.FC<RenderProps> = ({
                     width: "110%",
                     height: "110%",
                     objectFit: "cover",
-                    filter: "blur(28px) brightness(0.5)",
+                    filter: "brightness(0.4)",
                   }}
                 />
-                {/* Crisp foreground video */}
+                {/* Crisp foreground video with contain fit to avoid cropping */}
                 <Video
                   src={mediaSrc}
                   style={{
@@ -161,7 +165,7 @@ export const MainVideo: React.FC<RenderProps> = ({
                     left: 0,
                     width: "100%",
                     height: "100%",
-                    objectFit: "cover",
+                    objectFit: "contain",
                   }}
                 />
               </>
@@ -177,7 +181,7 @@ export const MainVideo: React.FC<RenderProps> = ({
                     width: "110%",
                     height: "110%",
                     objectFit: "cover",
-                    filter: "blur(28px) brightness(0.5)",
+                    filter: "brightness(0.4)",
                   }}
                 />
                 {/* Crisp foreground layer with uncropped contain fit */}
@@ -214,9 +218,21 @@ export const MainVideo: React.FC<RenderProps> = ({
           <Video
             src={resolveMediaSrc(currentBeat.broll_video_path)}
             style={{
+              position: "absolute",
+              top: "-5%",
+              left: "-5%",
+              width: "110%",
+              height: "110%",
+              objectFit: "cover",
+              filter: "blur(28px) brightness(0.5)",
+            }}
+          />
+          <Video
+            src={resolveMediaSrc(currentBeat.broll_video_path)}
+            style={{
               width: "100%",
               height: "100%",
-              objectFit: "cover",
+              objectFit: "contain",
             }}
           />
         </div>

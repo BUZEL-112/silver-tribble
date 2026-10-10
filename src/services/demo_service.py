@@ -1,6 +1,7 @@
 """Zero-API-key local sandbox demo pipeline service."""
 
 import hashlib
+import json
 import shutil
 import struct
 import time
@@ -16,13 +17,15 @@ from sqlalchemy.orm import Session
 
 from src.core.config import settings
 from src.models.entities import Article, StoryCluster
-from src.models.schemas import FeedItem
+from src.models.schemas import FeedItem, SentenceMediaPlacement
 from src.repositories.article_repository import ArticleRepository
 from src.repositories.cost_repository import CostRepository
 from src.repositories.render_repository import RenderRepository
 from src.repositories.script_repository import ScriptRepository
+from src.services.brand_card_service import BrandCardService
 from src.services.caption_service import CaptionService
 from src.services.clustering_service import ClusteringService
+from src.services.image_generation_service import ImageGenerationService
 from src.services.render_service import RenderService
 from src.services.storage_service import StorageService, get_storage_service
 from src.services.tts_service import TtsService
@@ -44,6 +47,7 @@ class DemoRunResult:
     audio_path: str
     captions_path: str
     stage_durations: dict[str, float]
+    aspect_ratio: str = "9:16"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert result object into a serializable dictionary."""
@@ -61,6 +65,7 @@ class DemoRunResult:
             "audio_path": self.audio_path,
             "captions_path": self.captions_path,
             "stage_durations": self.stage_durations,
+            "aspect_ratio": self.aspect_ratio,
         }
 
 
@@ -141,11 +146,11 @@ class DemoService:
                 "core_point": "Autonomous AI coding engine introduced",
                 "on_screen_text": "AI WRITES CODE",
                 "visual_direction": "Dramatic zoom on glowing terminal text",
-                "estimated_duration_seconds": 1.5,
-                "target_duration_seconds": 1.5,
+                "estimated_duration_seconds": 3.0,
+                "target_duration_seconds": 3.0,
                 "narration_text": (
-                    "AI agents just learned to write code without human help, "
-                    "and developers are watching closely."
+                    "This is the news for today, October 10, 2026. "
+                    "OpenAI just launched a self-healing autonomous coding engine."
                 ),
                 "emotion": "excited",
                 "shot_type": "close_up",
@@ -156,11 +161,10 @@ class DemoService:
                 "core_point": "Engine automatically repairs and deploys applications",
                 "on_screen_text": "FULL-STACK REPAIR",
                 "visual_direction": "Animated code diff scrolling across dark canvas",
-                "estimated_duration_seconds": 1.5,
-                "target_duration_seconds": 1.5,
+                "estimated_duration_seconds": 2.5,
+                "target_duration_seconds": 2.5,
                 "narration_text": (
-                    "A new autonomous engine was unveiled that can isolate bugs, "
-                    "refactor modules, and test whole applications."
+                    "It detects bugs, rewrites modules, and passes test suites automatically."
                 ),
                 "emotion": "analytical",
                 "shot_type": "medium",
@@ -171,11 +175,10 @@ class DemoService:
                 "core_point": "Zero-shot benchmark record achieved",
                 "on_screen_text": "RECORD BENCHMARKS",
                 "visual_direction": "Glowing performance chart spiking upward",
-                "estimated_duration_seconds": 1.5,
-                "target_duration_seconds": 1.5,
+                "estimated_duration_seconds": 2.5,
+                "target_duration_seconds": 2.5,
                 "narration_text": (
-                    "The architecture sets state of the art results on benchmark suites "
-                    "that once challenged senior engineers."
+                    "New benchmark scores crush previous human engineering baselines."
                 ),
                 "emotion": "triumphant",
                 "shot_type": "wide",
@@ -186,11 +189,10 @@ class DemoService:
                 "core_point": "Legacy production environments pose edge cases",
                 "on_screen_text": "EDGE CASES REMAIN",
                 "visual_direction": "Warning graphic detailing legacy software complexity",
-                "estimated_duration_seconds": 1.5,
-                "target_duration_seconds": 1.5,
+                "estimated_duration_seconds": 2.5,
+                "target_duration_seconds": 2.5,
                 "narration_text": (
-                    "Critics point out that legacy enterprise repositories still contain "
-                    "quirks that can trip up autonomous models."
+                    "Yet critics caution edge cases in legacy production code remain."
                 ),
                 "emotion": "skeptical",
                 "shot_type": "medium",
@@ -201,12 +203,9 @@ class DemoService:
                 "core_point": "Viewer engagement call to action",
                 "on_screen_text": "SUBSCRIBE FOR AI UPDATES",
                 "visual_direction": "Clean studio branding card with subscribe animation",
-                "estimated_duration_seconds": 1.5,
-                "target_duration_seconds": 1.5,
-                "narration_text": (
-                    "Subscribe for daily AI breakthroughs, and share whether you would "
-                    "let an AI deploy your code."
-                ),
+                "estimated_duration_seconds": 2.0,
+                "target_duration_seconds": 2.0,
+                "narration_text": ("Subscribe for more AI news, and share your take."),
                 "emotion": "engaging",
                 "shot_type": "close_up",
             },
@@ -257,6 +256,133 @@ class DemoService:
             stored_path = self.storage_service.save_file(local_wav_path, destination_key)
             self.render_repo.update_job_audio(job_id, stored_path, actual_duration)
             return stored_path, actual_duration
+
+    def _generate_demo_media_placements(
+        self,
+        job_id: int,
+        beats: list[dict[str, Any]],
+        duration_seconds: float,
+        aspect_ratio: str,
+    ) -> list[SentenceMediaPlacement]:
+        """Generate topic-accurate depiction images and brand cards for demo beats."""
+        image_gen = ImageGenerationService(output_dir=settings.media_cache_dir)
+        brand_card_svc = BrandCardService()
+
+        total_target = sum(
+            float(b.get("estimated_duration_seconds") or b.get("target_duration_seconds") or 1.5)
+            for b in beats
+        )
+        if total_target <= 0:
+            total_target = 1.0
+
+        placements: list[SentenceMediaPlacement] = []
+        elapsed = 0.0
+
+        aspect_slug = aspect_ratio.replace(":", "x")
+        depiction_configs = [
+            {
+                "type": "image_gen",
+                "prompt": "autonomous agent terminal code execution syntax IDE",
+                "keywords": ["code", "terminal", "autonomous agent"],
+                "filename": f"job_{job_id}_{aspect_slug}_sent_0_code_ide.png",
+                "provider": "ai_generated",
+            },
+            {
+                "type": "image_gen",
+                "prompt": (
+                    "neural reasoning architecture transformer feedback loops self-correction"
+                ),
+                "keywords": ["neural network", "architecture", "deep learning"],
+                "filename": f"job_{job_id}_{aspect_slug}_sent_1_neural.png",
+                "provider": "ai_generated",
+            },
+            {
+                "type": "image_gen",
+                "prompt": "benchmark leaderboard performance evaluation metrics record HumanEval",
+                "keywords": ["benchmark", "leaderboard", "accuracy"],
+                "filename": f"job_{job_id}_{aspect_slug}_sent_2_benchmark.png",
+                "provider": "ai_generated",
+            },
+            {
+                "type": "image_gen",
+                "prompt": "production edge cases verification alert legacy systems telemetry",
+                "keywords": ["edge cases", "runtime verification", "telemetry"],
+                "filename": f"job_{job_id}_{aspect_slug}_sent_3_alert.png",
+                "provider": "ai_generated",
+            },
+            {
+                "type": "brand_card",
+                "brand_key": "openai",
+                "keywords": ["openai", "brand card", "frontier ai"],
+                "filename": f"job_{job_id}_{aspect_slug}_sent_4_openai.png",
+                "provider": "brand_card",
+            },
+        ]
+
+        for idx, beat in enumerate(beats):
+            target = float(
+                beat.get("estimated_duration_seconds") or beat.get("target_duration_seconds") or 1.5
+            )
+            beat_duration = (target / total_target) * duration_seconds
+            start_t = round(elapsed, 2)
+            end_t = round(min(elapsed + beat_duration, duration_seconds), 2)
+            elapsed += beat_duration
+
+            cfg = depiction_configs[idx % len(depiction_configs)]
+            output_file = settings.media_cache_dir / cfg["filename"]
+
+            if cfg["type"] == "brand_card":
+                final_path = brand_card_svc.generate_card(
+                    cfg["brand_key"],
+                    output_file,
+                    aspect_ratio=aspect_ratio,
+                )
+            else:
+                _, final_path = image_gen.generate_image(
+                    cfg["prompt"],
+                    output_file,
+                    aspect_ratio=aspect_ratio,
+                )
+
+            placements.append(
+                SentenceMediaPlacement(
+                    sentence_index=idx,
+                    start_time=start_t,
+                    end_time=end_t,
+                    keywords=cfg["keywords"],
+                    media_type="image",
+                    local_path=str(final_path.resolve()),
+                    source_url=f"/static/media/{final_path.name}",
+                    provider=cfg["provider"],
+                    text=beat.get("narration_text", ""),
+                    query=cfg.get("prompt", cfg.get("brand_key", "")),
+                    emotion=beat.get("emotion", "neutral"),
+                    shot_type=beat.get("shot_type", "medium"),
+                )
+            )
+
+        # Persist placements for web inspection
+        settings.media_cache_dir.mkdir(parents=True, exist_ok=True)
+        placements_file = settings.media_cache_dir / f"placements_job_{job_id}.json"
+        placements_data = [p.model_dump() for p in placements]
+        placements_file.write_text(json.dumps(placements_data, indent=2), encoding="utf-8")
+
+        return placements
+
+    def run_all_sizes(
+        self,
+        dry_run: bool = False,
+        progress_callback: Callable[[str, dict[str, Any]], None] | None = None,
+    ) -> dict[str, DemoRunResult]:
+        """Execute demo pipeline across all three aspect ratios: 9:16, 16:9, and 1:1."""
+        results: dict[str, DemoRunResult] = {}
+        for ratio in ["9:16", "16:9", "1:1"]:
+            results[ratio] = self.run_demo(
+                aspect_ratio=ratio,
+                dry_run=dry_run,
+                progress_callback=progress_callback,
+            )
+        return results
 
     def run_demo(
         self,
@@ -357,7 +483,25 @@ class DemoService:
             },
         )
 
-        # Stage 6: Render Remotion Video
+        # Stage 6: Generate Accurate Topic Depiction Media
+        t0 = time.time()
+        media_placements = self._generate_demo_media_placements(
+            job_id=job.id,
+            beats=beats,
+            duration_seconds=duration,
+            aspect_ratio=aspect_ratio,
+        )
+        stage_durations["media"] = round(time.time() - t0, 3)
+        notify(
+            "media",
+            {
+                "job_id": job.id,
+                "placements_count": len(media_placements),
+                "elapsed": stage_durations["media"],
+            },
+        )
+
+        # Stage 7: Render Remotion Video
         t0 = time.time()
         render_service = RenderService(
             render_repo=self.render_repo,
@@ -371,6 +515,7 @@ class DemoService:
             captions=captions,
             audio_local_path=audio_local_path,
             duration_seconds=duration,
+            media_placements=media_placements,
         )
 
         has_local_remotion = (
@@ -384,12 +529,24 @@ class DemoService:
         else:
             try:
                 output_path = render_service.execute_render(job_id=job.id, dry_run=False)
-            except Exception:
+            except Exception as exc:
                 # Fallback to mock render if Remotion binary encounters an execution error
+                print(f"[Render Execution Warning]: {exc}")
                 is_mock_render = True
                 output_path = render_service.execute_render(job_id=job.id, dry_run=True)
 
         stage_durations["render"] = round(time.time() - t0, 3)
+        comp_name = (
+            "AiNewsVideoHorizontal"
+            if aspect_ratio == "16:9"
+            else ("AiNewsVideoSquare" if aspect_ratio == "1:1" else "AiNewsVideoVertical")
+        )
+        friendly_file = render_service.output_dir / f"{comp_name}.mp4"
+        try:
+            shutil.copy2(output_path, friendly_file)
+        except Exception:
+            pass
+
         notify(
             "render",
             {
@@ -414,4 +571,5 @@ class DemoService:
             audio_path=audio_path,
             captions_path=captions_path,
             stage_durations=stage_durations,
+            aspect_ratio=aspect_ratio,
         )

@@ -2,7 +2,7 @@ import React from "react";
 import { interpolate, useCurrentFrame } from "remotion";
 
 interface AnimatedBackgroundProps {
-  aspectRatio: "9:16" | "16:9";
+  aspectRatio: "9:16" | "16:9" | "1:1";
   beatType?: string;
 }
 
@@ -13,6 +13,7 @@ export const AnimatedBackground: React.FC<AnimatedBackgroundProps> = ({
   const frame = useCurrentFrame();
 
   const isVertical = aspectRatio === "9:16";
+  const isSquare = aspectRatio === "1:1";
 
   // Cycle gradient angle slowly
   const angle = interpolate(frame, [0, 900], [0, 360], {

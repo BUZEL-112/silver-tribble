@@ -2,7 +2,7 @@ import React from "react";
 import { spring, useCurrentFrame, useVideoConfig } from "remotion";
 
 interface OutroCardProps {
-  aspectRatio: "9:16" | "16:9";
+  aspectRatio: "9:16" | "16:9" | "1:1";
   subscribeTitle?: string;
   subscribeSubtitle?: string;
   subscribeButtonText?: string;
@@ -20,6 +20,7 @@ export const OutroCard: React.FC<OutroCardProps> = ({
   const { fps } = useVideoConfig();
 
   const isVertical = aspectRatio === "9:16";
+  const isSquare = aspectRatio === "1:1";
 
   const scale = spring({
     frame,

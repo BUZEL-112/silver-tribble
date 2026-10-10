@@ -4,7 +4,7 @@ import { WordCaption } from "../types";
 interface CaptionsProps {
   captions: WordCaption[];
   currentTime: number;
-  aspectRatio: "9:16" | "16:9";
+  aspectRatio: "9:16" | "16:9" | "1:1";
   captionStyle?: "hormozi" | "minimal" | "karaoke" | "news_ticker" | "cinematic";
   captionLevel?: number;
   captionFontSize?: number;
@@ -38,13 +38,14 @@ export const Captions: React.FC<CaptionsProps> = ({
   const targetIndex = currentIndex !== -1 ? currentIndex : captions.length - 1;
 
   const isVertical = aspectRatio === "9:16";
-  const windowSize = isVertical ? 4 : 6;
+  const isSquare = aspectRatio === "1:1";
+  const windowSize = isVertical ? 4 : (isSquare ? 5 : 6);
   const startIndex = Math.max(0, targetIndex - 2);
   const visibleWords = captions.slice(startIndex, startIndex + windowSize);
 
-  // Dynamic vertical level (default: 30% for vertical shorts, 15% for horizontal landscape)
-  const resolvedLevel = captionLevel ?? (isVertical ? 30 : 15);
-  const baseFontSize = captionFontSize ?? (isVertical ? 48 : 40);
+  // Dynamic vertical level (default: 30% for vertical shorts, 22% for square, 15% for horizontal landscape)
+  const resolvedLevel = captionLevel ?? (isVertical ? 30 : (isSquare ? 22 : 15));
+  const baseFontSize = captionFontSize ?? (isVertical ? 48 : (isSquare ? 42 : 40));
 
   const containerStyle: React.CSSProperties = {
     position: "absolute",

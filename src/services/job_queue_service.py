@@ -307,6 +307,7 @@ class JobQueueService:
                             job_id=job.id,
                             captions=captions,
                             beats=script.beats,
+                            aspect_ratio=job.aspect_ratio or "9:16",
                         )
 
                     audio_local_path = storage.get_local_path(job.audio_path or "")

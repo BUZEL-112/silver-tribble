@@ -135,7 +135,7 @@ class RenderProps(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     video_title: str = Field(..., alias="videoTitle")
-    aspect_ratio: Literal["9:16", "16:9"] = Field(..., alias="aspectRatio")
+    aspect_ratio: Literal["9:16", "16:9", "1:1"] = Field(..., alias="aspectRatio")
     audio_path: str = Field(..., alias="audioPath")
     duration_in_seconds: float = Field(..., alias="durationInSeconds", gt=0)
     fps: int = Field(default=30)
@@ -147,7 +147,7 @@ class RenderProps(BaseModel):
     )
     intro_delay_seconds: float = Field(default=0.0, alias="introDelaySeconds")
     outro_duration_seconds: float = Field(default=0.0, alias="outroDurationSeconds")
-    channel_badge_text: str = Field(default="AI NEWS BY ESWAR", alias="channelBadgeText")
+    channel_badge_text: str = Field(default="AI NEWS | OCTOBER 10, 2026", alias="channelBadgeText")
     show_material_indices: bool = Field(default=False, alias="showMaterialIndices")
     caption_style: str = Field(default="hormozi", alias="captionStyle")
     caption_level: float = Field(default=30.0, alias="captionLevel")
@@ -360,7 +360,7 @@ class VisualPresetInfo(BaseModel):
 class VisualConfigSchema(BaseModel):
     """Visual pipeline configuration state presented in dashboard UI."""
 
-    aspect_ratio: Literal["9:16", "16:9"] = "9:16"
+    aspect_ratio: Literal["9:16", "16:9", "1:1"] = "9:16"
     target_beats: int = Field(default=5, ge=3, le=9)
     max_clusters: int = Field(default=5, ge=1, le=20)
     time_limit_hours: int = Field(default=24, ge=1, le=168)
@@ -382,7 +382,7 @@ class VisualConfigSchema(BaseModel):
 class VisualConfigUpdateRequest(BaseModel):
     """Payload to update visual configuration parameters from dashboard buttons."""
 
-    aspect_ratio: Literal["9:16", "16:9"] | None = None
+    aspect_ratio: Literal["9:16", "16:9", "1:1"] | None = None
     target_beats: int | None = Field(default=None, ge=3, le=9)
     max_clusters: int | None = Field(default=None, ge=1, le=20)
     time_limit_hours: int | None = Field(default=None, ge=1, le=168)

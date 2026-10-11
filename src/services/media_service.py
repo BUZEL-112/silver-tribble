@@ -11,6 +11,7 @@ from src.core.config import settings
 from src.models.schemas import (
     CostLogCreate,
     SentenceMediaPlacement,
+    VisualCue,
     WordCaption,
 )
 from src.repositories.asset_repository import AssetRepository
@@ -21,6 +22,7 @@ from src.services.image_search_service import ImageSearchService
 from src.services.media_inspector import MediaInspector
 from src.services.media_router import MediaRouter
 from src.services.storage_service import StorageService, get_storage_service
+from src.services.visual_director_service import VisualDirectorService
 
 STOP_WORDS = {
     "a",
@@ -219,6 +221,7 @@ class MediaService:
         pexels_api_key: str | None = None,
         pixabay_api_key: str | None = None,
         giphy_api_key: str | None = None,
+        visual_director_service: VisualDirectorService | None = None,
         media_cache_dir: Path | None = None,
         default_ratio: float | None = None,
     ) -> None:
@@ -240,6 +243,9 @@ class MediaService:
         self.image_search = ImageSearchService()
         self.brand_cards = BrandCardService()
         self.image_gen = ImageGenerationService(output_dir=self.media_cache_dir)
+        self.visual_director = visual_director_service or VisualDirectorService(
+            cost_repo=self.cost_repo
+        )
         self.router = MediaRouter(
             storage_service=self.storage_service,
             cost_repo=self.cost_repo,
@@ -247,6 +253,7 @@ class MediaService:
             inspector=self.inspector,
             image_search_service=self.image_search,
             brand_card_service=self.brand_cards,
+            visual_director_service=self.visual_director,
             media_cache_dir=self.media_cache_dir,
         )
         self.media_cache_dir.mkdir(parents=True, exist_ok=True)
@@ -945,6 +952,13 @@ class MediaService:
         used_urls: set[str] = set()
         total_sentences = len(sentences)
 
+        sentence_texts = [s["text"] for s in sentences]
+        visual_cues: list[VisualCue] = self.visual_director.direct_visuals(
+            sentences=sentence_texts,
+            beats=beats_list,
+            job_id=job_id,
+        )
+
         for idx, sentence_info in enumerate(sentences):
             start_t = sentence_info["start_time"]
             end_t = sentence_info["end_time"]
@@ -958,6 +972,7 @@ class MediaService:
                 )
                 matching_beat = beats_list[beat_idx]
 
+            matching_cue: VisualCue | None = visual_cues[idx] if idx < len(visual_cues) else None
             placement = self.router.route_and_fetch(
                 job_id=job_id,
                 sentence_index=idx,
@@ -968,6 +983,7 @@ class MediaService:
                 used_urls=used_urls,
                 aspect_ratio=aspect_ratio,
                 media_service_ref=self,
+                visual_cue=matching_cue,
             )
             placements.append(placement)
 

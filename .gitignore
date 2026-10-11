@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Distribution and packaging
 build/
 develop-eggs/
 dist/
@@ -16,17 +18,39 @@ parts/
 sdist/
 var/
 wheels/
+share/python-wheels/
 *.egg-info/
+*.egg-info
+**/*.egg-info/
+**/*.egg-info
 .installed.cfg
 *.egg
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+*.manifest
+*.spec
+
+# Virtual environments
 venv/
 .venv/
 env/
+ENV/
+env.bak/
+venv.bak/
+
+# Caches and tooling
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.uv_cache/
+
+# Credentials and environment secrets
 .env
 .env.*
+!.env.example
 *.pem
 *.key
 *.p12
@@ -59,8 +83,13 @@ scratch/
 # Logs
 *.log
 session.log
+prefect.log
 
 # Node and Remotion
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 remotion/node_modules/
 remotion/.remotion/
 remotion/out/
@@ -68,15 +97,18 @@ remotion/dist/
 remotion/public/media
 remotion/public/media/
 
-# Testing and Coverage
-.coverage
-htmlcov/
-coverage.xml
-
 # IDE and OS
 .DS_Store
+.DS_Store?
+._*
 Thumbs.db
+ehthumbs.db
 .idea/
 .vscode/
 *.swp
+*.swo
 *~
+
+# Generated deployment reports
+/deployment.html
+/design/deployment.html

@@ -134,24 +134,26 @@ cd silver-tribble
 python3 -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install package dependencies
+# Option A: Install from PyPI
+pip install newsroom-ai
+
+# Option B: Install locally from repository source
 pip install --upgrade pip
 pip install -e ".[dev]"
 
 # Run the zero-key pipeline demo via CLI tool
-newsroom demo
-# Or using python module:
-python -m src.cli demo
+newsroom-ai demo
+# Aliases: newsroom demo, pipeline demo, ai-video demo
 ```
 
 To output machine-readable JSON:
 ```bash
-python -m src.cli demo --json
+newsroom-ai demo --json
 ```
 
 To run horizontal widescreen 16:9 demo:
 ```bash
-python -m src.cli demo --aspect-ratio 16:9
+newsroom-ai demo --aspect-ratio 16:9
 ```
 
 ### 2. Full Environment Setup

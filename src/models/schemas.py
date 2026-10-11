@@ -1,6 +1,7 @@
 """Pydantic schemas for data validation and domain contracts."""
 
 from datetime import datetime
+from enum import StrEnum
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -73,6 +74,35 @@ class CaptionSegment(BaseModel):
     start: float = Field(..., ge=0)
     end: float = Field(..., ge=0)
     words: list[WordCaption] = Field(default_factory=list)
+
+
+class VisualCategory(StrEnum):
+    """Categorization for visual scene intent."""
+
+    EDITORIAL_ENTITY = "editorial_entity"
+    PHYSICAL_BROLL = "physical_broll"
+    CODE_OR_DATA = "code_or_data"
+    CONCEPTUAL_AI = "conceptual_ai"
+    REACTION = "reaction"
+
+
+class VisualCue(BaseModel):
+    """Structured visual staging directive produced by the Visual Director LLM."""
+
+    sentence_index: int = Field(..., ge=0)
+    category: VisualCategory = Field(default=VisualCategory.PHYSICAL_BROLL)
+    entity_name: str | None = None
+    stock_search_query: str | None = None
+    generative_prompt: str | None = None
+    graphic_overlay_type: str | None = None
+    suggested_shot_type: str = "medium"
+    rationale: str = ""
+
+
+class VisualDirectorResponse(BaseModel):
+    """Collection of visual cues produced by the Visual Director LLM."""
+
+    cues: list[VisualCue] = Field(default_factory=list)
 
 
 class SentenceMediaPlacement(BaseModel):

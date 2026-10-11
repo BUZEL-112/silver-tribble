@@ -34,6 +34,24 @@ dependencies = [
     "python-multipart>=0.0.9",
 ]
 
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Multimedia :: Video",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["ai", "video", "pipeline", "newsroom", "cli", "remotion", "tts", "gemini"]
+
+[project.urls]
+Homepage = "https://github.com/BUZEL-112/silver-tribble"
+Repository = "https://github.com/BUZEL-112/silver-tribble"
+Issues = "https://github.com/BUZEL-112/silver-tribble/issues"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
@@ -43,6 +61,8 @@ dev = [
     "mypy>=1.10.0",
     "types-pyyaml>=6.0.12",
     "types-boto3>=1.34.0",
+    "build>=1.2.0",
+    "twine>=5.0.0",
 ]
 
 [project.scripts]
@@ -53,8 +73,15 @@ pipeline = "src.cli:app"
 ai-video = "src.cli:app"
 
 [build-system]
-requires = ["setuptools>=68.0"]
+requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+src = ["templates/*", "static/*", "prompts/*", "py.typed"]
 
 [tool.ruff]
 line-length = 100

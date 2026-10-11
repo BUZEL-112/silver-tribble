@@ -8,60 +8,74 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_index_html_exists_and_encodes_cleanly() -> None:
-    """Verify that index.html exists at the repository root and has valid UTF-8 encoding."""
+    """Verify that index.html and docs/index.html exist, encode cleanly, and match exactly."""
     index_path = PROJECT_ROOT / "index.html"
+    docs_path = PROJECT_ROOT / "docs" / "index.html"
+
     assert index_path.exists(), "index.html must exist at the repository root"
+    assert docs_path.exists(), "docs/index.html must exist for GitHub Pages deployment"
+
     content = index_path.read_text(encoding="utf-8")
+    docs_content = docs_path.read_text(encoding="utf-8")
+
     assert "<!DOCTYPE html>" in content
     assert "<html" in content
     assert "</html>" in content
+    assert content == docs_content, "index.html and docs/index.html must remain in exact parity"
 
 
 def test_index_html_satisfies_deploy_md_client_contracts() -> None:
-    """Verify that index.html contains required localStorage keys and API configurations."""
+    """Verify that index.html contains required client contracts, design viewer, and dashboard."""
     index_path = PROJECT_ROOT / "index.html"
     content = index_path.read_text(encoding="utf-8")
 
-    # LocalStorage keys from deploy.md specification
-    assert 'localStorage.getItem("ai_video_api_url")' in content
+    # LocalStorage auth token handling
     assert 'localStorage.getItem("ai_video_auth_token")' in content
-    assert "BACKEND_API_URL" in content
-    assert "AUTH_TOKEN" in content
+    assert 'id="auth-key-modal"' in content
+    assert 'id="input-auth-key-val"' in content
+    assert 'id="btn-header-auth-key"' in content
 
-    # Cloud Run settings modal elements
-    assert 'id="cloud-settings-modal"' in content
-    assert 'id="input-backend-url"' in content
-    assert 'id="input-auth-token"' in content
-    assert 'id="btn-cloud-status"' in content
+    # Base home view and navigation
+    assert 'id="default-landing-view"' in content
+    assert 'id="btn-goto-demo"' in content
+    assert "navigateToDemo()" in content
 
-    # Dynamic metrics and video player
-    assert 'id="rendered-video-player"' in content
-    assert 'id="select-video-source"' in content
-    assert 'id="metric-cost"' in content
-    assert 'id="metric-runs"' in content
+    # Technical design documentation viewer on base home
+    assert 'id="design-doc-viewer"' in content
+    assert 'id="design-toc"' in content
+    assert "markdown-it" in content
+    assert 'class="mermaid' in content
+    assert 'id="newsroom-ai-project"' in content
+    assert 'id="system-explanation-and-design"' in content
+    assert 'id="deployment"' in content
+    assert 'id="post-analysis"' in content
 
-    # Pipeline execution controls
-    assert 'id="pipeline-target-label"' in content
-    assert 'id="chk-dry-run"' in content
-    assert 'id="select-pipeline-ratio"' in content
-    assert 'id="btn-run-simulation"' in content
+    # Studio production dashboard container and elements
+    assert 'id="dashboard-view"' in content
+    assert 'id="html5-video-player"' in content
+    assert 'id="kpi-spend"' in content
+    assert 'id="kpi-rendered"' in content
 
-    # Artifact synchronization
-    assert 'id="btn-sync-artifacts"' in content
-    assert 'id="artifact-source-tag"' in content
+    # Workspace tabs and pipeline execution controls
+    assert 'id="tab-pipeline"' in content
+    assert 'id="tab-clusters"' in content
+    assert 'id="tab-script"' in content
+    assert 'id="tab-media"' in content
+    assert 'id="pipeline-modal"' in content
 
 
 def test_index_html_has_no_emojis_or_emdash() -> None:
     """Enforce project rules: no emojis and no em-dashes in frontend assets."""
-    index_path = PROJECT_ROOT / "index.html"
-    content = index_path.read_text(encoding="utf-8")
+    for relative_path in ["index.html", "docs/index.html"]:
+        file_path = PROJECT_ROOT / relative_path
+        content = file_path.read_text(encoding="utf-8")
 
-    assert "\u2014" not in content, "Found em-dash in index.html"
+        assert "\u2014" not in content, f"Found em-dash in {relative_path}"
 
-    # Verify no unexpected non-ascii characters (excluding curly quotes if any)
-    allowed_unicode = {"\u2018", "\u2019", "\u201c", "\u201d"}
-    non_ascii = [c for c in content if ord(c) > 127 and c not in allowed_unicode]
-    assert len(non_ascii) == 0, f"Found non-ascii/emojis in index.html: {non_ascii}"
+        # Verify no unexpected non-ascii characters (excluding curly quotes if any)
+        allowed_unicode = {"\u2018", "\u2019", "\u201c", "\u201d"}
+        non_ascii = [c for c in content if ord(c) > 127 and c not in allowed_unicode]
+        assert len(non_ascii) == 0, f"Found non-ascii/emojis in {relative_path}: {non_ascii}"
 
 
 def test_huggingface_space_manifest() -> None:

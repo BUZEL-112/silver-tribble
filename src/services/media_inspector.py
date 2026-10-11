@@ -79,6 +79,10 @@ class MediaInspector:
             return settings.prompts_media_inspector_system_prompt
 
         prompt_file = Path(settings.prompts_media_inspector_file or "prompts/media_inspector.yaml")
+        if not prompt_file.is_file():
+            bundled = Path(__file__).resolve().parent.parent / "prompts" / prompt_file.name
+            if bundled.is_file():
+                prompt_file = bundled
         if prompt_file.is_file():
             try:
                 import yaml

@@ -167,8 +167,14 @@ class ScriptService:
         p = Path(filename)
         if p.is_file():
             prompt_path = p
-        else:
+        elif (self.prompts_dir / p.name).is_file():
             prompt_path = self.prompts_dir / p.name
+        else:
+            bundled = Path(__file__).resolve().parent.parent / "prompts" / p.name
+            if bundled.is_file():
+                prompt_path = bundled
+            else:
+                prompt_path = self.prompts_dir / p.name
         with open(prompt_path, encoding="utf-8") as f:
             return yaml.safe_load(f)
 
@@ -705,8 +711,11 @@ class ScriptService:
         file_path = self.prompts_dir / target_name
         if not file_path.exists():
             fallback = Path("prompts") / target_name
+            bundled = Path(__file__).resolve().parent.parent / "prompts" / target_name
             if fallback.exists():
                 file_path = fallback
+            elif bundled.exists():
+                file_path = bundled
             else:
                 raise FileNotFoundError(
                     f"Beat generator configuration file '{target_name}' not found"
@@ -758,6 +767,10 @@ class ScriptService:
 
     def list_beat_generator_configs(self) -> list[str]:
         """List available prompt configuration YAML files in prompts directory."""
-        if not self.prompts_dir.exists():
-            return []
-        return sorted([f.name for f in self.prompts_dir.glob("*.yaml")])
+        found: set[str] = set()
+        if self.prompts_dir.exists():
+            found.update(f.name for f in self.prompts_dir.glob("*.yaml"))
+        bundled = Path(__file__).resolve().parent.parent / "prompts"
+        if bundled.exists():
+            found.update(f.name for f in bundled.glob("*.yaml"))
+        return sorted(list(found))

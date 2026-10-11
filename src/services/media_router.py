@@ -10,7 +10,12 @@ import httpx
 import yaml
 
 from src.core.config import settings
-from src.models.schemas import SentenceMediaPlacement, VisualAssetCreate
+from src.models.schemas import (
+    SentenceMediaPlacement,
+    VisualAssetCreate,
+    VisualCategory,
+    VisualCue,
+)
 from src.repositories.asset_repository import AssetRepository
 from src.repositories.cost_repository import CostRepository
 from src.services.brand_card_service import BrandCardService
@@ -18,6 +23,7 @@ from src.services.image_generation_service import ImageGenerationService
 from src.services.image_search_service import ImageSearchService
 from src.services.media_inspector import MediaInspector
 from src.services.storage_service import StorageService, get_storage_service
+from src.services.visual_director_service import VisualDirectorService
 
 
 class MediaRouter:
@@ -62,6 +68,7 @@ class MediaRouter:
         image_search_service: ImageSearchService | None = None,
         brand_card_service: BrandCardService | None = None,
         image_generation_service: ImageGenerationService | None = None,
+        visual_director_service: VisualDirectorService | None = None,
         rules_path: str | Path | None = None,
         media_cache_dir: Path | None = None,
     ) -> None:
@@ -72,6 +79,9 @@ class MediaRouter:
         self.image_search = image_search_service or ImageSearchService()
         self.brand_cards = brand_card_service or BrandCardService()
         self.image_gen = image_generation_service or ImageGenerationService()
+        self.visual_director = visual_director_service or VisualDirectorService(
+            cost_repo=self.cost_repo
+        )
         self.media_cache_dir = media_cache_dir or settings.media_cache_dir
         self.media_cache_dir.mkdir(parents=True, exist_ok=True)
         self.rules = self._load_rules(rules_path or settings.media_router_rules_file)
@@ -94,12 +104,35 @@ class MediaRouter:
         for key, query in self.CONCRETE_VISUAL_MAP.items():
             if re.search(rf"\b{re.escape(key)}\b", combined):
                 return query
-        return "technology"
+
+        clean_words = [
+            w
+            for w in re.findall(r"[a-zA-Z0-9]+", combined)
+            if len(w) > 3
+            and w
+            not in [
+                "with",
+                "from",
+                "that",
+                "this",
+                "have",
+                "they",
+                "will",
+                "when",
+                "were",
+                "been",
+                "into",
+            ]
+        ]
+        if clean_words:
+            return " ".join(clean_words[:2])
+        return "computer server room"
 
     def select_source(
         self,
         sentence_text: str,
         beat_info: dict[str, Any] | None = None,
+        visual_cue: VisualCue | None = None,
     ) -> tuple[
         Literal[
             "google_search", "giphy", "pexels_video", "pexels_photo", "brand_card", "ai_generated"
@@ -107,6 +140,22 @@ class MediaRouter:
         str,
     ]:
         """Determine primary visual provider and search query based on routing instructions."""
+        if visual_cue:
+            if visual_cue.category == VisualCategory.EDITORIAL_ENTITY:
+                return "google_search", visual_cue.entity_name or sentence_text[:30]
+            if visual_cue.category == VisualCategory.REACTION:
+                return "giphy", visual_cue.stock_search_query or "skeptical reaction"
+            if visual_cue.category == VisualCategory.CONCEPTUAL_AI:
+                return "ai_generated", visual_cue.generative_prompt or sentence_text[:80]
+            if visual_cue.category == VisualCategory.CODE_OR_DATA:
+                term_prompt = visual_cue.generative_prompt or f"Terminal: {sentence_text[:60]}"
+                return ("ai_generated", term_prompt)
+            if visual_cue.category == VisualCategory.PHYSICAL_BROLL:
+                query = visual_cue.stock_search_query or self.extract_core_visual_noun(
+                    sentence_text, (beat_info or {}).get("visual_direction", "")
+                )
+                return "pexels_video", query
+
         lower_sent = sentence_text.lower()
         beat_type = (beat_info or {}).get("beat_type", "context")
         beat_emotion = (beat_info or {}).get("emotion", "neutral")
@@ -211,14 +260,26 @@ class MediaRouter:
         used_urls: set[str],
         aspect_ratio: str = "9:16",
         media_service_ref: Any = None,
+        visual_cue: VisualCue | None = None,
     ) -> SentenceMediaPlacement:
         """Route sentence through prioritized visual sources and multimodal gate."""
-        primary_source, initial_query = self.select_source(sentence_text, beat_info)
-        core_noun = self.extract_core_visual_noun(
-            sentence_text, (beat_info or {}).get("visual_direction", "")
+        primary_source, initial_query = self.select_source(
+            sentence_text, beat_info, visual_cue=visual_cue
         )
+        if visual_cue and visual_cue.stock_search_query:
+            core_noun = visual_cue.stock_search_query
+        elif visual_cue and visual_cue.entity_name:
+            core_noun = visual_cue.entity_name
+        else:
+            core_noun = self.extract_core_visual_noun(
+                sentence_text, (beat_info or {}).get("visual_direction", "")
+            )
         beat_emotion = (beat_info or {}).get("emotion", "neutral")
-        beat_shot_type = (beat_info or {}).get("shot_type", "medium")
+        beat_shot_type = (
+            visual_cue.suggested_shot_type
+            if visual_cue
+            else (beat_info or {}).get("shot_type", "medium")
+        )
         enabled_set = set(settings.enabled_providers)
 
         # ----------------------------------------------------------------------
@@ -692,7 +753,12 @@ class MediaRouter:
         # Strategy 8: FLUX Procedural Fallback if No Stock Available
         # ----------------------------------------------------------------------
         dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}_procedural.png"
-        ok, final_path = self.image_gen.generate_image(core_noun, dest, aspect_ratio=aspect_ratio)
+        gen_prompt = (
+            (visual_cue.generative_prompt if visual_cue and visual_cue.generative_prompt else None)
+            or (beat_info or {}).get("visual_direction")
+            or f"Technical visualization of {sentence_text[:80]}"
+        )
+        ok, final_path = self.image_gen.generate_image(gen_prompt, dest, aspect_ratio=aspect_ratio)
         if ok and final_path.exists():
             return SentenceMediaPlacement(
                 sentence_index=sentence_index,
@@ -704,7 +770,7 @@ class MediaRouter:
                 source_url="",
                 provider="fallback",
                 text=sentence_text,
-                query=core_noun,
+                query=gen_prompt,
                 emotion=beat_emotion,
                 shot_type=beat_shot_type,
             )

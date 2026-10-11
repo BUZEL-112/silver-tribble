@@ -1,0 +1,78 @@
+name: media_routing_rules
+description: Rules and instructions for the visual media router to select the most accurate visual source provider.
+
+sources:
+  asset_library:
+    description: Reusable, metadata-rich verified visual asset library
+    priority: 0
+    routing_instruction: >
+      Check local database repository before querying external APIs. Reuses
+      existing assets matching the query, emotion, and aspect ratio with high
+      VLM inspection scores.
+    fallback: google_search
+
+  google_search:
+    description: Live Google Image Search, Web imagery, and Wikimedia Commons
+    priority: 1
+    routing_instruction: >
+      Route to this source when the sentence explicitly mentions real-world named
+      entities: AI companies (OpenAI, Anthropic, Nvidia, Google, DeepSeek, Meta,
+      Microsoft, Apple, TSMC), tech executives or researchers (Dario Amodei, Sam
+      Altman, Jensen Huang, Demis Hassabis, Mark Zuckerberg, Satya Nadella),
+      specific model releases (Claude 3.7, GPT-4.5, DeepSeek-R1, Blackwell), or
+      real-world benchmark tables.
+    fallback: brand_card
+
+  giphy:
+    description: Reaction meme GIFs
+    priority: 2
+    routing_instruction: >
+      Route to this source when the beat is skepticism, commentary, or humor, or
+      when the narration uses sarcastic, skeptical, or dramatic expressions
+      (e.g., 'critics are rolling their eyes', 'nobody knows', 'spoiler alert',
+      'good luck with that', 'terrible business').
+    fallback: pexels_video
+
+  pexels_video:
+    description: High-definition vertical portrait stock video footage
+    priority: 3
+    routing_instruction: >
+      Route to this source for general physical infrastructure, hardware, and
+      engineering environments (e.g., data centers, glowing server racks,
+      robotics laboratories, robotic arms, fiber optic cables, computer cooling).
+    query_rule: >
+      Always condense search terms into a single concrete physical noun (e.g.,
+      'datacenter', 'server', 'robotics') to avoid 0-result multi-word failures.
+    fallback: pexels_photo
+
+  pexels_photo:
+    description: High-resolution stock photography with Ken Burns motion
+    priority: 4
+    routing_instruction: >
+      Route to this source as the visual fallback when portrait video is unavailable,
+      or for detailed physical hardware close-ups (e.g., silicon wafers, microchips,
+      GPU circuit boards, motherboard components, optical chips).
+    fallback: pixabay_video
+
+  pixabay_video:
+    description: High-definition vertical and landscape stock footage from Pixabay
+    priority: 5
+    routing_instruction: >
+      Route to this source when Pexels video or photo searches return 0 results.
+    fallback: brand_card
+
+  brand_card:
+    description: High-tech company and product graphic cards
+    priority: 6
+    routing_instruction: >
+      Route to this source when an AI company, framework, or model is named and web
+      search yields low-resolution or missing assets.
+    fallback: ai_generated
+
+  ai_generated:
+    description: FLUX and Gemini text-to-image generator
+    priority: 7
+    routing_instruction: >
+      Route to this source for futuristic, abstract, or hypothetical visual directions
+      where authentic stock footage cannot exist, or when beat emotion is 'awe'.
+

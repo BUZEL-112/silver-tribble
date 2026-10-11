@@ -19,8 +19,8 @@ def test_cli_banner_command() -> None:
     """Verify studio ASCII banner command outputs stylized header."""
     res = runner.invoke(app, ["banner"])
     assert res.exit_code == 0
-    assert "AI VIDEO STUDIO" in res.stdout
-    assert "AUTONOMOUS YOUTUBE PRODUCTION" in res.stdout
+    assert "NEWSROOM AI STUDIO" in res.stdout
+    assert "Autonomous AI News-to-Video Studio" in res.stdout
 
 
 def test_cli_trending_command_table_and_json() -> None:

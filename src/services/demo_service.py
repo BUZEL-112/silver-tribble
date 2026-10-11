@@ -279,7 +279,7 @@ class DemoService:
         elapsed = 0.0
 
         aspect_slug = aspect_ratio.replace(":", "x")
-        depiction_configs = [
+        depiction_configs: list[dict[str, Any]] = [
             {
                 "type": "image_gen",
                 "prompt": "autonomous agent terminal code execution syntax IDE",

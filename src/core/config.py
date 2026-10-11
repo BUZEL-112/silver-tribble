@@ -877,9 +877,9 @@ class Settings(BaseSettings):
     )
 
     # Video and Timeline Defaults
-    aspect_ratio: Literal["9:16", "16:9"] = Field(
+    aspect_ratio: Literal["9:16", "16:9", "1:1"] = Field(
         default="9:16",
-        description="Target aspect ratio for video generation: 9:16 vertical or 16:9 widescreen",
+        description="Target aspect ratio: 9:16 vertical, 16:9 widescreen, or 1:1 square",
     )
     target_beats: int = Field(
         default=5,

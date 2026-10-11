@@ -653,9 +653,7 @@ class MediaRouter:
                     dest = self.media_cache_dir / f"job_{job_id}_sent_{sentence_index}.{ext}"
                     ok, final_path = self._download(src_url, dest, media_service_ref)
                     if ok:
-                        actual_type: Literal["video", "image"] = (
-                            "video" if final_path.suffix.lower() == ".mp4" else "image"
-                        )
+                        actual_type = "video" if final_path.suffix.lower() == ".mp4" else "image"
                         approved, _ = self.inspector.inspect_candidate(
                             sentence_text=sentence_text,
                             keywords=[core_noun],

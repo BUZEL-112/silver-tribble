@@ -859,7 +859,7 @@ class MediaService:
             ]
         )
 
-        if is_reaction and self.giphy_api_key:
+        if is_reaction:
             if any(p in lower_sent for p in ["skeptic", "having none of it", "terrible"]):
                 return "skeptical eye roll reaction", extracted_kw, "gif"
             if any(p in lower_sent for p in ["panic", "alarm", "doomsday"]):

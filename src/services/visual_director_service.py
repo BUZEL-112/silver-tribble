@@ -257,8 +257,8 @@ class VisualDirectorService:
                 if idx in cue_map:
                     final_cues.append(cue_map[idx])
                 else:
-                    b_info = beats_list[idx] if idx < len(beats_list) else None
-                    final_cues.append(self._fallback_direct_sentence(idx, sent, b_info))
+                    b_info_fallback = beats_list[idx] if idx < len(beats_list) else None
+                    final_cues.append(self._fallback_direct_sentence(idx, sent, b_info_fallback))
 
             if self.cost_repo and getattr(resp, "usage", None):
                 prompt_tokens = getattr(resp.usage, "prompt_tokens", 0)

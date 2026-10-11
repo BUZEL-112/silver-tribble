@@ -30,7 +30,15 @@
           <span class="font-black text-xl tracking-tight text-white">Newsroom AI</span>
           <span class="text-xs px-2 py-0.5 rounded-none bg-zinc-900 text-blue-400 font-mono font-semibold border border-zinc-700">Production</span>
         </div>
-        <div>
+        <div class="flex items-center space-x-2">
+          <button
+            onclick="openAuthKeyModal()"
+            id="btn-landing-api-settings"
+            class="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 border border-cyan-800/60 hover:border-cyan-500 text-cyan-400 font-mono text-xs font-semibold rounded-none transition flex items-center space-x-1.5 cursor-pointer"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+            <span>API &amp; Backend Settings</span>
+          </button>
           <button
             id="btn-goto-demo"
             onclick="navigateToDemo()"
@@ -740,7 +748,7 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
           class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-cyan-800/60 hover:border-cyan-500 text-cyan-400 text-xs font-semibold rounded-none-none transition flex items-center space-x-1.5 cursor-pointer"
         >
           <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
-          <span>API Key</span>
+          <span>API &amp; Backend Settings</span>
         </button>
         <button onclick="openPipelineModal()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-xs font-bold rounded-none-none text-white shadow-lg transition">Run Pipeline</button>
         <a href="/docs" target="_blank" class="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-xs font-medium rounded-none-none text-zinc-300 border border-zinc-700 transition">API Docs</a>
@@ -3255,22 +3263,37 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
     </div>
   </div>
 
-  <!-- AUTHENTICATION KEY MODAL -->
+  <!-- AUTHENTICATION AND BACKEND API SETTINGS MODAL -->
   <div id="auth-key-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm hidden flex items-center justify-center p-4">
-    <div class="bg-zinc-950 border border-zinc-800 rounded-none max-w-md w-full p-6 space-y-5 shadow-2xl relative">
+    <div class="bg-zinc-950 border border-zinc-800 rounded-none max-w-lg w-full p-6 space-y-5 shadow-2xl relative">
       <div class="flex items-center justify-between border-b border-zinc-800 pb-3">
         <div class="flex items-center space-x-2">
           <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
-          <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Authentication Key</h3>
+          <h3 class="text-sm font-bold text-white uppercase tracking-wider font-mono">Backend API &amp; Authentication</h3>
         </div>
         <button onclick="closeAuthKeyModal()" class="text-zinc-500 hover:text-white text-lg font-bold leading-none cursor-pointer">&times;</button>
       </div>
 
       <p class="text-xs text-zinc-400 leading-relaxed">
-        Configure your pre-shared API bearer authentication key to unlock protected pipeline runs and administrative endpoints.
+        Configure your serverless backend endpoint (Modal ASGI or Cloud Run) and API bearer key. When hosted on GitHub Pages, requests are dispatched directly to this backend URL.
       </p>
 
-      <div class="space-y-3">
+      <div class="space-y-4">
+        <div>
+          <label for="input-backend-url" class="block text-xs font-semibold font-mono text-zinc-300 mb-1.5">
+            Modal Backend API URL
+          </label>
+          <input
+            id="input-backend-url"
+            type="url"
+            placeholder="https://your-workspace--ai-video-pipeline-web.modal.run"
+            class="w-full px-3 py-2 bg-black border border-zinc-700 rounded-none text-xs font-mono text-white focus:outline-none focus:border-cyan-500"
+          />
+          <p class="text-[10px] text-zinc-500 mt-1 font-mono">
+            Leave blank for same-origin local development, or paste your Modal ASGI web endpoint URL.
+          </p>
+        </div>
+
         <div>
           <label for="input-auth-key-val" class="block text-xs font-semibold font-mono text-zinc-300 mb-1.5">
             API Bearer Key / Token
@@ -3279,7 +3302,7 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
             <input
               id="input-auth-key-val"
               type="password"
-              placeholder="Paste your API key here..."
+              placeholder="Paste your API bearer token here..."
               class="w-full px-3 py-2 bg-black border border-zinc-700 rounded-none text-xs font-mono text-white focus:outline-none focus:border-cyan-500 pr-14"
             />
             <button
@@ -3291,20 +3314,32 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
               Show
             </button>
           </div>
-          <p id="auth-key-status-msg" class="text-[10px] text-zinc-500 mt-1.5 font-mono">
-            Key is stored securely in browser local storage.
+          <p id="auth-key-status-msg" class="text-[10px] text-zinc-500 mt-1 font-mono">
+            No default key configured. Values are saved locally in browser storage.
           </p>
         </div>
+
+        <div id="backend-connection-feedback" class="hidden p-2.5 border text-xs font-mono"></div>
       </div>
 
       <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 border-t border-zinc-800">
-        <button
-          type="button"
-          onclick="navigateToRequestKey()"
-          class="px-3 py-2 text-xs font-semibold text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/60 rounded-none transition text-left sm:text-center cursor-pointer"
-        >
-          Request API Key
-        </button>
+        <div class="flex items-center space-x-2">
+          <button
+            type="button"
+            onclick="testBackendConnection()"
+            id="btn-test-backend-connection"
+            class="px-3 py-1.5 text-xs font-mono bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-none transition cursor-pointer"
+          >
+            Test Connection
+          </button>
+          <button
+            type="button"
+            onclick="navigateToRequestKey()"
+            class="px-3 py-1.5 text-xs font-semibold text-cyan-400 hover:text-cyan-300 bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/60 rounded-none transition cursor-pointer"
+          >
+            Request Key
+          </button>
+        </div>
 
         <div class="flex items-center space-x-2 justify-end">
           <button
@@ -3312,14 +3347,14 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
             onclick="clearAuthKey()"
             class="px-3 py-1.5 text-xs text-zinc-400 hover:text-zinc-200 border border-zinc-800 hover:border-zinc-700 rounded-none transition cursor-pointer"
           >
-            Clear
+            Clear All
           </button>
           <button
             type="button"
             onclick="saveAuthKey()"
-            class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-none transition shadow cursor-pointer"
+            class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider rounded-none shadow transition cursor-pointer"
           >
-            Save Key
+            Save Settings
           </button>
         </div>
       </div>
@@ -3414,17 +3449,39 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
 
     window.addEventListener("hashchange", handleRoute);
 
-    // Authentication Key Modal Handling
+    // Backend API URL and Authentication Key Management
+    function getBackendUrl() {
+      return (window.localStorage.getItem("ai_video_api_url") || "").trim().replace(/\/+$/, "");
+    }
+
+    function getAuthToken() {
+      return (window.localStorage.getItem("ai_video_auth_token") || "").trim();
+    }
+
     function openAuthKeyModal() {
       const modal = document.getElementById("auth-key-modal");
       if (!modal) return;
       modal.classList.remove("hidden");
-      const currentToken = (window.localStorage.getItem("ai_video_auth_token") || "").trim();
-      const input = document.getElementById("input-auth-key-val");
-      if (input) input.value = currentToken;
+
+      const currentBackend = getBackendUrl();
+      const currentToken = getAuthToken();
+
+      const backendInput = document.getElementById("input-backend-url");
+      if (backendInput) backendInput.value = currentBackend;
+
+      const tokenInput = document.getElementById("input-auth-key-val");
+      if (tokenInput) tokenInput.value = currentToken;
+
+      const feedback = document.getElementById("backend-connection-feedback");
+      if (feedback) feedback.classList.add("hidden");
+
       const statusMsg = document.getElementById("auth-key-status-msg");
       if (statusMsg) {
-        statusMsg.textContent = currentToken ? "Active key loaded from local storage." : "No key configured currently.";
+        if (currentToken) {
+          statusMsg.textContent = "Active key loaded from local browser storage.";
+        } else {
+          statusMsg.textContent = "No default key configured. Clean local storage.";
+        }
       }
     }
 
@@ -3447,25 +3504,76 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
     }
 
     function saveAuthKey() {
-      const input = document.getElementById("input-auth-key-val");
-      const val = input ? input.value.trim() : "";
-      if (val) {
-        window.localStorage.setItem("ai_video_auth_token", val);
-        showToast("Authentication key saved successfully", "success");
+      const backendInput = document.getElementById("input-backend-url");
+      const backendVal = backendInput ? backendInput.value.trim().replace(/\/+$/, "") : "";
+      if (backendVal) {
+        window.localStorage.setItem("ai_video_api_url", backendVal);
+      } else {
+        window.localStorage.removeItem("ai_video_api_url");
+      }
+
+      const tokenInput = document.getElementById("input-auth-key-val");
+      const tokenVal = tokenInput ? tokenInput.value.trim() : "";
+      if (tokenVal) {
+        window.localStorage.setItem("ai_video_auth_token", tokenVal);
       } else {
         window.localStorage.removeItem("ai_video_auth_token");
-        showToast("Authentication key cleared", "info");
       }
+
+      showToast("Backend API and authentication settings saved", "success");
       closeAuthKeyModal();
+      refreshPlatformStats();
+      loadRecentJobs();
     }
 
     function clearAuthKey() {
+      window.localStorage.removeItem("ai_video_api_url");
       window.localStorage.removeItem("ai_video_auth_token");
-      const input = document.getElementById("input-auth-key-val");
-      if (input) input.value = "";
+
+      const backendInput = document.getElementById("input-backend-url");
+      if (backendInput) backendInput.value = "";
+
+      const tokenInput = document.getElementById("input-auth-key-val");
+      if (tokenInput) tokenInput.value = "";
+
       const statusMsg = document.getElementById("auth-key-status-msg");
-      if (statusMsg) statusMsg.textContent = "Authentication key cleared.";
-      showToast("Authentication key cleared", "info");
+      if (statusMsg) statusMsg.textContent = "All backend URLs and tokens cleared.";
+
+      const feedback = document.getElementById("backend-connection-feedback");
+      if (feedback) feedback.classList.add("hidden");
+
+      showToast("Settings and tokens cleared", "info");
+    }
+
+    async function testBackendConnection() {
+      const backendInput = document.getElementById("input-backend-url");
+      const backendVal = backendInput ? backendInput.value.trim().replace(/\/+$/, "") : "";
+      const feedback = document.getElementById("backend-connection-feedback");
+      if (!feedback) return;
+
+      const testUrl = backendVal ? `${backendVal}/api/health` : "/api/health";
+      feedback.classList.remove("hidden");
+      feedback.className = "p-2.5 border border-zinc-700 bg-zinc-900 text-zinc-300 text-xs font-mono";
+      feedback.textContent = `Testing connection to ${testUrl}...`;
+
+      try {
+        const token = (document.getElementById("input-auth-key-val")?.value || "").trim();
+        const headers = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+
+        const res = await _originalFetch(testUrl, { headers });
+        if (res.ok) {
+          const data = await res.json();
+          feedback.className = "p-2.5 border border-emerald-800 bg-emerald-950/60 text-emerald-300 text-xs font-mono";
+          feedback.textContent = `Connected successfully! Status: ${data.status || "healthy"}`;
+        } else {
+          feedback.className = "p-2.5 border border-amber-800 bg-amber-950/60 text-amber-300 text-xs font-mono";
+          feedback.textContent = `Backend returned HTTP ${res.status}: ${res.statusText}`;
+        }
+      } catch (err) {
+        feedback.className = "p-2.5 border border-red-800 bg-red-950/60 text-red-300 text-xs font-mono";
+        feedback.textContent = `Connection failed: ${err.message}. Verify Modal URL and CORS configuration.`;
+      }
     }
 
     function submitKeyRequest(event) {
@@ -3481,7 +3589,11 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
       if (btn) btn.disabled = true;
 
       const subject = encodeURIComponent(`[API Key Request] ${title}`);
-      const mailBody = encodeURIComponent(`Request Title: ${title}\nRequester Email: ${email}\n\nRequest Details:\n${body}`);
+      const mailBody = encodeURIComponent(`Request Title: ${title}
+Requester Email: ${email}
+
+Request Details:
+${body}`);
       const mailtoUrl = `mailto:admin@aivideostudio.com?subject=${subject}&body=${mailBody}`;
 
       try {
@@ -3505,23 +3617,31 @@ Visual asset discovery was treated as an afterthought downstream of audio alignm
     // Attach saved API authentication bearer token to backend API requests
     const _originalFetch = window.fetch;
     window.fetch = function(url, options = {}) {
-      const token = (window.localStorage.getItem("ai_video_auth_token") || "").trim();
-      if (token && typeof url === "string" && url.startsWith("/api/")) {
+      const backendUrl = getBackendUrl();
+      const token = getAuthToken();
+
+      let targetUrl = url;
+      if (typeof url === "string" && url.startsWith("/api/")) {
+        if (backendUrl) {
+          targetUrl = `${backendUrl}${url}`;
+        }
         options = options || {};
         options.headers = options.headers || {};
-        if (options.headers instanceof Headers) {
-          if (!options.headers.has("Authorization")) {
-            options.headers.set("Authorization", `Bearer ${token}`);
-          }
-        } else if (Array.isArray(options.headers)) {
-          options.headers.push(["Authorization", `Bearer ${token}`]);
-        } else {
-          if (!options.headers["Authorization"]) {
-            options.headers["Authorization"] = `Bearer ${token}`;
+        if (token) {
+          if (options.headers instanceof Headers) {
+            if (!options.headers.has("Authorization")) {
+              options.headers.set("Authorization", `Bearer ${token}`);
+            }
+          } else if (Array.isArray(options.headers)) {
+            options.headers.push(["Authorization", `Bearer ${token}`]);
+          } else {
+            if (!options.headers["Authorization"]) {
+              options.headers["Authorization"] = `Bearer ${token}`;
+            }
           }
         }
       }
-      return _originalFetch(url, options);
+      return _originalFetch(targetUrl, options);
     };
 
     // State management

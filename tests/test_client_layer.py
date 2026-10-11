@@ -29,11 +29,18 @@ def test_index_html_satisfies_deploy_md_client_contracts() -> None:
     index_path = PROJECT_ROOT / "index.html"
     content = index_path.read_text(encoding="utf-8")
 
-    # LocalStorage auth token handling
+    # LocalStorage backend URL and auth token handling
+    assert 'localStorage.getItem("ai_video_api_url")' in content
     assert 'localStorage.getItem("ai_video_auth_token")' in content
     assert 'id="auth-key-modal"' in content
+    assert 'id="input-backend-url"' in content
     assert 'id="input-auth-key-val"' in content
     assert 'id="btn-header-auth-key"' in content
+    assert 'id="btn-test-backend-connection"' in content
+
+    # Enforce no hardcoded default token in client files
+    assert "DEFAULT_AUTH_TOKEN" not in content
+    assert "c01a1e0431fe2850a396304a79afaf0a" not in content
 
     # Base home view and navigation
     assert 'id="default-landing-view"' in content

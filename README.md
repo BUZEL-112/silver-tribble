@@ -23,7 +23,6 @@ Autonomous AI news video studio that transforms daily research papers and tech h
 - [Overview](#overview)
 - [Architecture Flow Diagram](#architecture-flow-diagram)
 - [Directory Structure](#directory-structure)
-- [Engineering Highlights](#engineering-highlights)
 - [Sample Artifacts](#sample-artifacts)
 - [Quickstart Guide](#quickstart-guide)
   - [Zero-Key Offline Demo](#1-zero-key-offline-demo)
@@ -31,12 +30,10 @@ Autonomous AI news video studio that transforms daily research papers and tech h
 - [CLI Command Reference](#cli-command-reference)
 - [Configuration and Environment Variables](#configuration-and-environment-variables)
 - [Deployment Options](#deployment-options)
-  - [Option 1: Static Client Showcase (GitHub Pages & Hugging Face)](#option-1-static-client-showcase)
+  - [Option 1: Static Client Showcase (GitHub Pages & Hugging Face)](#option-1-static-client-showcase-github-pages--hugging-face)
   - [Option 2: Serverless Deployment with Modal](#option-2-serverless-deployment-with-modal)
   - [Option 3: Container Deployment with Docker](#option-3-container-deployment-with-docker)
 - [Testing and Quality Assurance](#testing-and-quality-assurance)
-- [Automated Reviewers and Governance](#automated-reviewers-and-governance)
-- [Architecture Standards](#architecture-standards)
 - [License](#license)
 
 ---
